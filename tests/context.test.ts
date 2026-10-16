@@ -20,6 +20,13 @@ function fixture() {
     createdAt: new Date().toISOString(),
   });
   board.notes.push(current, privateNote);
+  board.relations.push({
+    id: "relation-dom-style",
+    source: "concept-dom",
+    target: "concept-style",
+    label: "为元素计算样式",
+    kind: "cross",
+  });
   board.nodes.push({
     ...board.nodes[1],
     id: "unrelated-topic",
@@ -111,13 +118,15 @@ describe("local note context", () => {
         source: "concept-dom",
         target: `neighbor-${i}`,
         label: "neighbor",
+        kind: "cross",
       });
     }
     const context = contextForNote(board, current.id, {
       kind: "node",
       id: "concept-dom",
     });
-    expect(context.references.length).toBeLessThanOrEqual(9);
+    // topic, note, self, parent, ≤3 children, ≤3 cross-links (+ endpoints)
+    expect(context.references.length).toBeLessThanOrEqual(11);
     expect(context.summary.length).toBeLessThan(20_000);
     expect(contextBundleSchema.safeParse(context).success).toBe(true);
   });

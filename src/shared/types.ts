@@ -12,10 +12,15 @@ export interface ConceptNode {
   kind: "concept" | "scene";
   title: string;
   body: string;
-  emoji: string;
-  position: Point;
-  color: "sage" | "blue" | "peach" | "lavender";
+  /** null only for the root question. Tree edges are implied by parentId. */
+  parentId: string | null;
+  /** Position among siblings (0-based, contiguous); also reads as 先→后. */
+  order: number;
+  /** Derived from the parentId chain; never persisted. */
+  level?: number;
   status: Understanding;
+  /** Handwritten margin remark shown under the body. */
+  hand?: string;
   expanded?: boolean;
   visual?: VisualDiagram;
 }
@@ -24,6 +29,8 @@ export interface Relation {
   source: string;
   target: string;
   label: string;
+  /** Only cross-links are stored; they never affect layout. */
+  kind: "cross";
 }
 export interface ChatMessage {
   id: string;
@@ -47,7 +54,7 @@ export interface SceneState {
   changed: "width" | "color" | null;
 }
 export interface Board {
-  version: 1;
+  version: 2;
   id: string;
   title: string;
   topic: string;

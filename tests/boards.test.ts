@@ -41,8 +41,9 @@ describe("board creation and progressive exploration", () => {
     expect(board.nodes[0]).toMatchObject({
       kind: "scene",
       title: "浏览器，把代码变成画面",
-      position: { x: 0, y: 0 },
+      parentId: null,
     });
+    expect(board.nodes.slice(1).map((node) => node.order)).toEqual([0, 1, 2]);
     expect(board.nodes.slice(1).map((node) => node.title)).toEqual([
       "DOM",
       "样式计算",
@@ -84,7 +85,7 @@ describe("board creation and progressive exploration", () => {
       newNote(
         board,
         { x: 0, y: 0 },
-        { kind: "relation", id: board.relations[1].id },
+        { kind: "relation", id: board.relations[0].id },
       ).attachedTo?.kind,
     ).toBe("relation");
   });
@@ -126,10 +127,10 @@ describe("constrained AI map parsing", () => {
     expect(original.nodes).toHaveLength(1);
     expect(result.nodes).toHaveLength(3);
     expect(result.nodes[1].id).not.toBe("structure");
-    expect(result.relations).toHaveLength(2);
-    expect(
-      result.relations.some((edge) => edge.source === original.nodes[0].id),
-    ).toBe(true);
+    // structure→style is the first incoming edge: it becomes the tree edge.
+    expect(result.relations).toHaveLength(0);
+    expect(result.nodes[1].parentId).toBe(original.nodes[0].id);
+    expect(result.nodes[2].parentId).toBe(result.nodes[1].id);
     expect(boardSchema.safeParse(result).success).toBe(true);
     expect(result.nodes.some((node) => node.status === "explained")).toBe(
       false,
@@ -148,22 +149,22 @@ describe("constrained AI map parsing", () => {
       board,
       board.nodes[0].id,
     );
-    expect(result.relations).toHaveLength(2);
+    expect(result.relations).toHaveLength(0);
     expect(
-      result.relations.some(
-        (edge) => edge.source === board.nodes[0].id && edge.label === "第一步",
-      ),
-    ).toBe(true);
+      result.nodes.filter((n) => n.parentId === board.nodes[0].id),
+    ).toHaveLength(1);
   });
   it("connects disconnected components without fabricating semantic edges", () => {
     const board = createEmptyBoard("学习");
     const payload = map();
     payload.relations = [];
     const result = buildMapFromAI(JSON.stringify(payload), board);
-    expect(result.relations).toHaveLength(2);
-    expect(result.relations.every((edge) => edge.label === "继续探索")).toBe(
-      true,
-    );
+    // Both hang under the anchor as siblings, in the model's order.
+    expect(result.relations).toHaveLength(0);
+    expect(result.nodes.slice(1).map((n) => [n.parentId, n.order])).toEqual([
+      [board.nodes[0].id, 0],
+      [board.nodes[0].id, 1],
+    ]);
   });
   it.each([
     "not json",

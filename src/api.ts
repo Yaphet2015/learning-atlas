@@ -1,9 +1,15 @@
 import type { AtlasAPI, Board } from "./shared/types";
+import { safeParseBoard } from "./shared/validation";
 const key = "learning-atlas-preview-boards-v1";
 function read(): Board[] {
   const raw = localStorage.getItem(key);
   if (!raw) return [];
-  return JSON.parse(raw);
+  const all: unknown[] = JSON.parse(raw);
+  // Upgrade v1 previews in place; drop anything that no longer validates.
+  return all.flatMap((item) => {
+    const result = safeParseBoard(item);
+    return result.success ? [result.data as Board] : [];
+  });
 }
 const preview: AtlasAPI = {
   onBeforeClose() {

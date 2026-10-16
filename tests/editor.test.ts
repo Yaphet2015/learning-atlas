@@ -6,6 +6,23 @@ import type { ChatMessage } from "../src/shared/types";
 
 function fixture() {
   const board = createWalkthroughBoard();
+  // Two extra cross-links so incident-relation handling is exercised.
+  board.relations.unshift(
+    {
+      id: "relation-scene-dom",
+      source: "scene-browser",
+      target: "concept-dom",
+      label: "内容与结构",
+      kind: "cross",
+    },
+    {
+      id: "relation-dom-style",
+      source: "concept-dom",
+      target: "concept-style",
+      label: "为元素计算样式",
+      kind: "cross",
+    },
+  );
   const nodeNote = newNote(
     board,
     { x: 0, y: 0 },

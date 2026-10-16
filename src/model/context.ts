@@ -101,7 +101,15 @@ export function contextForNote(
       : note.attachedTo;
   if (selected?.kind === "node") {
     addNode(selected.id);
-    // One hop, at most three neighboring branches. Outgoing branches come first.
+    // Tree neighbours: the parent, then up to three children in 先→后 order.
+    const self = board.nodes.find((item) => item.id === selected.id);
+    if (self?.parentId) addNode(self.parentId);
+    board.nodes
+      .filter((item) => item.parentId === selected.id)
+      .sort((a, b) => a.order - b.order)
+      .slice(0, 3)
+      .forEach((item) => addNode(item.id));
+    // One hop across branches, at most three cross-links. Outgoing come first.
     const nearby = board.relations
       .filter(
         (edge) => edge.source === selected.id || edge.target === selected.id,
@@ -118,6 +126,11 @@ export function contextForNote(
       addRelation(edge);
       // A relation's endpoints provide its meaning. Add only its nearest downstream
       // branch, rather than every edge attached to both endpoint nodes.
+      board.nodes
+        .filter((item) => item.parentId === edge.target)
+        .sort((a, b) => a.order - b.order)
+        .slice(0, 2)
+        .forEach((item) => addNode(item.id));
       board.relations
         .filter((item) => item.id !== edge.id && item.source === edge.target)
         .slice(0, 2)
