@@ -297,10 +297,13 @@ export function buildMapFromAI(
     return {
       ...c,
       parentId,
-      order: (tree.order.get(c.id) ?? 0) + (parentId === anchor.id ? existing : 0),
+      order:
+        (tree.order.get(c.id) ?? 0) + (parentId === anchor.id ? existing : 0),
     };
   });
-  const cross = tree.cross.map((r) => relation(r.id, r.source, r.target, r.label));
+  const cross = tree.cross.map((r) =>
+    relation(r.id, r.source, r.target, r.label),
+  );
   return boardSchema.parse({
     ...board,
     updatedAt: now(),

@@ -472,13 +472,11 @@ export function migrateV1toV2(input: unknown): z.infer<typeof boardSchema> {
   return boardSchema.parse({
     ...v1,
     version: 2,
-    nodes: nodes.map(
-      ({ emoji: _e, position: _p, color: _c, ...rest }) => ({
-        ...rest,
-        parentId: parent.get(rest.id) ?? null,
-        order: order.get(rest.id) ?? 0,
-      }),
-    ),
+    nodes: nodes.map(({ emoji: _e, position: _p, color: _c, ...rest }) => ({
+      ...rest,
+      parentId: parent.get(rest.id) ?? null,
+      order: order.get(rest.id) ?? 0,
+    })),
     relations: cross.map((r) => ({ ...r, kind: "cross" as const })),
     notes,
   });

@@ -65,7 +65,11 @@ describe("tree editing", () => {
     expect(reparent(b, "scene-browser", "k")).toBe(b);
   });
   it("removing a node promotes its children into its slot; the root stays", () => {
-    const b = addChild(addChild(base, "concept-style", "a"), "concept-style", "b");
+    const b = addChild(
+      addChild(base, "concept-style", "a"),
+      "concept-style",
+      "b",
+    );
     const r = removeSelection(b, { kind: "node", id: "concept-style" });
     expect(row(r, "scene-browser")).toEqual([
       "concept-dom",

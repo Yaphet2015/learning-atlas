@@ -9,7 +9,12 @@ import {
   rowY,
 } from "../src/model/layout";
 
-type N = { id: string; parentId: string | null; order: number; kind: "concept" };
+type N = {
+  id: string;
+  parentId: string | null;
+  order: number;
+  kind: "concept";
+};
 const n = (id: string, parentId: string | null, order = 0): N => ({
   id,
   parentId,
