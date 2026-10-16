@@ -18,6 +18,9 @@ let runtime: AIRuntime;
 let quitting = false;
 let closePending = false;
 let rendererReady = false;
+function traceClose(stage: string): void {
+  if (process.env.ATLAS_E2E === "1") console.info(`[close] ${stage}`);
+}
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
 app.setName("Learning Atlas");
 if (process.env.ATLAS_E2E === "1" && process.env.ATLAS_TEST_USERDATA)
@@ -110,6 +113,9 @@ async function bootstrap(): Promise<void> {
       runtime.getHistory(id.parse(board), id.parse(sticky)),
     );
     async function requestClose() {
+      traceClose(
+        `request received; pending=${closePending}; rendererReady=${rendererReady}`,
+      );
       if (closePending) return;
       closePending = true;
       if (!rendererReady) {
@@ -120,6 +126,7 @@ async function bootstrap(): Promise<void> {
       }
       try {
         await runtime.quiesce();
+        traceClose("AI quiesced; requesting renderer save");
         window?.webContents.send("atlas:before-close");
       } catch {
         closePending = false;
@@ -133,8 +140,10 @@ async function bootstrap(): Promise<void> {
     }
     handle("atlas:renderer-ready", () => {
       rendererReady = true;
+      traceClose("renderer save handler ready");
     });
     handle("atlas:close-ready", async (saved) => {
+      traceClose(`renderer save acknowledged: ${saved === true}`);
       if (saved !== true) {
         closePending = false;
         await dialog.showMessageBox(window!, {
@@ -146,6 +155,7 @@ async function bootstrap(): Promise<void> {
         return;
       }
       await runtime.close();
+      traceClose("runtime closed; quitting app");
       quitting = true;
       app.quit();
     });
@@ -172,6 +182,7 @@ async function bootstrap(): Promise<void> {
         closePending = false;
       });
       window.on("close", (event) => {
+        traceClose(`native window close; quitting=${quitting}`);
         if (!quitting) {
           event.preventDefault();
           requestClose();

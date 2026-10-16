@@ -76,7 +76,7 @@ test("arbitrary topic stays a real AI setup state and keeps the new board", asyn
     "How does a rainbow form?",
   );
   await expect(page.locator(".react-flow__node-concept")).toHaveCount(1);
-  await page.getByText("生成起点", { exact: true }).click();
+  await page.getByRole("button", { name: /^生成起点/ }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByLabel("关闭设置").click();
   await expect(page.getByText("已保存", { exact: true })).toBeVisible();
