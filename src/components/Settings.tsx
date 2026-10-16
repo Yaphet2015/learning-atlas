@@ -1,3 +1,4 @@
+import ofl from "lxgw-wenkai-webfont/OFL.txt?raw";
 import { useState } from "react";
 import { Check, KeyRound, LockKeyhole, X } from "lucide-react";
 import type { AISettings, AISettingsInput } from "../shared/types";
@@ -131,6 +132,14 @@ export function Settings({
         <p className="settings-foot">
           配置不代表已验证连通；只有你发出提问时才调用模型。
         </p>
+        <details className="licenses">
+          <summary>关于 · 开源许可</summary>
+          <p>
+            字体：霞鹜文楷 LXGW WenKai / LXGW WenKai Mono（随应用离线打包），以
+            SIL Open Font License 1.1 授权。
+          </p>
+          <pre>{ofl}</pre>
+        </details>
       </section>
     </div>
   );

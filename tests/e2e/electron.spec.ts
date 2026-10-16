@@ -60,13 +60,15 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
   }
   try {
     const { app, page } = await launch();
-    await expect(page.getByText("一行 CSS，画面为什么变了？")).toBeVisible();
-    await expect(page.getByText("白板保存在这台 Mac")).toBeVisible();
+    await expect(page.locator(".react-flow__node-root h2")).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(page.getByText(/白板保存在这台 Mac/)).toBeVisible();
+    await page.keyboard.press("Escape");
     await page.screenshot({
       path: "test-results/atlas-macos-desktop.png",
       fullPage: true,
     });
-    await page.getByText("贴张批注", { exact: true }).click();
+    await page.getByRole("button", { name: "批注", exact: true }).click();
     const nativeWindow = await app.browserWindow(page);
     await page
       .getByLabel("批注内容")
@@ -94,6 +96,8 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     );
 
     const { app: reopened, page: nextPage } = await launch();
+    await nextPage.keyboard.press("ControlOrMeta+k");
+    await nextPage.getByRole("button", { name: /^批注 · / }).click();
     await expect(nextPage.getByLabel("批注内容")).toHaveValue(
       "Close immediately: this edit must survive.",
     );

@@ -1,44 +1,57 @@
-import { useState } from "react";
-import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Handle,
+  NodeToolbar,
+  Position,
+  type NodeProps,
+  type Node,
+} from "@xyflow/react";
 import {
   ArrowDown,
   ArrowRight,
-  Check,
   ChevronRight,
-  CornerDownLeft,
-  Expand,
+  Layers3,
   MessageCircle,
-  Plus,
-  Send,
-  Square,
-  StickyNote as StickyIcon,
+  PencilLine,
+  Sparkles,
 } from "lucide-react";
-import type {
-  ConceptNode,
-  ContextReference,
-  SceneState,
-  StickyNote,
-  VisualDiagram,
-} from "../shared/types";
-export type CanvasData = {
+import type { ConceptNode, SceneState, VisualDiagram } from "../shared/types";
+import { RoughBox, SelectRing, type BoxKind } from "./sketch/RoughBox";
+
+export type CardData = {
   [key: string]: unknown;
-  concept?: ConceptNode;
-  note?: StickyNote;
+  concept: ConceptNode;
+  /** "§02"-style index shown top-right. */
+  no?: string;
+  topic?: string;
+  createdAt?: string;
   scene?: SceneState;
-  refs?: ContextReference[];
-  pending?: string;
-  error?: string;
-  busy?: boolean;
-  onExpand?: (id: string) => void;
-  onNote?: (id: string) => void;
+  editing?: boolean;
+  linkMode?: boolean;
+  dimmed?: boolean;
+  onRename?: (id: string, title: string) => void;
+  onEditDone?: () => void;
+  onAddChild?: (id: string) => void;
+  onAddSibling?: (id: string) => void;
+  onPreviewAdd?: (id: string | null) => void;
   onScene?: (patch: Partial<SceneState>) => void;
-  onNoteChange?: (id: string, patch: Partial<StickyNote>) => void;
-  onAsk?: (id: string, prompt: string) => boolean;
-  onStop?: (id: string) => void;
-  onPromote?: (id: string, text: string) => void;
-  onDetach?: (id: string) => void;
+  onNote?: (id: string) => void;
+  onStatus?: (id: string, status: ConceptNode["status"]) => void;
+  onStartEdit?: (id: string) => void;
+  onAsk?: (id: string) => void;
+  onExpand?: (id: string) => void;
+  canExpand?: boolean;
 };
-export type CanvasNode = Node<CanvasData>;
+export type GhostData = { [key: string]: unknown; w: number };
+export type CardNode = Node<CardData, "concept" | "root">;
+export type GhostNode = Node<GhostData, "ghost">;
+export type CanvasNode = CardNode | GhostNode;
+
+export const boxFor = (status: ConceptNode["status"]): BoxKind =>
+  status === "unseen" ? "dash" : status === "explained" ? "strong" : "card";
+const washFor = (status: ConceptNode["status"]) =>
+  status === "explained" ? 1 : status === "exploring" ? 0.5 : 0;
+
 function StructuredVisual({ visual }: { visual: VisualDiagram }) {
   return (
     <figure className={`structured-visual visual-${visual.kind}`}>
@@ -72,76 +85,295 @@ function StructuredVisual({ visual }: { visual: VisualDiagram }) {
     </figure>
   );
 }
-function Ports() {
+function Ports({ linkMode }: { linkMode?: boolean }) {
   return (
     <>
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="t"
+        isConnectable={false}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="b"
+        isConnectable={false}
+      />
+      {linkMode && (
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="link"
+          className="link-handle"
+        />
+      )}
     </>
   );
 }
-export function ConceptCard({ data, selected }: NodeProps<CanvasNode>) {
-  const n = data.concept!;
+
+/** Title with the mastery highlighter stroke underneath (0 / 50% / 100%). */
+function Title({ data, as: Tag }: { data: CardData; as: "h2" | "h3" }) {
+  const n = data.concept;
+  const [draft, setDraft] = useState(n.title);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => setDraft(n.title), [n.title, data.editing]);
+  useEffect(() => {
+    if (!data.editing) return;
+    // React Flow moves focus to the node wrapper on select; take it back.
+    const t = setTimeout(() => {
+      input.current?.focus();
+      input.current?.select();
+    }, 30);
+    return () => clearTimeout(t);
+  }, [data.editing]);
+  if (data.editing)
+    return (
+      <input
+        ref={input}
+        className="title-input nodrag nopan"
+        aria-label="概念标题"
+        value={draft}
+        maxLength={160}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft.trim()) data.onRename?.(n.id, draft.trim());
+          data.onEditDone?.();
+        }}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
+        }}
+      />
+    );
+  return (
+    <Tag>
+      <span className="ttl">
+        <span
+          className="wash"
+          style={{ "--f": washFor(n.status) } as React.CSSProperties}
+        />
+        {Tag === "h2" ? (data.topic ?? n.title) : n.title}
+      </span>
+    </Tag>
+  );
+}
+
+function AddHandles({ data }: { data: CardData }) {
+  const id = data.concept.id;
+  return (
+    <>
+      <button
+        className="plus below nodrag nopan"
+        title="加子概念 Tab"
+        aria-label="加子概念"
+        onMouseEnter={() => data.onPreviewAdd?.(id)}
+        onMouseLeave={() => data.onPreviewAdd?.(null)}
+        onClick={(e) => {
+          e.stopPropagation();
+          data.onAddChild?.(id);
+        }}
+      >
+        +
+      </button>
+      {data.concept.parentId && (
+        <button
+          className="plus right nodrag nopan"
+          title="加并列概念 Enter"
+          aria-label="加并列概念"
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onAddSibling?.(id);
+          }}
+        >
+          +
+        </button>
+      )}
+    </>
+  );
+}
+
+const STATUS: [ConceptNode["status"], string][] = [
+  ["unseen", "待探索"],
+  ["exploring", "探索中"],
+  ["explained", "我能解释"],
+];
+/**
+ * Selection toolbar under the card. It carries an opaque paper halo so the tree
+ * line leaving the card bottom passes *behind* it instead of through it.
+ */
+function SelectToolbar({
+  data,
+  visible,
+}: {
+  data: CardData;
+  visible: boolean;
+}) {
+  const n = data.concept;
+  return (
+    <NodeToolbar
+      isVisible={visible}
+      position={Position.Bottom}
+      offset={20}
+      className="select-toolbar"
+    >
+      <div className="seg" role="radiogroup" aria-label="掌握度">
+        {STATUS.map(([s, label]) => (
+          <button
+            key={s}
+            role="radio"
+            aria-checked={n.status === s}
+            className={n.status === s ? "on" : ""}
+            onClick={() => data.onStatus?.(n.id, s)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <span className="sep" />
+      <button
+        className="icon"
+        title="改标题 F2"
+        aria-label="改标题"
+        onClick={() => data.onStartEdit?.(n.id)}
+      >
+        <PencilLine size={15} className="ico" />
+      </button>
+      {data.canExpand && (
+        <button
+          className="icon"
+          title="再看一层"
+          aria-label="再看一层"
+          onClick={() => data.onExpand?.(n.id)}
+        >
+          <Layers3 size={15} className="ico" />
+        </button>
+      )}
+      <button
+        className="icon accent"
+        title="问一问 /"
+        aria-label="问一问"
+        onClick={() => data.onAsk?.(n.id)}
+      >
+        <Sparkles size={15} className="ico" />
+      </button>
+    </NodeToolbar>
+  );
+}
+
+export function ConceptCard({
+  data,
+  selected,
+  width,
+  height,
+}: NodeProps<CardNode>) {
+  const n = data.concept;
+  // Stamp only when the status changes while mounted, not on first paint.
+  const first = useRef(n.status);
+  const animate = first.current !== n.status;
   return (
     <article
-      className={`concept-card ${n.color} ${selected ? "is-selected" : ""}`}
+      className={`card s-${n.status} ${selected ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""}`}
     >
-      <Ports />
-      <div className="card-top">
-        <span className="concept-symbol">{n.emoji}</span>
-        <span className={`understanding ${n.status}`}>
-          {n.status === "explained"
-            ? "我能解释"
-            : n.status === "exploring"
-              ? "探索中"
-              : "待探索"}
-        </span>
-      </div>
-      <h3>{n.title}</h3>
-      <p>{n.body}</p>
+      <RoughBox kind={boxFor(n.status)} seedKey={n.id} />
+      <div className="bg" />
+      <Ports linkMode={data.linkMode} />
+      {n.status === "explained" && <span className="seal">懂</span>}
+      {data.no && <span className="no">{data.no}</span>}
+      <Title data={data} as="h3" />
+      {n.body && <p>{n.body}</p>}
       {n.visual && <StructuredVisual visual={n.visual} />}
-      <div className="card-actions nodrag nopan">
-        <button onClick={() => data.onExpand?.(n.id)} disabled={n.expanded}>
-          <Plus size={14} />
-          {n.expanded ? "已展开" : "再看一层"}
-        </button>
-        <button
-          className="icon-button"
-          title="贴一张批注"
-          aria-label={`批注 ${n.title}`}
-          onClick={() => data.onNote?.(n.id)}
-        >
-          <StickyIcon size={15} />
-        </button>
-      </div>
+      {n.hand && <span className="hand">{n.hand}</span>}
+      {selected && width && height ? (
+        <SelectRing w={width} h={height} seedKey={n.id + ":sel"} />
+      ) : null}
+      {!data.linkMode && <AddHandles data={data} />}
+      <SelectToolbar data={data} visible={!!selected && !data.editing} />
     </article>
   );
 }
-export function SceneCard({ data, selected }: NodeProps<CanvasNode>) {
-  const s = data.scene!;
+
+const dateLabel = (iso?: string) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+};
+
+export function RootCard({ data, selected }: NodeProps<CardNode>) {
+  const n = data.concept;
+  const [open, setOpen] = useState(false);
+  return (
+    <article className={`origin ${selected ? "is-selected" : ""}`}>
+      <RoughBox kind="origin" seedKey={n.id} />
+      <div className="bg" />
+      <Ports linkMode={data.linkMode} />
+      <div className="origin-head">
+        <span className="eyebrow">起点 · 问题</span>
+        <span className="lab">{dateLabel(data.createdAt)}</span>
+      </div>
+      <Title data={data} as="h2" />
+      {n.kind === "scene" && data.scene && (
+        <>
+          <button
+            className="text-button nodrag nopan"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(!open);
+            }}
+          >
+            {open ? "收起小实验" : "动手看一看 · 改一行 CSS"}
+            <ChevronRight size={13} className={open ? "rot" : ""} />
+          </button>
+          {open && (
+            <div className="scene-body nodrag nopan">
+              <SceneExperiment
+                scene={data.scene}
+                onScene={(p) => data.onScene?.(p)}
+                onNote={() => data.onNote?.(n.id)}
+              />
+            </div>
+          )}
+        </>
+      )}
+      {!data.linkMode && <AddHandles data={data} />}
+    </article>
+  );
+}
+
+/** Insertion preview: a vermilion dashed slot. */
+export function GhostCard({ data }: NodeProps<GhostNode>) {
+  return (
+    <div className="ghost" style={{ width: data.w }}>
+      <RoughBox kind="ghost" seedKey="ghost" />
+    </div>
+  );
+}
+
+export function SceneExperiment({
+  scene: s,
+  onScene,
+  onNote,
+}: {
+  scene: SceneState;
+  onScene: (patch: Partial<SceneState>) => void;
+  onNote: () => void;
+}) {
   const [tab, setTab] = useState<"experiment" | "explain">("experiment");
   return (
-    <article className={`scene-card ${selected ? "is-selected" : ""}`}>
-      <Ports />
-      <div className="scene-heading">
-        <div>
-          <span className="eyebrow">动手看一看 · 内置演练</span>
-          <h2>一行 CSS，画面为什么变了？</h2>
-        </div>
-        <div className="scene-tabs nodrag nopan">
-          <button
-            className={tab === "experiment" ? "active" : ""}
-            onClick={() => setTab("experiment")}
-          >
-            小实验
-          </button>
-          <button
-            className={tab === "explain" ? "active" : ""}
-            onClick={() => setTab("explain")}
-          >
-            我的理解
-          </button>
-        </div>
+    <div className="scene">
+      <div className="seg">
+        <button
+          className={tab === "experiment" ? "on" : ""}
+          onClick={() => setTab("experiment")}
+        >
+          小实验
+        </button>
+        <button
+          className={tab === "explain" ? "on" : ""}
+          onClick={() => setTab("explain")}
+        >
+          我的理解
+        </button>
       </div>
       {tab === "experiment" ? (
         <>
@@ -160,7 +392,7 @@ export function SceneCard({ data, selected }: NodeProps<CanvasNode>) {
                 step="10"
                 value={s.width}
                 onChange={(e) =>
-                  data.onScene?.({
+                  onScene({
                     width: Number(e.target.value),
                     changed: "width",
                   })
@@ -175,9 +407,7 @@ export function SceneCard({ data, selected }: NodeProps<CanvasNode>) {
                       aria-label={`颜色 ${c}`}
                       className={s.color === c ? "selected" : ""}
                       style={{ background: c }}
-                      onClick={() =>
-                        data.onScene?.({ color: c, changed: "color" })
-                      }
+                      onClick={() => onScene({ color: c, changed: "color" })}
                     />
                   ))}
                 </div>
@@ -231,7 +461,7 @@ export function SceneCard({ data, selected }: NodeProps<CanvasNode>) {
             aria-label="我的预测"
             placeholder="先猜一猜：改颜色与改宽度，区别在哪？（可跳过）"
             value={s.prediction}
-            onChange={(e) => data.onScene?.({ prediction: e.target.value })}
+            onChange={(e) => onScene({ prediction: e.target.value })}
           />
         </>
       ) : (
@@ -243,155 +473,18 @@ export function SceneCard({ data, selected }: NodeProps<CanvasNode>) {
             aria-label="我的理解"
             placeholder="我认为改宽度会……因为……；而改颜色……"
             value={s.explanation}
-            onChange={(e) => data.onScene?.({ explanation: e.target.value })}
+            onChange={(e) => onScene({ explanation: e.target.value })}
           />
           <p>
             这段解释会留在你的白板。你可以把它放进批注，向 AI
             提问、找反例或修正地图。
           </p>
-          <button
-            className="subtle-button"
-            onClick={() => data.onNote?.("scene-browser")}
-          >
+          <button className="subtle-button" onClick={() => onNote()}>
             <MessageCircle size={14} />
             带着解释提问
           </button>
         </div>
       )}
-    </article>
-  );
-}
-export function NoteCard({ data, selected }: NodeProps<CanvasNode>) {
-  const n = data.note!;
-  const [prompt, setPrompt] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
-  const last = n.messages.filter((m) => m.role === "assistant").at(-1);
-  const messages = showHistory ? n.messages : n.messages.slice(-2);
-  function send() {
-    if (!prompt.trim() || data.busy) return;
-    if (data.onAsk?.(n.id, prompt.trim()) !== false) setPrompt("");
-  }
-  return (
-    <article className={`note-card ${selected ? "is-selected" : ""}`}>
-      <div className="note-header drag-handle">
-        <StickyIcon size={15} />
-        <span>{n.attachedTo ? "关联批注" : "自由批注"}</span>
-        {n.attachedTo && (
-          <button
-            className="nodrag icon-button"
-            title="解除关联"
-            onClick={() => data.onDetach?.(n.id)}
-          >
-            ↗
-          </button>
-        )}
-      </div>
-      <div className="nodrag nopan note-inner">
-        <input
-          className="note-title"
-          aria-label="批注标题"
-          value={n.title}
-          onChange={(e) => data.onNoteChange?.(n.id, { title: e.target.value })}
-        />
-        <textarea
-          className="note-body"
-          aria-label="批注内容"
-          placeholder="留下一点发现，或者一个没想通的地方……"
-          value={n.text}
-          onChange={(e) => data.onNoteChange?.(n.id, { text: e.target.value })}
-        />
-        <div className="note-context">
-          <span>AI 参考</span>
-          {data.refs?.slice(0, 3).map((r) => (
-            <span key={`${r.kind}-${r.id}`} title={r.text}>
-              {r.kind === "topic" ? "起始问题" : r.title}
-            </span>
-          ))}
-          {(data.refs?.length ?? 0) > 3 && (
-            <span
-              title={data.refs
-                ?.slice(3)
-                .map((r) => r.title)
-                .join("、")}
-            >
-              +{data.refs!.length - 3}
-            </span>
-          )}
-        </div>
-        {!!messages.length && (
-          <div className="note-conversation">
-            {n.messages.length > 2 && (
-              <button
-                className="history-toggle"
-                onClick={() => setShowHistory(!showHistory)}
-              >
-                {showHistory
-                  ? "收起对话"
-                  : `查看之前 ${n.messages.length - 2} 条消息`}
-              </button>
-            )}
-            {messages.map((m) => (
-              <div key={m.id} className={`note-message ${m.role}`}>
-                <span>{m.role === "user" ? "你" : "AI"}</span>
-                <p>{m.text}</p>
-              </div>
-            ))}
-          </div>
-        )}
-        {data.pending && (
-          <div className="note-message assistant streaming">
-            <span>AI</span>
-            <p>{data.pending}</p>
-          </div>
-        )}
-        {data.busy && !data.pending && (
-          <div className="thinking">
-            <i />
-            <i />
-            <i />
-            <span>正在看这片上下文</span>
-          </div>
-        )}
-        {data.error && <div className="note-error">{data.error}</div>}
-        {last && !data.busy && (
-          <button
-            className="promote-button"
-            onClick={() => data.onPromote?.(n.id, last.text)}
-          >
-            <Plus size={13} />
-            选取回答，加入地图
-          </button>
-        )}
-        <div className="note-composer">
-          <textarea
-            aria-label="向 AI 提问"
-            placeholder="问这里，也可以说说你的理解…"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                send();
-              }
-            }}
-          />
-          {data.busy ? (
-            <button title="停止回答" onClick={() => data.onStop?.(n.id)}>
-              <Square size={14} />
-            </button>
-          ) : (
-            <button
-              title="发送提问"
-              aria-label="发送提问"
-              disabled={!prompt.trim()}
-              onClick={send}
-            >
-              <ArrowRight size={16} />
-            </button>
-          )}
-        </div>
-        <div className="note-foot">回答留在这里，由你决定是否加入地图</div>
-      </div>
-    </article>
+    </div>
   );
 }

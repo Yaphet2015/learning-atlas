@@ -1,71 +1,84 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
-  Background,
-  BackgroundVariant,
-  Controls,
-  MiniMap,
+  ConnectionMode,
   useReactFlow,
   type Edge,
   type Connection,
   type NodeChange,
-  applyNodeChanges,
-  MarkerType,
 } from "@xyflow/react";
-import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  BookOpen,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  CircleHelp,
-  Compass,
-  Focus,
-  Layers3,
-  LoaderCircle,
-  MessageCircle,
-  MoreHorizontal,
-  MousePointer2,
-  Plus,
-  Search,
-  Settings2,
-  Sparkles,
-  StickyNote as StickyIcon,
-  Undo2,
-  X,
-} from "lucide-react";
+import { ArrowRight, LoaderCircle, Plus, X } from "lucide-react";
 import type {
   AIRequest,
   AISettings,
   AIUpdate,
   Board,
   BoardSummary,
-  ConceptNode,
-  Point,
   Selection,
   StickyNote,
+  Understanding,
 } from "./shared/types";
 import { api, isDesktop } from "./api";
 import {
   createWalkthroughBoard,
   createEmptyBoard,
+  newId,
   newNote,
   expandWalkthrough,
   buildMapFromAI,
 } from "./model/boards";
 import { contextForNote } from "./model/context";
-import { removeSelection, cacheMessages } from "./model/editor";
+import {
+  addChild,
+  addSibling,
+  cacheMessages,
+  removeSelection,
+  reorder,
+  reparent,
+} from "./model/editor";
+import { insertSlot, layoutTree, type Slot } from "./model/layout";
 import { flushBoardCache, loadBoardForNavigation } from "./model/persistence";
 import {
   ConceptCard,
-  SceneCard,
-  NoteCard,
+  GhostCard,
+  RootCard,
   type CanvasNode,
 } from "./components/CanvasNodes";
+import { TreeEdge, SeqEdge } from "./components/TreeEdge";
+import { CrossEdge } from "./components/CrossEdge";
+import { LevelGuides } from "./components/LevelGuides";
+import {
+  Dock,
+  MapSwitcher,
+  MapUnit,
+  Palette,
+  Progress,
+  type Tool,
+} from "./components/Chrome";
+import { Drawer } from "./components/Drawer";
+import { StudyMode } from "./components/StudyMode";
+import { Outline } from "./components/Outline";
+import { RoughBox, SketchDefs } from "./components/sketch/RoughBox";
 import { Settings } from "./components/Settings";
-const nodeTypes = { concept: ConceptCard, scene: SceneCard, note: NoteCard };
+
+const nodeTypes = { concept: ConceptCard, root: RootCard, ghost: GhostCard };
+const edgeTypes = { tree: TreeEdge, seq: SeqEdge, cross: CrossEdge };
+const GHOST = "ghost-slot";
+function applySlot(board: Board, id: string, slot: Slot): Board {
+  return slot.kind === "reorder"
+    ? reorder(board, id, slot.order)
+    : reparent(board, id, slot.parentId, slot.order);
+}
+function useMedia(query: string) {
+  const [match, setMatch] = useState(() => matchMedia(query).matches);
+  useEffect(() => {
+    const m = matchMedia(query);
+    const on = () => setMatch(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, [query]);
+  return match;
+}
 const defaults: AISettings = {
   configured: false,
   source: "none",
@@ -105,7 +118,24 @@ export default function App() {
       text: string;
       title: string;
     } | null>(null),
-    [search, setSearch] = useState("");
+    [drawer, setDrawer] = useState<string | null>(null),
+    [palette, setPalette] = useState(false),
+    [study, setStudy] = useState<{ startId?: string } | null>(null),
+    [tool, setTool] = useState<Tool>("select"),
+    [editingId, setEditingId] = useState<string | null>(null),
+    [preview, setPreview] = useState<Board | null>(null),
+    [measured, setMeasured] = useState<
+      Record<string, { width: number; height: number }>
+    >({}),
+    [dragPos, setDragPos] = useState<{
+      id: string;
+      x: number;
+      y: number;
+    } | null>(null),
+    [dark, setDark] = useState(
+      () => matchMedia("(prefers-color-scheme: dark)").matches,
+    ),
+    mobile = useMedia("(max-width: 720px)");
   const [closing, setClosing] = useState(false);
   const editingLocked = useRef(false);
   const boardCache = useRef(new Map<string, Board>()),
@@ -347,31 +377,32 @@ export default function App() {
       }),
     [flow],
   );
+  /** Open the drawer on the card's note (creating one if needed), or a free note. */
   const addNote = useCallback(
-    (attachment?: StickyNote["attachedTo"], position?: Point) => {
+    (attachment?: StickyNote["attachedTo"], text?: string) => {
       const b = boardRef.current;
       if (!b) return;
-      let pos = position ?? center();
-      if (attachment?.kind === "node") {
-        const n = b.nodes.find((n) => n.id === attachment.id);
-        if (n)
-          pos = {
-            x: n.position.x + (n.kind === "scene" ? 790 : 300),
-            y: n.position.y,
-          };
+      const existing = attachment
+        ? b.notes.find(
+            (n) =>
+              n.attachedTo?.kind === attachment.kind &&
+              n.attachedTo.id === attachment.id,
+          )
+        : undefined;
+      if (existing && !text) {
+        setDrawer(existing.id);
+        return;
       }
-      const note = newNote(b, pos, attachment);
+      const note = newNote(b, { x: 0, y: 0 }, attachment);
       if (attachment?.id === "scene-browser" && b.scene.explanation)
         note.text = b.scene.explanation;
+      if (text) note.text = text;
+      if (attachment?.kind === "node")
+        note.title = b.nodes.find((n) => n.id === attachment.id)?.title ?? "";
       edit((current) => ({ ...current, notes: [...current.notes, note] }));
-      setSelection({ kind: "note", id: note.id });
-      showToast(
-        attachment
-          ? "批注已关联；提问时会带上相关分支。"
-          : "已放下一张自由批注。拖动标题可以移动。",
-      );
+      setDrawer(note.id);
     },
-    [edit, center, showToast],
+    [edit],
   );
   const sendAI = useCallback(
     async (request: AIRequest, anchor?: string) => {
@@ -455,7 +486,6 @@ export default function App() {
           return;
         }
         putBoard(next);
-        setTimeout(() => flow.fitView({ padding: 0.18, duration: 500 }), 80);
         return;
       }
       if (!settings.configured) {
@@ -482,7 +512,7 @@ export default function App() {
         id,
       );
     },
-    [putBoard, flow, settings.configured, sendAI],
+    [putBoard, settings.configured, sendAI, showToast],
   );
   const generateMap = useCallback(
     (target: Board) => {
@@ -529,7 +559,8 @@ export default function App() {
       setBoard(b);
       setPast([]);
       setSelection(null);
-      setTimeout(() => flow.fitView({ padding: 0.17, duration: 400 }), 60);
+      setDrawer(null);
+      setTimeout(() => flow.fitView({ padding: 0.16, duration: 400 }), 60);
     } catch (e) {
       showToast(errorText(e));
     } finally {
@@ -550,6 +581,7 @@ export default function App() {
       setBoard(next);
       setPast([]);
       setSelection(null);
+      setDrawer(null);
       setShowNew(false);
       setTopic("");
       await refreshList();
@@ -573,743 +605,630 @@ export default function App() {
       return p.slice(0, -1);
     });
   }, []);
-  useEffect(() => {
-    const listener = (e: KeyboardEvent) => {
-      const typing = (e.target as HTMLElement)?.matches(
-        "input,textarea,[contenteditable=true]",
-      );
-      if (e.key === "Escape") {
-        setShowNew(false);
-        setShowSettings(false);
-        setPromote(null);
-        setSelection(null);
-      }
-      if (typing) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
-        e.preventDefault();
-        setShowNew(true);
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        undo();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        void flush();
-      } else if (e.key.toLowerCase() === "n") {
-        e.preventDefault();
-        addNote();
-      } else if (e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        flow.fitView({ padding: 0.18, duration: 400 });
-      }
-    };
-    window.addEventListener("keydown", listener);
-    return () => window.removeEventListener("keydown", listener);
-  }, [undo, flush, addNote, flow]);
-  const nodes = useMemo<CanvasNode[]>(() => {
-    if (!board) return [];
-    return [
-      ...board.nodes.map((n) => ({
-        id: n.id,
-        type: n.kind,
-        position: n.position,
-        selected: selection?.kind === "node" && selection.id === n.id,
-        data: {
-          concept: n,
-          scene: board.scene,
-          onExpand: expand,
-          onNote: (id: string) => addNote({ kind: "node", id }),
-          onScene: (patch: any) =>
-            edit((b) => ({ ...b, scene: { ...b.scene, ...patch } }), false),
-        },
-      })),
-      ...board.notes.map((n) => ({
-        id: n.id,
-        type: "note",
-        position: n.position,
-        dragHandle: ".drag-handle",
-        selected: selection?.kind === "note" && selection.id === n.id,
-        zIndex: 5,
-        data: {
-          note: n,
-          refs: contextForNote(
-            board,
-            n.id,
-            selection?.kind === "note" ? null : selection,
-          ).references,
-          ...pending[`${board.id}/${n.id}`],
-          pending: pending[`${board.id}/${n.id}`]?.text,
-          onNoteChange: (id: string, patch: Partial<StickyNote>) =>
-            edit(
-              (b) => ({
-                ...b,
-                notes: b.notes.map((n) =>
-                  n.id === id ? { ...n, ...patch } : n,
-                ),
-              }),
-              false,
-            ),
-          onAsk: askNote,
-          onStop: (id: string) => {
-            void api.stop(board.id, id).catch((e) => showToast(errorText(e)));
-          },
-          onPromote: (id: string, text: string) =>
-            setPromote({ noteId: id, title: "新的发现", text }),
-          onDetach: (id: string) =>
-            edit((b) => ({
-              ...b,
-              notes: b.notes.map((n) =>
-                n.id === id ? { ...n, attachedTo: undefined } : n,
-              ),
-            })),
-        },
-      })),
-    ];
-  }, [board, selection, expand, addNote, edit, pending, askNote, showToast]);
-  const edges = useMemo<Edge[]>(
-    () =>
-      board?.relations.map((r) => ({
-        id: r.id,
-        source: r.source,
-        target: r.target,
-        label: r.label,
-        type: "smoothstep",
-        selected: selection?.kind === "relation" && selection.id === r.id,
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 13,
-          height: 13,
-          color: "#a6b3ac",
-        },
-        style: { stroke: "#b2bdb5", strokeWidth: 1.5 },
-        labelStyle: { fontSize: 11, fill: "#768278" },
-        labelBgStyle: { fill: "#f6f7f3" },
-        labelBgPadding: [8, 4],
-      })) ?? [],
-    [board?.relations, selection],
-  );
-  const onNodesChange = useCallback(
-    (changes: NodeChange<CanvasNode>[]) => {
-      const positions = changes.filter(
-        (c) => c.type === "position" && c.position,
-      );
-      if (!positions.length) return;
-      edit(
-        (b) => ({
-          ...b,
-          nodes: b.nodes.map((n) => {
-            const p = positions.find((c) => "id" in c && c.id === n.id);
-            return p?.type === "position" && p.position
-              ? { ...n, position: p.position }
-              : n;
-          }),
-          notes: b.notes.map((n) => {
-            const p = positions.find((c) => "id" in c && c.id === n.id);
-            return p?.type === "position" && p.position
-              ? { ...n, position: p.position }
-              : n;
-          }),
-        }),
-        false,
-      );
-    },
-    [edit],
-  );
-  const connect = useCallback(
-    (connection: Connection) => {
-      if (
-        !connection.source ||
-        !connection.target ||
-        connection.source === connection.target
-      )
-        return;
+  const setStatus = useCallback(
+    (id: string, status: Understanding, hand?: string) =>
       edit((b) => ({
         ...b,
-        relations: [
-          ...b.relations,
-          {
-            id: uid(),
-            source: connection.source!,
-            target: connection.target!,
-            label: "关联",
-          },
-        ],
-      }));
+        nodes: b.nodes.map((n) =>
+          n.id === id ? { ...n, status, ...(hand ? { hand } : {}) } : n,
+        ),
+      })),
+    [edit],
+  );
+  const rename = useCallback(
+    (id: string, title: string) =>
+      edit((b) => ({
+        ...b,
+        nodes: b.nodes.map((n) => (n.id === id ? { ...n, title } : n)),
+      })),
+    [edit],
+  );
+  const addChildOf = useCallback(
+    (parentId: string) => {
+      const id = newId("concept");
+      setPreview(null);
+      edit((b) => addChild(b, parentId, id));
+      setSelection({ kind: "node", id });
+      setEditingId(id);
     },
     [edit],
   );
-  const selectedNode = board?.nodes.find(
-      (n) => selection?.kind === "node" && n.id === selection.id,
-    ),
-    selectedRelation = board?.relations.find(
-      (r) => selection?.kind === "relation" && r.id === selection.id,
-    ),
-    selectedNote = board?.notes.find(
-      (n) => selection?.kind === "note" && n.id === selection.id,
-    );
-  const updateSelected = (patch: Partial<ConceptNode>) => {
-    if (selectedNode)
-      edit(
-        (b) => ({
-          ...b,
-          nodes: b.nodes.map((n) =>
-            n.id === selectedNode.id ? { ...n, ...patch } : n,
-          ),
-        }),
-        false,
-      );
-  };
+  const addSiblingOf = useCallback(
+    (siblingId: string) => {
+      const b = boardRef.current;
+      const node = b?.nodes.find((n) => n.id === siblingId);
+      if (!node) return;
+      if (!node.parentId) return addChildOf(siblingId);
+      const id = newId("concept");
+      edit((current) => addSibling(current, siblingId, id));
+      setSelection({ kind: "node", id });
+      setEditingId(id);
+    },
+    [edit, addChildOf],
+  );
+  const selectedNodeId = selection?.kind === "node" ? selection.id : null;
+  const rootId = board?.nodes.find((n) => n.parentId === null)?.id ?? null;
   function removeSelected() {
     if (!selection) return;
+    if (selection.kind === "node" && selection.id === rootId) {
+      showToast("起点问题不能删除，地图都从这里长出来。");
+      return;
+    }
     edit((b) => removeSelection(b, selection));
     setSelection(null);
     showToast("已移除。⌘Z 可以撤销。");
   }
+  const ask = useCallback(() => {
+    addNote(selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined);
+    setTimeout(
+      () =>
+        document
+          .querySelector<HTMLTextAreaElement>(".drawer footer textarea")
+          ?.focus(),
+      60,
+    );
+  }, [addNote, selectedNodeId]);
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement)?.matches(
+        "input,textarea,select,[contenteditable=true]",
+      );
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPalette((p) => !p);
+        return;
+      }
+      if (e.key === "Escape") {
+        setShowNew(false);
+        setShowSettings(false);
+        setPromote(null);
+        setPalette(false);
+        if (!typing) {
+          if (drawer) setDrawer(null);
+          else setSelection(null);
+          setTool("select");
+        }
+      }
+      // While a title is being edited (focus may still be moving), keys are text.
+      if (typing || study || palette || editingId) return;
+      const key = e.key.toLowerCase();
+      if (mod && key === "n") {
+        e.preventDefault();
+        setShowNew(true);
+      } else if (mod && key === "z") {
+        e.preventDefault();
+        undo();
+      } else if (mod && key === "s") {
+        e.preventDefault();
+        void flush();
+      } else if (mod) {
+        return;
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        const parent = selectedNodeId ?? rootId;
+        if (parent) addChildOf(parent);
+      } else if (e.key === "Enter" && selectedNodeId) {
+        e.preventDefault();
+        addSiblingOf(selectedNodeId);
+      } else if (e.key === "F2" && selectedNodeId) {
+        setEditingId(selectedNodeId);
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selection) {
+        e.preventDefault();
+        removeSelected();
+      } else if (key === "f") {
+        setStudy({ startId: selectedNodeId ?? undefined });
+      } else if (key === "v") setTool("select");
+      else if (key === "h") setTool("hand");
+      else if (key === "l") {
+        setTool((t) => (t === "link" ? "select" : "link"));
+      } else if (key === "n") {
+        addNote(
+          selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined,
+        );
+      } else if (e.key === "/") {
+        e.preventDefault();
+        ask();
+      } else if (key === "0") {
+        flow.fitView({ padding: 0.16, duration: 400 });
+      } else if (key === "d") {
+        setDark((d) => !d);
+      } else if (selectedNodeId && ["1", "2", "3"].includes(key)) {
+        setStatus(
+          selectedNodeId,
+          (["unseen", "exploring", "explained"] as const)[Number(key) - 1],
+        );
+      }
+    };
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  });
+
+  // ---- layout: positions come only from layoutTree (or a drag/insert preview)
+  const shown = preview ?? board;
+  const baseLayout = useMemo(
+    () => layoutTree(board?.nodes ?? []),
+    [board?.nodes],
+  );
+  const layout = useMemo(
+    () => (shown === board ? baseLayout : layoutTree(shown?.nodes ?? [])),
+    [shown, board, baseLayout],
+  );
+  const slotRef = useRef<{ id: string; slot: Slot } | null>(null);
+  const hoverAdd = useCallback((id: string | null) => {
+    const b = boardRef.current;
+    setPreview(id && b ? addChild(b, id, GHOST) : null);
+  }, []);
+  const nodes = useMemo<CanvasNode[]>(() => {
+    if (!shown || !board) return [];
+    const out: CanvasNode[] = [];
+    for (const n of shown.nodes) {
+      const p = layout.positions.get(n.id);
+      if (!p) continue;
+      if (n.id === GHOST) {
+        out.push({
+          id: GHOST,
+          type: "ghost",
+          position: { x: p.x, y: p.y },
+          width: p.w,
+          height: 74,
+          measured: { width: p.w, height: 74 },
+          data: { w: p.w },
+          draggable: false,
+          selectable: false,
+        });
+        continue;
+      }
+      const dragging = dragPos?.id === n.id;
+      if (dragging && slotRef.current)
+        out.push({
+          id: GHOST,
+          type: "ghost",
+          position: { x: p.x, y: p.y },
+          width: p.w,
+          height: 74,
+          measured: { width: p.w, height: 74 },
+          data: { w: p.w },
+          draggable: false,
+          selectable: false,
+        });
+      out.push({
+        id: n.id,
+        type: n.parentId === null ? "root" : "concept",
+        position: dragging
+          ? { x: dragPos.x, y: dragPos.y }
+          : { x: p.x, y: p.y },
+        width: p.w,
+        measured: measured[n.id],
+        draggable:
+          n.parentId !== null && tool === "select" && editingId !== n.id,
+        selected: selectedNodeId === n.id,
+        className: dragging ? "is-dragging" : undefined,
+        data: {
+          concept: n,
+          no: n.parentId
+            ? `§${String(n.order + 1).padStart(2, "0")}`
+            : undefined,
+          topic: board.topic,
+          createdAt: board.createdAt,
+          scene: board.scene,
+          editing: editingId === n.id,
+          linkMode: tool === "link",
+          onRename: rename,
+          onEditDone: () => setEditingId(null),
+          onAddChild: addChildOf,
+          onAddSibling: addSiblingOf,
+          onPreviewAdd: hoverAdd,
+          onStatus: setStatus,
+          onStartEdit: setEditingId,
+          onAsk: (id: string) => addNote({ kind: "node", id }),
+          onExpand: expand,
+          canExpand:
+            !n.expanded &&
+            (board.kind === "ai" ||
+              ["concept-dom", "concept-style", "concept-render"].includes(
+                n.id,
+              )),
+          onScene: (patch: Partial<Board["scene"]>) =>
+            edit((b) => ({ ...b, scene: { ...b.scene, ...patch } }), false),
+          onNote: (id: string) => addNote({ kind: "node", id }),
+        },
+      });
+    }
+    return out;
+  }, [
+    shown,
+    board,
+    layout,
+    measured,
+    dragPos,
+    tool,
+    editingId,
+    selectedNodeId,
+    rename,
+    addChildOf,
+    addSiblingOf,
+    hoverAdd,
+    setStatus,
+    addNote,
+    expand,
+    edit,
+  ]);
+  const edges = useMemo<Edge[]>(() => {
+    if (!shown) return [];
+    const out: Edge[] = [];
+    const by = new Map(shown.nodes.map((n) => [n.id, n]));
+    for (const [parent, kids] of layout.children) {
+      const real = kids.filter((k) => k !== GHOST);
+      const pw = layout.positions.get(parent)?.w ?? 176;
+      real.forEach((child, i) => {
+        const k = real.length;
+        out.push({
+          id: `tree-${child}`,
+          type: "tree",
+          source: parent,
+          target: child,
+          sourceHandle: "b",
+          targetHandle: "t",
+          selectable: false,
+          focusable: false,
+          data: {
+            offset: k > 1 ? (i - (k - 1) / 2) * Math.min(24, pw / k / 1.5) : 0,
+            unseen: by.get(child)?.status === "unseen",
+          },
+        });
+        if (i > 0)
+          out.push({
+            id: `seq-${real[i - 1]}-${child}`,
+            type: "seq",
+            source: real[i - 1],
+            target: child,
+            sourceHandle: "b",
+            targetHandle: "t",
+            selectable: false,
+            focusable: false,
+          });
+      });
+    }
+    for (const r of shown.relations)
+      out.push({
+        id: r.id,
+        type: "cross",
+        source: r.source,
+        target: r.target,
+        sourceHandle: "b",
+        targetHandle: "t",
+        selected: selection?.kind === "relation" && selection.id === r.id,
+        data: { label: r.label },
+      });
+    return out;
+  }, [shown, layout, selection]);
+  // Positions are controlled by layoutTree; only drag offsets and measured
+  // sizes (needed by the minimap) flow back from React Flow.
+  const onNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
+    const sizes: Record<string, { width: number; height: number }> = {};
+    for (const c of changes) {
+      if (c.type === "position" && c.dragging && c.position)
+        setDragPos({ id: c.id, x: c.position.x, y: c.position.y });
+      if (c.type === "dimensions" && c.dimensions) sizes[c.id] = c.dimensions;
+    }
+    if (Object.keys(sizes).length) setMeasured((m) => ({ ...m, ...sizes }));
+  }, []);
+  const onNodeDrag = useCallback(
+    (_: unknown, node: CanvasNode) => {
+      const b = boardRef.current;
+      if (!b) return;
+      const w = baseLayout.positions.get(node.id)?.w ?? 176;
+      const heights = new Map(
+        b.nodes.map((n) => [
+          n.id,
+          flow.getInternalNode(n.id)?.measured.height ?? 120,
+        ]),
+      );
+      const slot = insertSlot(
+        node.id,
+        { x: node.position.x + w / 2, y: node.position.y },
+        b.nodes,
+        baseLayout,
+        heights,
+      );
+      const key = slot ? JSON.stringify(slot) : "";
+      if (key === (slotRef.current ? JSON.stringify(slotRef.current.slot) : ""))
+        return;
+      slotRef.current = slot ? { id: node.id, slot } : null;
+      setPreview(slot ? applySlot(b, node.id, slot) : null);
+    },
+    [baseLayout, flow],
+  );
+  const onNodeDragStop = useCallback(() => {
+    const s = slotRef.current;
+    slotRef.current = null;
+    setDragPos(null);
+    setPreview(null);
+    if (s) edit((b) => applySlot(b, s.id, s.slot));
+  }, [edit]);
+  const connect = useCallback(
+    (c: Connection) => {
+      setTool("select");
+      if (!c.source || !c.target || c.source === c.target) return;
+      edit((b) =>
+        b.relations.some((r) => r.source === c.source && r.target === c.target)
+          ? b
+          : {
+              ...b,
+              relations: [
+                ...b.relations,
+                {
+                  id: newId("relation"),
+                  source: c.source,
+                  target: c.target,
+                  label: "关联",
+                  kind: "cross",
+                },
+              ],
+            },
+      );
+      showToast("已连上一条交叉链接。选中它可以改标签。");
+    },
+    [edit, showToast],
+  );
+  const bounds = useMemo(() => {
+    const ps = [...baseLayout.positions.values()];
+    return {
+      levels: Math.max(1, ...ps.map((p) => p.level + 1)),
+      left: Math.min(0, ...ps.map((p) => p.x)),
+      right: Math.max(0, ...ps.map((p) => p.x + p.w)),
+    };
+  }, [baseLayout]);
+  const selectedRelation = board?.relations.find(
+    (r) => selection?.kind === "relation" && r.id === selection.id,
+  );
+  const drawerNote = board?.notes.find((n) => n.id === drawer);
   if (!loaded)
     return (
       <div className="loading-screen">
-        <Compass size={28} />
         <p>铺开你的学习地图…</p>
       </div>
     );
   return (
-    <main className="app-shell">
+    <main className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""}`}>
+      <SketchDefs />
+      <div className="grain" />
       {closing && (
         <div className="closing-overlay" role="status">
           <LoaderCircle size={18} />
-          正在保存全部白板…
+          正在保存全部地图…
         </div>
       )}
-      <aside className="sidebar">
-        <div className="window-drag" />
-        <div className="brand">
-          <div className="brand-mark">
-            <Compass size={22} strokeWidth={1.6} />
-          </div>
-          <div>
-            Learning Atlas<span>让理解，慢慢长出来</span>
-          </div>
-        </div>
-        <button className="new-board-button" onClick={() => setShowNew(true)}>
-          <Plus size={16} />
-          新的问题<span>⌘ N</span>
-        </button>
-        <div className="sidebar-search">
-          <Search size={14} />
-          <input
-            aria-label="搜索白板"
-            placeholder="找到一张白板…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="sidebar-label">
-          我的白板 <span>{boards.length}</span>
-        </div>
-        <nav className="board-list">
-          {boards
-            .filter((b) => b.title.toLowerCase().includes(search.toLowerCase()))
-            .map((b) => (
-              <button
-                key={b.id}
-                onClick={() => void switchBoard(b.id)}
-                className={b.id === board?.id ? "active" : ""}
-              >
-                <span className="board-symbol">
-                  {b.kind === "walkthrough" ? (
-                    <BookOpen size={16} />
-                  ) : (
-                    <Layers3 size={16} />
-                  )}
-                </span>
-                <span>
-                  {b.title}
-                  <small>
-                    {b.kind === "walkthrough" ? "内置演练" : "我的探索"}
-                  </small>
-                </span>
-                {b.id === board?.id && <span className="active-dot" />}
-              </button>
-            ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="learning-note">
-            <span>小步探索，大图景理解。</span>
-            <p>
-              不用一口气学完。
-              <br />
-              带着问题，走近一个概念。
-            </p>
-          </div>
-          <button
-            className="settings-button"
-            onClick={() => setShowSettings(true)}
+      {board && mobile && (
+        <Outline
+          board={board}
+          onStatus={(id, s) => setStatus(id, s)}
+          onOpen={() => setPalette(true)}
+          onStudy={() => setStudy({})}
+        />
+      )}
+      {board && !mobile && (
+        <>
+          <ReactFlow<CanvasNode>
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onNodeDrag={onNodeDrag}
+            onNodeDragStop={onNodeDragStop}
+            onConnect={connect}
+            connectionMode={ConnectionMode.Loose}
+            connectionRadius={70}
+            nodesConnectable={tool === "link"}
+            onNodeClick={(_, n) =>
+              n.type !== "ghost" && setSelection({ kind: "node", id: n.id })
+            }
+            onNodeDoubleClick={(_, n) =>
+              n.type !== "ghost" && setEditingId(n.id)
+            }
+            onEdgeClick={(_, e) =>
+              e.type === "cross" && setSelection({ kind: "relation", id: e.id })
+            }
+            onPaneClick={() => {
+              setSelection(null);
+              setEditingId(null);
+            }}
+            onPaneContextMenu={(e) => {
+              e.preventDefault();
+              addNote();
+            }}
+            fitView
+            fitViewOptions={{ padding: 0.16 }}
+            minZoom={0.18}
+            maxZoom={1.8}
+            deleteKeyCode={null}
+            selectionKeyCode={null}
+            multiSelectionKeyCode={null}
+            panOnScroll
+            panOnDrag={tool === "hand" ? true : [1, 2]}
+            zoomOnDoubleClick={false}
+            nodeDragThreshold={4}
+            proOptions={{ hideAttribution: true }}
           >
-            <span
-              className={`connection-dot ${settings.configured ? "connected" : ""}`}
-            />
-            <span>
-              {settings.configured ? "AI 已配置" : "连接你的 AI"}
-              <small>
-                {settings.configured ? settings.model : "内置演练无需连接"}
-              </small>
-            </span>
-            <Settings2 size={15} />
-          </button>
-          <div className="storage-caption">
-            {isDesktop ? "白板保存在这台 Mac" : "浏览器预览 · 仅当前浏览器保存"}
-          </div>
-        </div>
-      </aside>
-      <section className="workspace">
-        <header className="topbar">
-          <div className="breadcrumb">
-            <span>我的白板</span>
-            <ChevronRight size={13} />
-            <strong>{board?.title ?? "Learning Atlas"}</strong>
-          </div>
-          <div className="topbar-actions">
-            <span className={`save-status ${saveStatus}`}>
-              {saveStatus === "saving" ? (
-                <LoaderCircle size={12} />
-              ) : saveStatus === "saved" ? (
-                <Check size={12} />
-              ) : (
-                <CircleHelp size={12} />
-              )}{" "}
-              {saveStatus === "saving"
-                ? "保存中"
-                : saveStatus === "saved"
-                  ? "已保存"
-                  : "保存失败"}
-            </span>
-            <button
-              className="icon-button"
-              title="撤销 ⌘Z"
-              aria-label="撤销"
-              disabled={!past.length}
-              onClick={undo}
-            >
-              <Undo2 size={16} />
-            </button>
-            <button
-              className="icon-button"
-              title="AI 设置"
-              onClick={() => setShowSettings(true)}
-            >
-              <MoreHorizontal size={18} />
-            </button>
-          </div>
-        </header>
-        <div className="question-bar">
-          <div className="question-icon">
-            <Sparkles size={19} />
-          </div>
-          <div>
-            <span className="eyebrow">从这个问题出发</span>
-            <h1>{board?.topic ?? "开始一个新问题"}</h1>
-          </div>
-          <span className="board-kind">
-            {board?.kind === "walkthrough" ? "内置演练" : "自由探索"}
-          </span>
-        </div>
-        <div className="canvas-layout">
-          <div className="canvas-wrap">
-            <div className="canvas-top-left">
-              <span className="canvas-label">
-                <span className="small-dot" />
-                学习地图
-              </span>
-              <span>
-                {board?.nodes.length ?? 0} 个概念 · {board?.notes.length ?? 0}{" "}
-                张批注
-              </span>
+            <LevelGuides {...bounds} />
+            <MapUnit />
+          </ReactFlow>
+          <MapSwitcher
+            title={board.title}
+            nodes={board.nodes}
+            onOpen={() => setPalette(true)}
+          />
+          <Progress
+            nodes={board.nodes}
+            onStudy={() => setStudy({ startId: selectedNodeId ?? undefined })}
+          />
+          <Dock
+            tool={tool}
+            setTool={setTool}
+            onAddConcept={() => {
+              const parent = selectedNodeId ?? rootId;
+              if (parent) addChildOf(parent);
+            }}
+            onNote={() =>
+              addNote(
+                selectedNodeId
+                  ? { kind: "node", id: selectedNodeId }
+                  : undefined,
+              )
+            }
+            onAsk={ask}
+            onSettings={() => setShowSettings(true)}
+          />
+          {tool === "link" && (
+            <div className="hint lab">
+              连线：从一张卡拖到另一张卡 · Esc 取消
             </div>
-            {board && (
-              <ReactFlow<CanvasNode>
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                onNodesChange={onNodesChange}
-                onNodeDragStart={() => {
-                  if (boardRef.current)
-                    setPast((p) => [
-                      ...p.slice(-29),
-                      structuredClone(boardRef.current!),
-                    ]);
-                }}
-                onConnect={connect}
-                onNodeClick={(_, n) =>
-                  setSelection({
-                    kind: n.type === "note" ? "note" : "node",
-                    id: n.id,
-                  })
-                }
-                onEdgeClick={(_, e) =>
-                  setSelection({ kind: "relation", id: e.id })
-                }
-                onPaneClick={() => setSelection(null)}
-                onPaneContextMenu={(e) => {
-                  e.preventDefault();
-                  addNote(
-                    undefined,
-                    flow.screenToFlowPosition({ x: e.clientX, y: e.clientY }),
-                  );
-                }}
-                fitView
-                fitViewOptions={{ padding: 0.15 }}
-                minZoom={0.18}
-                maxZoom={1.6}
-                deleteKeyCode={null}
-                panOnScroll
-                selectionOnDrag
-                panOnDrag={[1, 2]}
-                zoomOnDoubleClick={false}
-                proOptions={{ hideAttribution: true }}
-              >
-                <Background
-                  variant={BackgroundVariant.Dots}
-                  gap={24}
-                  size={1}
-                  color="#d6ddd4"
-                />
-                <Controls showInteractive={false} position="bottom-left" />
-                <MiniMap
-                  className="atlas-minimap"
-                  position="bottom-right"
-                  pannable
-                  zoomable
-                  nodeColor={(n) =>
-                    n.type === "note"
-                      ? "#e9d69b"
-                      : n.type === "scene"
-                        ? "#8dafa0"
-                        : "#bdcec3"
-                  }
-                />
-              </ReactFlow>
-            )}
-            <div className="canvas-toolbox">
-              <button title="自由批注 N" onClick={() => addNote()}>
-                <StickyIcon size={16} />
-                <span>贴张批注</span>
-                <kbd>N</kbd>
-              </button>
-              <div />
-              <button
-                title="适应地图 F"
-                onClick={() => flow.fitView({ padding: 0.18, duration: 450 })}
-              >
-                <Focus size={16} />
-                <span>查看全图</span>
-                <kbd>F</kbd>
-              </button>
-            </div>
-            <div className="canvas-help">
-              双指平移 · 捏合缩放 · 拖动概念 · 连接圆点建立关系
-            </div>
-            {mapBusy && (
-              <div className="map-progress">
-                <LoaderCircle size={16} />
-                正在搭建下一小步…
-              </div>
-            )}
-            {toast && (
-              <div className="toast" role="status">
-                {toast}
-                <button aria-label="关闭提示" onClick={() => setToast("")}>
-                  <X size={13} />
-                </button>
-              </div>
-            )}
-          </div>
-          <aside className="inspector">
-            <div className="inspector-heading">
-              <span>{selection ? "在这里，继续探索" : "接下来，试一小步"}</span>
-              {selection && (
-                <button
-                  className="icon-button"
-                  onClick={() => setSelection(null)}
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </div>
-            {selectedNode ? (
-              <>
-                <span className="inspector-symbol">{selectedNode.emoji}</span>
-                <label className="editor-label">
-                  概念
-                  <input
-                    className="editable-title"
-                    value={selectedNode.title}
-                    onChange={(e) => updateSelected({ title: e.target.value })}
-                  />
-                </label>
-                <label className="editor-label">
-                  用几句话描述
-                  <textarea
-                    className="editable-body"
-                    value={selectedNode.body}
-                    onChange={(e) => updateSelected({ body: e.target.value })}
-                  />
-                </label>
-                <div className="inspector-divider" />
-                <span className="eyebrow">你的理解，由你判断</span>
-                <div className="status-picker">
-                  {(["unseen", "exploring", "explained"] as const).map((s) => (
-                    <button
-                      key={s}
-                      className={selectedNode.status === s ? "active" : ""}
-                      onClick={() => updateSelected({ status: s })}
-                    >
-                      {s === "unseen"
-                        ? "待探索"
-                        : s === "exploring"
-                          ? "探索中"
-                          : "我能解释"}
-                    </button>
-                  ))}
-                </div>
-                <p className="quiet-copy">
-                  打开一个概念，只代表看过。能否举例、解释和运用，可以慢慢检验。
-                </p>
-                <div className="next-actions">
-                  <button
-                    onClick={() => expand(selectedNode.id)}
-                    disabled={selectedNode.expanded || mapBusy}
-                  >
-                    <Plus size={16} />
-                    <span>
-                      展开下一层<small>看组成、过程或一个例子</small>
-                    </span>
-                    <ChevronRight size={14} />
-                  </button>
-                  <button
-                    onClick={() =>
-                      addNote({ kind: "node", id: selectedNode.id })
-                    }
-                  >
-                    <MessageCircle size={16} />
-                    <span>
-                      用自己的话解释<small>让 AI 帮你找遗漏或反例</small>
-                    </span>
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-                <button className="text-danger" onClick={removeSelected}>
-                  移除概念
-                </button>
-              </>
-            ) : selectedRelation ? (
-              <>
-                <span className="eyebrow">概念之间的关系</span>
-                <div className="relation-preview">
-                  <span>
-                    {
-                      board?.nodes.find((n) => n.id === selectedRelation.source)
-                        ?.title
-                    }
-                  </span>
-                  <ArrowDown size={18} />
-                  <span>
-                    {
-                      board?.nodes.find((n) => n.id === selectedRelation.target)
-                        ?.title
-                    }
-                  </span>
-                </div>
-                <label className="editor-label">
-                  关系标签
-                  <input
-                    value={selectedRelation.label}
-                    onChange={(e) =>
-                      edit(
-                        (b) => ({
-                          ...b,
-                          relations: b.relations.map((r) =>
-                            r.id === selectedRelation.id
-                              ? { ...r, label: e.target.value }
-                              : r,
-                          ),
-                        }),
-                        false,
-                      )
-                    }
-                  />
-                </label>
-                <div className="next-actions">
-                  <button
-                    onClick={() =>
-                      addNote({ kind: "relation", id: selectedRelation.id })
-                    }
-                  >
-                    <MessageCircle size={16} />
-                    <span>
-                      为什么存在这条关系？
-                      <small>带上两端概念和附近分支提问</small>
-                    </span>
-                  </button>
-                </div>
-                <button className="text-danger" onClick={removeSelected}>
-                  移除关系
-                </button>
-              </>
-            ) : selectedNote ? (
-              <>
-                <span className="inspector-symbol">✎</span>
-                <h3>{selectedNote.title || "我的批注"}</h3>
-                <p className="quiet-copy">
-                  {selectedNote.attachedTo
-                    ? "这张批注关联到地图的一部分。"
-                    : "这是一张自由批注。"}
-                  回答会留在批注里，你可以选择将有用的部分加入地图。
-                </p>
-                <span className="eyebrow">这次 AI 会参考什么</span>
-                <div className="context-reference-list">
-                  {board &&
-                    contextForNote(board, selectedNote.id).references.map(
-                      (r) => (
-                        <div key={`${r.kind}-${r.id}`}>
-                          <span>
-                            {r.kind === "topic"
-                              ? "起始问题"
-                              : r.kind === "relation"
-                                ? "关系"
-                                : r.kind === "note"
-                                  ? "批注"
-                                  : "相关概念"}
-                          </span>
-                          <strong>{r.title}</strong>
-                          <p>{r.text}</p>
-                        </div>
+          )}
+          {selectedRelation && (
+            <div className="chrome relation-bar">
+              <RoughBox kind="soft" seedKey="relbar" />
+              <div className="bg" />
+              <span className="lab">交叉链接</span>
+              <input
+                aria-label="关系标签"
+                value={selectedRelation.label}
+                onChange={(e) =>
+                  edit(
+                    (b) => ({
+                      ...b,
+                      relations: b.relations.map((r) =>
+                        r.id === selectedRelation.id
+                          ? { ...r, label: e.target.value }
+                          : r,
                       ),
-                    )}
-                </div>
-                <label className="editor-label">
-                  关联到
-                  <select
-                    value={
-                      selectedNote.attachedTo
-                        ? `${selectedNote.attachedTo.kind}:${selectedNote.attachedTo.id}`
-                        : ""
-                    }
-                    onChange={(e) => {
-                      const [kind, id] = e.target.value.split(":");
-                      edit((b) => ({
-                        ...b,
-                        notes: b.notes.map((n) =>
-                          n.id === selectedNote.id
-                            ? {
-                                ...n,
-                                attachedTo: kind
-                                  ? { kind: kind as "node" | "relation", id }
-                                  : undefined,
-                              }
-                            : n,
-                        ),
-                      }));
-                    }}
-                  >
-                    <option value="">自由批注（只参考问题）</option>
-                    {board?.nodes.map((n) => (
-                      <option key={n.id} value={`node:${n.id}`}>
-                        概念 · {n.title}
-                      </option>
-                    ))}
-                    {board?.relations.map((r) => (
-                      <option key={r.id} value={`relation:${r.id}`}>
-                        关系 · {r.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className="text-danger" onClick={removeSelected}>
-                  移除批注
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="journey-illustration">
-                  <div className="journey-orbit" />
-                  <span>?</span>
-                  <i className="leaf one" />
-                  <i className="leaf two" />
-                  <i className="leaf three" />
-                </div>
-                <h2>
-                  先有画面，
-                  <br />
-                  再连起理解。
-                </h2>
-                <p className="inspector-intro">
-                  从小实验开始。不用急着背下名词，先看看一处变化，会影响哪里。
-                </p>
-                <div className="next-actions">
-                  {board?.kind === "walkthrough" ? (
-                    <>
-                      <button
-                        onClick={() => {
-                          setSelection({ kind: "node", id: "scene-browser" });
-                          flow.fitView({
-                            nodes: [{ id: "scene-browser" }],
-                            padding: 0.3,
-                            duration: 500,
-                          });
-                        }}
-                      >
-                        <MousePointer2 size={17} />
-                        <span>
-                          改一改颜色和宽度<small>先预测，再观察结果</small>
-                        </span>
-                        <ChevronRight size={14} />
-                      </button>
-                      <button onClick={() => expand("concept-render")}>
-                        <Layers3 size={17} />
-                        <span>
-                          拆开「布局与绘制」<small>它们为什么是两件事？</small>
-                        </span>
-                        <ChevronRight size={14} />
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      disabled={mapBusy}
-                      onClick={() => board && generateMap(board)}
-                    >
-                      <Sparkles size={17} />
-                      <span>
-                        {board && board.nodes.length > 1
-                          ? "换一个角度展开"
-                          : "生成起点"}
-                        <small>从 3 个大图景概念开始</small>
-                      </span>
-                      <ChevronRight size={14} />
-                    </button>
-                  )}
-                  <button onClick={() => addNote()}>
-                    <StickyIcon size={17} />
-                    <span>
-                      留下一个没想通的地方
-                      <small>自由提问，或者自己试着解释</small>
-                    </span>
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-                <div className="inspector-bottom-note">
-                  <BookOpen size={16} />
-                  <span>
-                    {board?.kind === "walkthrough"
-                      ? "这是可离线操作的内置演练；其他主题由你连接的 AI 生成。"
-                      : "地图只是理解的起点。AI 也可能出错，重要结论请核对可靠来源。"}
-                  </span>
-                </div>
-              </>
-            )}
-          </aside>
+                    }),
+                    false,
+                  )
+                }
+              />
+              <button
+                className="btn"
+                onClick={() =>
+                  addNote({ kind: "relation", id: selectedRelation.id })
+                }
+              >
+                问为什么
+              </button>
+              <button className="btn" onClick={removeSelected}>
+                删除
+              </button>
+            </div>
+          )}
+          {mapBusy && (
+            <div className="map-progress lab">
+              <LoaderCircle size={14} /> 正在搭建下一小步…
+            </div>
+          )}
+        </>
+      )}
+      {board && drawerNote && (
+        <Drawer
+          key={drawerNote.id}
+          note={drawerNote}
+          anchorTitle={
+            board.nodes.find((n) => n.id === drawerNote.attachedTo?.id)?.title
+          }
+          refs={
+            contextForNote(
+              board,
+              drawerNote.id,
+              selection?.kind === "note" ? null : selection,
+            ).references
+          }
+          pending={pending[`${board.id}/${drawerNote.id}`]?.text}
+          busy={pending[`${board.id}/${drawerNote.id}`]?.busy}
+          error={pending[`${board.id}/${drawerNote.id}`]?.error}
+          onChange={(patch) =>
+            edit(
+              (b) => ({
+                ...b,
+                notes: b.notes.map((n) =>
+                  n.id === drawerNote.id ? { ...n, ...patch } : n,
+                ),
+              }),
+              false,
+            )
+          }
+          onAsk={(prompt) => askNote(drawerNote.id, prompt)}
+          onStop={() =>
+            void api
+              .stop(board.id, drawerNote.id)
+              .catch((e) => showToast(errorText(e)))
+          }
+          onPromote={(text) =>
+            setPromote({ noteId: drawerNote.id, title: "新的发现", text })
+          }
+          onRemove={() => {
+            edit((b) =>
+              removeSelection(b, { kind: "note", id: drawerNote.id }),
+            );
+            setDrawer(null);
+          }}
+          onClose={() => setDrawer(null)}
+        />
+      )}
+      {board && study && (
+        <StudyMode
+          board={board}
+          startId={study.startId}
+          onRate={setStatus}
+          onAskAI={(id, text) => {
+            setStudy(null);
+            addNote({ kind: "node", id }, text);
+          }}
+          onClose={() => setStudy(null)}
+        />
+      )}
+      {palette && (
+        <Palette
+          boards={boards}
+          notes={(board?.notes ?? []).map((n) => ({
+            id: n.id,
+            title: n.title || n.text.slice(0, 24) || "未命名批注",
+          }))}
+          footer={`${isDesktop ? "白板保存在这台 Mac" : "浏览器预览 · 仅当前浏览器保存"} · ${saveStatus === "saving" ? "保存中" : saveStatus === "saved" ? "已保存" : "保存失败"}`}
+          onNote={(id) => {
+            setPalette(false);
+            setDrawer(id);
+          }}
+          currentId={board?.id}
+          onClose={() => setPalette(false)}
+          onPick={(id) => {
+            setPalette(false);
+            void switchBoard(id);
+          }}
+          onNew={() => {
+            setPalette(false);
+            setShowNew(true);
+          }}
+          onWalkthrough={() => {
+            setPalette(false);
+            void createBoard(true);
+          }}
+          onSettings={() => {
+            setPalette(false);
+            setShowSettings(true);
+          }}
+        />
+      )}
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+          <button aria-label="关闭提示" onClick={() => setToast("")}>
+            <X size={13} />
+          </button>
         </div>
-      </section>
+      )}
       {showSettings && (
         <Settings
           settings={settings}
@@ -1323,9 +1242,7 @@ export default function App() {
       {showNew && (
         <div
           className="modal-backdrop"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setShowNew(false);
-          }}
+          onMouseDown={(e) => e.target === e.currentTarget && setShowNew(false)}
         >
           <section
             className="modal new-modal"
@@ -1333,6 +1250,7 @@ export default function App() {
             aria-modal="true"
             aria-labelledby="new-title"
           >
+            <RoughBox kind="soft" seedKey="new-modal" />
             <button
               className="modal-close icon-button"
               onClick={() => setShowNew(false)}
@@ -1340,10 +1258,7 @@ export default function App() {
             >
               <X size={19} />
             </button>
-            <div className="modal-icon">
-              <Compass size={27} />
-            </div>
-            <span className="eyebrow">一张新白板</span>
+            <span className="eyebrow">一张新地图</span>
             <h2 id="new-title">什么，让你好奇？</h2>
             <p>输入一个问题、概念或领域。先看清一个小场景，再一步步展开。</p>
             <form
@@ -1361,23 +1276,18 @@ export default function App() {
                 maxLength={500}
               />
               <button
-                className="primary-button"
+                className="btn primary"
                 disabled={!topic.trim()}
                 type="submit"
               >
                 开始探索 <ArrowRight size={16} />
               </button>
             </form>
-            <div className="modal-separator">或先试试</div>
             <button
-              className="example-button"
+              className="text-button"
               onClick={() => void createBoard(true)}
             >
-              <span>◫</span>
-              <div>
-                浏览器如何把代码变成画面？<small>内置演练 · 可离线操作</small>
-              </div>
-              <ChevronRight size={16} />
+              或先试试内置演练：浏览器如何把代码变成画面？
             </button>
           </section>
         </div>
@@ -1390,6 +1300,7 @@ export default function App() {
             aria-modal="true"
             aria-labelledby="promote-title"
           >
+            <RoughBox kind="soft" seedKey="promote" />
             <button
               className="modal-close icon-button"
               onClick={() => setPromote(null)}
@@ -1422,43 +1333,30 @@ export default function App() {
               />
             </label>
             <button
-              className="primary-button"
+              className="btn primary"
               disabled={!promote.title.trim() || !promote.text.trim()}
               onClick={() => {
                 const p = promote;
+                const id = newId("concept");
                 edit((b) => {
                   const note = b.notes.find((n) => n.id === p.noteId);
-                  const id = uid();
+                  const parent =
+                    note?.attachedTo?.kind === "node"
+                      ? note.attachedTo.id
+                      : (b.nodes.find((n) => n.parentId === null)?.id ?? "");
+                  const next = addChild(b, parent, id);
                   return {
-                    ...b,
-                    nodes: [
-                      ...b.nodes,
-                      {
-                        id,
-                        kind: "concept",
-                        title: p.title,
-                        body: p.text,
-                        emoji: "◇",
-                        color: "sage",
-                        status: "exploring",
-                        position: {
-                          x: (note?.position.x ?? 0) + 360,
-                          y: note?.position.y ?? 0,
-                        },
-                      },
-                    ],
-                    relations:
-                      note?.attachedTo?.kind === "node"
-                        ? [
-                            ...b.relations,
-                            {
-                              id: uid(),
-                              source: note.attachedTo.id,
-                              target: id,
-                              label: "我的发现",
-                            },
-                          ]
-                        : b.relations,
+                    ...next,
+                    nodes: next.nodes.map((n) =>
+                      n.id === id
+                        ? {
+                            ...n,
+                            title: p.title.trim(),
+                            body: p.text.trim().slice(0, 4000),
+                            status: "exploring" as const,
+                          }
+                        : n,
+                    ),
                   };
                 });
                 setPromote(null);
