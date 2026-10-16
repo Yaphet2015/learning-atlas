@@ -1,0 +1,125 @@
+import { describe, expect, it } from "vitest";
+import { createWalkthroughBoard, newNote } from "../src/model/boards";
+import { cacheMessages, removeSelection } from "../src/model/editor";
+import { boardSchema } from "../src/shared/validation";
+import type { ChatMessage } from "../src/shared/types";
+
+function fixture() {
+  const board = createWalkthroughBoard();
+  const nodeNote = newNote(
+    board,
+    { x: 0, y: 0 },
+    { kind: "node", id: "concept-dom" },
+  );
+  const incomingNote = newNote(
+    board,
+    { x: 10, y: 10 },
+    { kind: "relation", id: "relation-scene-dom" },
+  );
+  const outgoingNote = newNote(
+    board,
+    { x: 20, y: 20 },
+    { kind: "relation", id: "relation-dom-style" },
+  );
+  const unrelatedNote = newNote(
+    board,
+    { x: 30, y: 30 },
+    { kind: "node", id: "concept-style" },
+  );
+  board.notes.push(nodeNote, incomingNote, outgoingNote, unrelatedNote);
+  return { board, nodeNote, incomingNote, outgoingNote, unrelatedNote };
+}
+
+describe("selection removal", () => {
+  it("removes a concept and its incident relations while preserving and detaching their notes", () => {
+    const { board, nodeNote, incomingNote, outgoingNote, unrelatedNote } =
+      fixture();
+    const snapshot = JSON.stringify(board);
+    const result = removeSelection(board, { kind: "node", id: "concept-dom" });
+    expect(result.nodes.some((node) => node.id === "concept-dom")).toBe(false);
+    expect(result.relations.map((edge) => edge.id)).toEqual([
+      "relation-style-render",
+    ]);
+    expect(result.notes).toHaveLength(4);
+    for (const note of [nodeNote, incomingNote, outgoingNote]) {
+      expect(
+        result.notes.find((item) => item.id === note.id)?.attachedTo,
+      ).toBeUndefined();
+    }
+    expect(result.notes.find((note) => note.id === unrelatedNote.id)).toBe(
+      unrelatedNote,
+    );
+    expect(boardSchema.safeParse(result).success).toBe(true);
+    expect(JSON.stringify(board)).toBe(snapshot);
+  });
+  it("removes only the selected relation and detaches its notes", () => {
+    const { board, nodeNote, incomingNote, outgoingNote } = fixture();
+    const result = removeSelection(board, {
+      kind: "relation",
+      id: "relation-dom-style",
+    });
+    expect(result.nodes).toBe(board.nodes);
+    expect(result.relations).toHaveLength(2);
+    expect(
+      result.notes.find((note) => note.id === outgoingNote.id)?.attachedTo,
+    ).toBeUndefined();
+    expect(
+      result.notes.find((note) => note.id === incomingNote.id)?.attachedTo,
+    ).toEqual(incomingNote.attachedTo);
+    expect(
+      result.notes.find((note) => note.id === nodeNote.id)?.attachedTo,
+    ).toEqual(nodeNote.attachedTo);
+    expect(boardSchema.safeParse(result).success).toBe(true);
+  });
+  it("deleting a note does not delete its associated concept or relation", () => {
+    const { board, outgoingNote } = fixture();
+    const result = removeSelection(board, {
+      kind: "note",
+      id: outgoingNote.id,
+    });
+    expect(result.notes).toHaveLength(3);
+    expect(result.nodes).toBe(board.nodes);
+    expect(result.relations).toBe(board.relations);
+    expect(boardSchema.safeParse(result).success).toBe(true);
+  });
+  it("leaves empty and stale selections unchanged", () => {
+    const { board } = fixture();
+    expect(removeSelection(board, null)).toBe(board);
+    expect(removeSelection(board, { kind: "node", id: "missing" })).toBe(board);
+  });
+});
+
+describe("renderer message cache", () => {
+  const message = (index: number): ChatMessage => ({
+    id: `message-${index}`,
+    role: index % 2 ? "assistant" : "user",
+    text: `Text ${index}`,
+    createdAt: "2026-10-16T00:00:00.000Z",
+  });
+  it("retains the last 200 messages in chronological order without mutating inputs", () => {
+    const messages = Array.from({ length: 250 }, (_, index) => message(index));
+    const cached = cacheMessages(messages);
+    expect(cached).toHaveLength(200);
+    expect(cached[0].id).toBe("message-50");
+    expect(cached.at(-1)?.id).toBe("message-249");
+    expect(messages).toHaveLength(250);
+    expect(cached[0]).not.toBe(messages[50]);
+  });
+  it("caps cached text at 32,000 characters while preserving the original", () => {
+    const original = { ...message(0), text: "x".repeat(40_000) };
+    expect(cacheMessages([original])[0].text).toHaveLength(32_000);
+    expect(original.text).toHaveLength(40_000);
+  });
+  it("keeps the latest version of duplicate message IDs from replayed events", () => {
+    const first = message(0);
+    const second = message(1);
+    const replayed = { ...first, text: "latest content" };
+    expect(cacheMessages([first, second, replayed])).toEqual([
+      second,
+      replayed,
+    ]);
+  });
+  it("accepts an empty history", () => {
+    expect(cacheMessages([])).toEqual([]);
+  });
+});
