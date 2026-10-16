@@ -29,165 +29,191 @@ app.on("second-instance", () => {
     window.focus();
   }
 });
-await app.whenReady();
-if (process.env.ATLAS_SMOKE_TEST === "1") {
-  const { DatabaseSync } = await import("node:sqlite");
-  const db = new DatabaseSync(":memory:");
-  const result = db.prepare("SELECT 42 AS answer").get();
-  db.close();
-  const smokeDir = await mkdtemp(path.join(tmpdir(), "learning-atlas-smoke-"));
-  try {
-    const durable = await smokeDurableStorage(smokeDir);
-    console.log(
-      JSON.stringify({
-        electron: process.versions.electron,
-        node: process.versions.node,
-        sqlite: result,
-        durable,
-      }),
+// Electron does not emit ready until the ESM entry module finishes evaluating.
+// Await readiness in a callback, never as a top-level await in this entry point.
+if (process.env.ATLAS_SMOKE_TEST === "1")
+  console.info("[smoke] entry module loaded; waiting for Electron ready");
+async function bootstrap(): Promise<void> {
+  if (process.env.ATLAS_SMOKE_TEST === "1") {
+    console.info(
+      `[smoke] Electron ready: Electron ${process.versions.electron}, Node ${process.versions.node}`,
     );
-  } finally {
-    await rm(smokeDir, { recursive: true, force: true });
-  }
-  app.quit();
-} else {
-  const store = new BoardStore(path.join(app.getPath("userData"), "boards"));
-  runtime = new AIRuntime(
-    path.join(app.getPath("userData"), "ai"),
-    (update) => {
-      if (window && !window.isDestroyed())
-        window.webContents.send("atlas:ai-update", update);
-    },
-  );
-  function assertSender(event: Electron.IpcMainInvokeEvent) {
-    const url = event.senderFrame?.url;
-    if (event.sender !== window?.webContents || !url)
-      throw new Error("Untrusted sender");
-    if (
-      developmentURL
-        ? new URL(url).origin !== new URL(developmentURL).origin
-        : !url.startsWith("file://")
-    )
-      throw new Error("Untrusted origin");
-  }
-  function handle(channel: string, fn: (...args: any[]) => unknown) {
-    ipcMain.handle(channel, async (event, ...args) => {
-      assertSender(event);
-      return fn(...args);
-    });
-  }
-  handle("atlas:list", () => store.list());
-  handle("atlas:load", (value) => store.load(id.parse(value)));
-  handle("atlas:save", (value) => store.save(boardSchema.parse(value)));
-  handle("atlas:delete", (value) => store.delete(id.parse(value)));
-  handle("atlas:ai-settings", () => runtime.getSettings());
-  handle("atlas:configure-ai", (value) =>
-    runtime.setSettings(settingsSchema.parse(value)),
-  );
-  handle("atlas:ask", (value) => {
-    if (closePending) throw new Error("App is preparing to close");
-    return runtime.ask(aiRequestSchema.parse(value));
-  });
-  handle("atlas:stop", (board, sticky) =>
-    runtime.stop(id.parse(board), id.parse(sticky)),
-  );
-  handle("atlas:history", (board, sticky) =>
-    runtime.getHistory(id.parse(board), id.parse(sticky)),
-  );
-  async function requestClose() {
-    if (closePending) return;
-    closePending = true;
-    if (!rendererReady) {
-      await runtime.close();
-      quitting = true;
-      app.quit();
-      return;
-    }
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(":memory:");
+    const result = db.prepare("SELECT 42 AS answer").get();
+    db.close();
+    console.info("[smoke] node:sqlite verified");
+    const smokeDir = await mkdtemp(
+      path.join(tmpdir(), "learning-atlas-smoke-"),
+    );
     try {
-      await runtime.quiesce();
-      window?.webContents.send("atlas:before-close");
-    } catch {
-      closePending = false;
-      await dialog.showMessageBox(window!, {
-        type: "error",
-        message: "暂时无法关闭 AI 会话",
-        detail: "请停止回答后再重试关闭。",
-        buttons: ["回到白板"],
-      });
+      console.info(
+        "[smoke] opening durable SQLite, committing, closing and reopening",
+      );
+      const durable = await smokeDurableStorage(smokeDir);
+      console.info("[smoke] durable reopen verified");
+      console.log(
+        JSON.stringify({
+          electron: process.versions.electron,
+          node: process.versions.node,
+          sqlite: result,
+          durable,
+        }),
+      );
+    } finally {
+      await rm(smokeDir, { recursive: true, force: true });
     }
-  }
-  handle("atlas:renderer-ready", () => {
-    rendererReady = true;
-  });
-  handle("atlas:close-ready", async (saved) => {
-    if (saved !== true) {
-      closePending = false;
-      await dialog.showMessageBox(window!, {
-        type: "error",
-        message: "白板尚未保存",
-        detail: "请先重试保存，再关闭应用。",
-        buttons: ["回到白板"],
-      });
-      return;
-    }
-    await runtime.close();
-    quitting = true;
+    console.info("[smoke] complete; quitting Electron");
     app.quit();
-  });
-  function createWindow() {
-    window = new BrowserWindow({
-      width: 1512,
-      height: 982,
-      minWidth: 1060,
-      minHeight: 720,
-      backgroundColor: "#f6f7f3",
-      title: "Learning Atlas",
-      titleBarStyle: "hiddenInset",
-      trafficLightPosition: { x: 20, y: 20 },
-      webPreferences: {
-        preload: path.join(here, "preload.cjs"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
+  } else {
+    const store = new BoardStore(path.join(app.getPath("userData"), "boards"));
+    runtime = new AIRuntime(
+      path.join(app.getPath("userData"), "ai"),
+      (update) => {
+        if (window && !window.isDestroyed())
+          window.webContents.send("atlas:ai-update", update);
       },
-    });
-    rendererReady = false;
-    window.webContents.on("render-process-gone", () => {
-      rendererReady = false;
-      closePending = false;
-    });
-    window.on("close", (event) => {
-      if (!quitting) {
-        event.preventDefault();
-        requestClose();
-      }
-    });
-    window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    window.webContents.on("will-navigate", (event, url) => {
+    );
+    function assertSender(event: Electron.IpcMainInvokeEvent) {
+      const url = event.senderFrame?.url;
+      if (event.sender !== window?.webContents || !url)
+        throw new Error("Untrusted sender");
       if (
         developmentURL
           ? new URL(url).origin !== new URL(developmentURL).origin
-          : url !== window?.webContents.getURL()
+          : !url.startsWith("file://")
       )
-        event.preventDefault();
-    });
-    window.webContents.session.setPermissionRequestHandler(
-      (_contents, _permission, callback) => callback(false),
+        throw new Error("Untrusted origin");
+    }
+    function handle(channel: string, fn: (...args: any[]) => unknown) {
+      ipcMain.handle(channel, async (event, ...args) => {
+        assertSender(event);
+        return fn(...args);
+      });
+    }
+    handle("atlas:list", () => store.list());
+    handle("atlas:load", (value) => store.load(id.parse(value)));
+    handle("atlas:save", (value) => store.save(boardSchema.parse(value)));
+    handle("atlas:delete", (value) => store.delete(id.parse(value)));
+    handle("atlas:ai-settings", () => runtime.getSettings());
+    handle("atlas:configure-ai", (value) =>
+      runtime.setSettings(settingsSchema.parse(value)),
     );
-    window.webContents.session.setPermissionCheckHandler(() => false);
-    if (developmentURL) void window.loadURL(developmentURL);
-    else void window.loadFile(path.join(here, "../../dist/index.html"));
+    handle("atlas:ask", (value) => {
+      if (closePending) throw new Error("App is preparing to close");
+      return runtime.ask(aiRequestSchema.parse(value));
+    });
+    handle("atlas:stop", (board, sticky) =>
+      runtime.stop(id.parse(board), id.parse(sticky)),
+    );
+    handle("atlas:history", (board, sticky) =>
+      runtime.getHistory(id.parse(board), id.parse(sticky)),
+    );
+    async function requestClose() {
+      if (closePending) return;
+      closePending = true;
+      if (!rendererReady) {
+        await runtime.close();
+        quitting = true;
+        app.quit();
+        return;
+      }
+      try {
+        await runtime.quiesce();
+        window?.webContents.send("atlas:before-close");
+      } catch {
+        closePending = false;
+        await dialog.showMessageBox(window!, {
+          type: "error",
+          message: "暂时无法关闭 AI 会话",
+          detail: "请停止回答后再重试关闭。",
+          buttons: ["回到白板"],
+        });
+      }
+    }
+    handle("atlas:renderer-ready", () => {
+      rendererReady = true;
+    });
+    handle("atlas:close-ready", async (saved) => {
+      if (saved !== true) {
+        closePending = false;
+        await dialog.showMessageBox(window!, {
+          type: "error",
+          message: "白板尚未保存",
+          detail: "请先重试保存，再关闭应用。",
+          buttons: ["回到白板"],
+        });
+        return;
+      }
+      await runtime.close();
+      quitting = true;
+      app.quit();
+    });
+    function createWindow() {
+      window = new BrowserWindow({
+        width: 1512,
+        height: 982,
+        minWidth: 1060,
+        minHeight: 720,
+        backgroundColor: "#f6f7f3",
+        title: "Learning Atlas",
+        titleBarStyle: "hiddenInset",
+        trafficLightPosition: { x: 20, y: 20 },
+        webPreferences: {
+          preload: path.join(here, "preload.cjs"),
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+        },
+      });
+      rendererReady = false;
+      window.webContents.on("render-process-gone", () => {
+        rendererReady = false;
+        closePending = false;
+      });
+      window.on("close", (event) => {
+        if (!quitting) {
+          event.preventDefault();
+          requestClose();
+        }
+      });
+      window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+      window.webContents.on("will-navigate", (event, url) => {
+        if (
+          developmentURL
+            ? new URL(url).origin !== new URL(developmentURL).origin
+            : url !== window?.webContents.getURL()
+        )
+          event.preventDefault();
+      });
+      window.webContents.session.setPermissionRequestHandler(
+        (_contents, _permission, callback) => callback(false),
+      );
+      window.webContents.session.setPermissionCheckHandler(() => false);
+      if (developmentURL) void window.loadURL(developmentURL);
+      else void window.loadFile(path.join(here, "../../dist/index.html"));
+    }
+    createWindow();
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+    app.on("window-all-closed", () => {
+      app.quit();
+    });
+    app.on("before-quit", (event) => {
+      if (quitting) return;
+      event.preventDefault();
+      requestClose();
+    });
   }
-  createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-  app.on("window-all-closed", () => {
-    app.quit();
-  });
-  app.on("before-quit", (event) => {
-    if (quitting) return;
-    event.preventDefault();
-    requestClose();
-  });
 }
+void app
+  .whenReady()
+  .then(bootstrap)
+  .catch((error: unknown) => {
+    console.error(
+      "[startup] failed:",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+    app.exit(1);
+  });

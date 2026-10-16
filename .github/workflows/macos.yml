@@ -20,7 +20,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Download Electron runtime
+        timeout-minutes: 5
+        run: node node_modules/electron/install.js
       - name: Verify Electron embedded Node, SQLite and durable reopen
+        timeout-minutes: 3
         run: ATLAS_SMOKE_TEST=1 ./node_modules/.bin/electron .
       - name: Install test browser
         run: npx playwright install chromium
