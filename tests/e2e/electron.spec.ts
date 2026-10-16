@@ -8,6 +8,7 @@ import {
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { ChildProcess } from "node:child_process";
 
 test("macOS desktop bridge, edit flush on immediate close, and durable reopening", async ({}, testInfo) => {
   test.skip(
@@ -28,7 +29,7 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
   delete environment.ATLAS_DEV_SERVER;
   delete environment.OPENAI_API_KEY;
   const diagnostics: string[] = [];
-  const applications: ElectronApplication[] = [];
+  const applications: { app: ElectronApplication; child: ChildProcess }[] = [];
   const pages: Page[] = [];
   async function launch() {
     const app = await electron.launch({
@@ -36,15 +37,16 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
       env: environment,
       timeout: 25_000,
     });
-    applications.push(app);
+    // Playwright disposes its application handle after close(), so retain the
+    // actual process while the handle is still valid for later failure cleanup.
+    const child = app.process();
+    applications.push({ app, child });
     app.on("console", (message) =>
       diagnostics.push(`[main ${message.type()}] ${message.text()}`),
     );
-    app
-      .process()
-      .stderr?.on("data", (chunk) =>
-        diagnostics.push(`[stderr] ${String(chunk)}`),
-      );
+    child.stderr?.on("data", (chunk) =>
+      diagnostics.push(`[stderr] ${String(chunk)}`),
+    );
     const page = await app.firstWindow();
     pages.push(page);
     page.on("console", (message) =>
@@ -119,24 +121,45 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
   } finally {
     // Failure cleanup is separate from the assertion above and never makes a
     // failed close/reopen check pass. Do not leave the test's own app orphaned.
-    for (const app of applications) {
-      if (app.process().exitCode === null && !app.process().killed) {
+    try {
+      for (const { app, child } of applications) {
         let timeout: ReturnType<typeof setTimeout> | undefined;
-        await Promise.race([
-          app.close().catch(() => {}),
-          new Promise<void>((resolve) => {
-            timeout = setTimeout(resolve, 5000);
-          }),
-        ]);
-        if (timeout) clearTimeout(timeout);
-        if (app.process().exitCode === null && !app.process().killed)
-          app.process().kill("SIGTERM");
+        try {
+          if (
+            child.exitCode === null &&
+            child.signalCode === null &&
+            !child.killed
+          ) {
+            await Promise.race([
+              app.close().catch(() => {}),
+              new Promise<void>((resolve) => {
+                timeout = setTimeout(resolve, 5000);
+              }),
+            ]);
+            if (
+              child.exitCode === null &&
+              child.signalCode === null &&
+              !child.killed
+            )
+              child.kill("SIGTERM");
+          }
+        } catch (error) {
+          diagnostics.push(`[cleanup] ${String(error)}`);
+        } finally {
+          if (timeout) clearTimeout(timeout);
+        }
       }
+    } finally {
+      // Diagnostic/cleanup errors must not replace the original test failure.
+      await writeFile(
+        testInfo.outputPath("electron-diagnostics.txt"),
+        diagnostics.join("\n"),
+      ).catch((error) =>
+        console.warn("Unable to write Electron diagnostics", error),
+      );
+      await rm(directory, { recursive: true, force: true }).catch((error) =>
+        console.warn("Unable to remove temporary Electron test data", error),
+      );
     }
-    await writeFile(
-      testInfo.outputPath("electron-diagnostics.txt"),
-      diagnostics.join("\n"),
-    );
-    await rm(directory, { recursive: true, force: true });
   }
 });

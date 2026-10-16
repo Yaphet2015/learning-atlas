@@ -34,6 +34,19 @@ jobs:
         run: npm run dist:mac -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Verify packaged app, SQLite and durable reopen
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          app="release/mac-arm64/Learning Atlas.app/Contents/MacOS/Learning Atlas"
+          test -x "$app"
+          mkdir -p test-results
+          smoke_data="$(mktemp -d "${RUNNER_TEMP}/atlas-packaged-smoke.XXXXXX")"
+          trap 'rm -rf "$smoke_data"' EXIT
+          ATLAS_E2E=1 ATLAS_TEST_USERDATA="$smoke_data" ATLAS_SMOKE_TEST=1 \
+            "$app" 2>&1 | tee test-results/packaged-smoke.log
+          grep -F '[smoke] durable reopen verified' test-results/packaged-smoke.log
+          grep -F '[smoke] complete; quitting Electron' test-results/packaged-smoke.log
       - name: Upload macOS preview
         uses: actions/upload-artifact@v4
         with:
