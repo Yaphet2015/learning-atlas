@@ -51,6 +51,21 @@ export const conceptNodeSchema = z
     kind: z.enum(["concept", "scene"]),
     title: nonemptyText(160),
     body: z.string().max(4_000),
+    parentId: idSchema.nullable(),
+    order: z.number().int().min(0).max(LIMITS.nodes),
+    status: understandingSchema,
+    hand: z.string().max(200).optional(),
+    expanded: z.boolean().optional(),
+    visual: visualDiagramSchema.optional(),
+  })
+  .strict();
+/** v1 node shape, accepted only as migration input. */
+const conceptNodeV1Schema = z
+  .object({
+    id: idSchema,
+    kind: z.enum(["concept", "scene"]),
+    title: nonemptyText(160),
+    body: z.string().max(4_000),
     emoji: z.string().max(32),
     position: pointSchema,
     color: colorSchema,
@@ -60,6 +75,15 @@ export const conceptNodeSchema = z
   })
   .strict();
 export const relationSchema = z
+  .object({
+    id: idSchema,
+    source: idSchema,
+    target: idSchema,
+    label: z.string().max(200),
+    kind: z.literal("cross"),
+  })
+  .strict();
+const relationV1Schema = z
   .object({
     id: idSchema,
     source: idSchema,
@@ -97,9 +121,32 @@ export const sceneSchema = z
     changed: z.enum(["width", "color"]).nullable(),
   })
   .strict();
-export const boardSchema = z
+const viewportSchema = z
+  .object({
+    x: z.number().finite().min(-1_000_000).max(1_000_000),
+    y: z.number().finite().min(-1_000_000).max(1_000_000),
+    zoom: z.number().finite().min(0.05).max(4),
+  })
+  .strict();
+const legacyBoardV1Schema = z
   .object({
     version: z.literal(1),
+    id: idSchema,
+    title: nonemptyText(160),
+    topic: nonemptyText(2_000),
+    kind: z.enum(["walkthrough", "ai"]),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    nodes: z.array(conceptNodeV1Schema).max(LIMITS.nodes),
+    relations: z.array(relationV1Schema).max(LIMITS.relations),
+    notes: z.array(stickyNoteSchema).max(LIMITS.notes),
+    scene: sceneSchema,
+    viewport: viewportSchema.optional(),
+  })
+  .strict();
+export const boardSchema = z
+  .object({
+    version: z.literal(2),
     id: idSchema,
     title: nonemptyText(160),
     topic: nonemptyText(2_000),
@@ -110,17 +157,40 @@ export const boardSchema = z
     relations: z.array(relationSchema).max(LIMITS.relations),
     notes: z.array(stickyNoteSchema).max(LIMITS.notes),
     scene: sceneSchema,
-    viewport: z
-      .object({
-        x: z.number().finite().min(-1_000_000).max(1_000_000),
-        y: z.number().finite().min(-1_000_000).max(1_000_000),
-        zoom: z.number().finite().min(0.05).max(4),
-      })
-      .strict()
-      .optional(),
+    viewport: viewportSchema.optional(),
   })
   .strict()
   .superRefine((board, ctx) => {
+    const byId = new Map(board.nodes.map((node) => [node.id, node]));
+    const roots = board.nodes.filter((node) => node.parentId === null);
+    if (board.nodes.length && roots.length !== 1)
+      ctx.addIssue({
+        code: "custom",
+        path: ["nodes"],
+        message: "A board needs exactly one root question",
+      });
+    board.nodes.forEach((node, index) => {
+      if (node.parentId !== null && !byId.has(node.parentId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["nodes", index, "parentId"],
+          message: "Parent does not exist",
+        });
+        return;
+      }
+      let cursor = node.parentId;
+      for (let steps = 0; cursor !== null; steps += 1) {
+        if (cursor === node.id || steps > board.nodes.length) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["nodes", index, "parentId"],
+            message: "Parent chain contains a cycle",
+          });
+          return;
+        }
+        cursor = byId.get(cursor)?.parentId ?? null;
+      }
+    });
     const ids = new Set<string>();
     for (const [type, entries] of [
       ["nodes", board.nodes],
@@ -289,3 +359,138 @@ export const aiMapSchema = z
       .max(12),
   })
   .strict();
+
+type EdgeLike = { id: string; source: string; target: string; label: string };
+/**
+ * Turn a directed graph into a tree: each node keeps its first incoming edge
+ * (in array order) that does not create a cycle; nodes without one hang under
+ * the root. Children are ordered by `xOf` (old position.x). Unused edges are
+ * returned as cross-links.
+ */
+export function treeify(
+  ids: string[],
+  edges: EdgeLike[],
+  rootId: string,
+  xOf: (id: string) => number,
+): {
+  parent: Map<string, string | null>;
+  order: Map<string, number>;
+  cross: EdgeLike[];
+} {
+  const known = new Set(ids);
+  const parent = new Map<string, string | null>([[rootId, null]]);
+  const used = new Set<string>();
+  const isAncestor = (candidate: string, of: string) => {
+    for (let c: string | null | undefined = of; c; c = parent.get(c))
+      if (c === candidate) return true;
+    return false;
+  };
+  for (const id of ids) {
+    if (id === rootId) continue;
+    const edge = edges.find(
+      (e) =>
+        e.target === id &&
+        e.source !== id &&
+        known.has(e.source) &&
+        !isAncestor(id, e.source),
+    );
+    parent.set(id, edge ? edge.source : rootId);
+    if (edge) used.add(edge.id);
+  }
+  const order = new Map<string, number>();
+  const groups = new Map<string, string[]>();
+  for (const id of ids) {
+    const p = parent.get(id);
+    if (p) groups.set(p, [...(groups.get(p) ?? []), id]);
+  }
+  for (const kids of groups.values())
+    kids
+      .map((id, index) => ({ id, index }))
+      .sort((a, b) => xOf(a.id) - xOf(b.id) || a.index - b.index)
+      .forEach(({ id }, index) => order.set(id, index));
+  order.set(rootId, 0);
+  const pairs = new Set<string>();
+  const cross = edges.filter((e) => {
+    const key = `${e.source}:${e.target}`;
+    const keep =
+      !used.has(e.id) &&
+      e.source !== e.target &&
+      known.has(e.source) &&
+      known.has(e.target) &&
+      !pairs.has(key);
+    pairs.add(key);
+    return keep;
+  });
+  return { parent, order, cross };
+}
+
+/**
+ * v1 → v2: position/color/emoji are dropped; the first incoming relation of
+ * each node becomes its parent (siblings ordered by old position.x) and every
+ * other relation becomes a `cross` link.
+ */
+export function migrateV1toV2(input: unknown): z.infer<typeof boardSchema> {
+  const v1 = legacyBoardV1Schema.parse(input);
+  const nodes = [...v1.nodes];
+  const relations = [...v1.relations];
+  if (!nodes.length)
+    nodes.push({
+      id: "root-" + v1.id.slice(-80).replace(/^[^A-Za-z0-9]+/, ""),
+      kind: "concept",
+      title: v1.topic.slice(0, 160),
+      body: "",
+      emoji: "",
+      position: { x: 0, y: 0 },
+      color: "sage",
+      status: "unseen",
+    });
+  const incoming = new Set(relations.map((r) => r.target));
+  const candidates = nodes.filter((n) => !incoming.has(n.id));
+  const root = (candidates.length ? candidates : nodes).reduce((best, n) =>
+    n.position.y < best.position.y ? n : best,
+  );
+  const pos = new Map(nodes.map((n) => [n.id, n.position.x]));
+  const { parent, order, cross } = treeify(
+    nodes.map((n) => n.id),
+    relations,
+    root.id,
+    (id) => pos.get(id) ?? 0,
+  );
+  const notes = v1.notes.map((note) => {
+    if (
+      note.attachedTo?.kind === "relation" &&
+      !cross.some((r) => r.id === note.attachedTo!.id)
+    ) {
+      // The relation became a tree edge; attach the note to its child node.
+      const edge = relations.find((r) => r.id === note.attachedTo!.id);
+      return edge
+        ? { ...note, attachedTo: { kind: "node" as const, id: edge.target } }
+        : note;
+    }
+    return note;
+  });
+  return boardSchema.parse({
+    ...v1,
+    version: 2,
+    nodes: nodes.map(({ emoji: _e, position: _p, color: _c, ...rest }) => ({
+      ...rest,
+      parentId: parent.get(rest.id) ?? null,
+      order: order.get(rest.id) ?? 0,
+    })),
+    relations: cross.map((r) => ({ ...r, kind: "cross" as const })),
+    notes,
+  });
+}
+
+/** Validate a board from disk/IPC, upgrading v1 data on the way in. */
+export function parseBoard(input: unknown) {
+  const version = (input as { version?: unknown } | null)?.version;
+  return version === 1 ? migrateV1toV2(input) : boardSchema.parse(input);
+}
+export const safeParseBoard = (input: unknown) => {
+  try {
+    return { success: true as const, data: parseBoard(input) };
+  } catch (error) {
+    return { success: false as const, error };
+  }
+};

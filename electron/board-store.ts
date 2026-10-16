@@ -3,7 +3,12 @@ import { mkdir, lstat, open, readdir, rename, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Board, BoardSummary } from "../src/shared/types.js";
-import { boardSchema, idSchema, LIMITS } from "../src/shared/validation.js";
+import {
+  boardSchema,
+  idSchema,
+  LIMITS,
+  safeParseBoard,
+} from "../src/shared/validation.js";
 
 export class BoardStoreError extends Error {
   constructor(
@@ -121,7 +126,7 @@ export class BoardStore {
           { cause },
         );
       }
-      const result = boardSchema.safeParse(parsed);
+      const result = safeParseBoard(parsed);
       if (!result.success || result.data.id !== id) {
         throw new BoardStoreError(
           `Board ${id} failed validation. The original file has been preserved.`,

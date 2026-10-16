@@ -5,7 +5,12 @@ import type {
   Relation,
   StickyNote,
 } from "../shared/types";
-import { aiMapSchema, boardSchema, pointSchema } from "../shared/validation";
+import {
+  aiMapSchema,
+  boardSchema,
+  pointSchema,
+  treeify,
+} from "../shared/validation";
 
 export function newId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -22,18 +27,15 @@ const node = (
   id: string,
   title: string,
   body: string,
-  emoji: string,
-  color: ConceptNode["color"],
-  x: number,
-  y: number,
+  parentId: string | null,
+  order: number,
 ): ConceptNode => ({
   id,
   kind: "concept",
   title,
   body,
-  emoji,
-  color,
-  position: { x, y },
+  parentId,
+  order,
   status: "unseen",
 });
 const relation = (
@@ -41,12 +43,12 @@ const relation = (
   source: string,
   target: string,
   label: string,
-): Relation => ({ id, source, target, label });
+): Relation => ({ id, source, target, label, kind: "cross" });
 
 export function createWalkthroughBoard(): Board {
   const timestamp = now();
   return {
-    version: 1,
+    version: 2,
     id: newId("board"),
     title: "浏览器如何画出一个页面",
     topic: "浏览器如何把 HTML、CSS 变成屏幕上的页面？",
@@ -59,9 +61,7 @@ export function createWalkthroughBoard(): Board {
           "scene-browser",
           "浏览器，把代码变成画面",
           "改一个属性，看看浏览器需要重新做哪些工作。",
-          "◉",
-          "sage",
-          0,
+          null,
           0,
         ),
         kind: "scene",
@@ -71,43 +71,26 @@ export function createWalkthroughBoard(): Board {
         "concept-dom",
         "DOM",
         "HTML 变成一棵描述内容和结构的树。",
-        "🌿",
-        "sage",
-        -70,
-        440,
+        "scene-browser",
+        0,
       ),
       node(
         "concept-style",
         "样式计算",
         "把 CSS 规则匹配到元素，算出每个元素最终的样式。",
-        "🎨",
-        "blue",
-        240,
-        440,
+        "scene-browser",
+        1,
       ),
       node(
         "concept-render",
         "布局与绘制",
         "先确定元素的位置和尺寸，再把它们画成像素。",
-        "▦",
-        "peach",
-        550,
-        440,
+        "scene-browser",
+        2,
       ),
     ],
+    // 先→后 is expressed by sibling order; the one cross-branch link stays.
     relations: [
-      relation(
-        "relation-scene-dom",
-        "scene-browser",
-        "concept-dom",
-        "内容与结构",
-      ),
-      relation(
-        "relation-dom-style",
-        "concept-dom",
-        "concept-style",
-        "为元素计算样式",
-      ),
       relation(
         "relation-style-render",
         "concept-style",
@@ -126,7 +109,7 @@ export function createEmptyBoard(topic: string): Board {
     throw new Error("请输入 1–2000 字的学习主题。");
   const timestamp = now();
   return {
-    version: 1,
+    version: 2,
     id: newId("board"),
     title: trimmed.slice(0, 160),
     topic: trimmed,
@@ -138,9 +121,7 @@ export function createEmptyBoard(topic: string): Board {
         newId("topic"),
         trimmed.slice(0, 160),
         "这是你的学习起点。选中它，在便签里提出第一个问题。",
-        "✦",
-        "lavender",
-        0,
+        null,
         0,
       ),
     ],
@@ -180,7 +161,6 @@ export function expandWalkthrough(board: Board, nodeId: string): Board {
   if (board.kind !== "walkthrough") return board;
   const selected = board.nodes.find((item) => item.id === nodeId);
   if (!selected || selected.expanded || selected.kind === "scene") return board;
-  const { x, y } = selected.position;
   let children: ConceptNode[] = [];
   if (nodeId === "concept-dom") {
     children = [
@@ -188,10 +168,8 @@ export function expandWalkthrough(board: Board, nodeId: string): Board {
         "concept-dom-tree",
         "标签，组成一棵树",
         "父子关系决定结构。改变颜色不会自动改变这棵树。",
-        "🌱",
-        "sage",
-        x,
-        y + 230,
+        nodeId,
+        0,
       ),
     ];
   } else if (nodeId === "concept-style") {
@@ -200,10 +178,8 @@ export function expandWalkthrough(board: Board, nodeId: string): Board {
         "concept-computed-style",
         "最终生效的样式",
         "多条规则可能同时命中元素；层叠与继承共同决定最终的属性值。",
-        "◐",
-        "blue",
-        x,
-        y + 230,
+        nodeId,
+        0,
       ),
     ];
   } else if (nodeId === "concept-render") {
@@ -212,19 +188,15 @@ export function expandWalkthrough(board: Board, nodeId: string): Board {
         "concept-layout",
         "布局：放在哪里？",
         "计算几何信息：宽高和位置。改变宽度可能让后面的元素重新排列。",
-        "↔",
-        "peach",
-        x - 145,
-        y + 250,
+        nodeId,
+        0,
       ),
       node(
         "concept-paint",
         "绘制：长什么样？",
         "生成颜色、文字、边框等绘制内容。只改背景色通常不需要重新布局。",
-        "🖌",
-        "lavender",
-        x + 155,
-        y + 250,
+        nodeId,
+        1,
       ),
     ];
   } else {
@@ -249,17 +221,6 @@ export function expandWalkthrough(board: Board, nodeId: string): Board {
           : item,
       ),
       ...children,
-    ],
-    relations: [
-      ...board.relations,
-      ...children.map((child) =>
-        relation(
-          `relation-${child.id}`,
-          nodeId,
-          child.id,
-          nodeId === "concept-render" ? "拆开来看" : "再看一层",
-        ),
-      ),
     ],
   };
 }
@@ -314,56 +275,35 @@ export function buildMapFromAI(
       );
     pairs.add(key);
   }
-  const palette: ConceptNode["color"][] = ["sage", "blue", "peach", "lavender"];
-  const children = map.nodes.map((item, index) => {
-    const columns = Math.min(map.nodes.length, 3);
-    const column = index % 3;
-    const row = Math.floor(index / 3);
-    const generated = node(
-      ids.get(item.id)!,
-      item.title,
-      item.body,
-      item.emoji || "✦",
-      item.color ?? palette[index % palette.length],
-      Math.max(
-        -99_000,
-        Math.min(
-          99_000,
-          anchor.position.x + (column - (columns - 1) / 2) * 300,
-        ),
-      ),
-      Math.max(-99_000, Math.min(99_000, anchor.position.y + 460 + row * 480)),
-    );
+  const children = map.nodes.map((item) => ({
+    ...node(ids.get(item.id)!, item.title, item.body, anchor.id, 0),
+    ...(item.visual
+      ? { visual: { ...item.visual, labels: [...item.visual.labels] } }
+      : {}),
+  }));
+  // First incoming edge becomes the tree parent (nodes without one hang under
+  // the anchor); remaining edges are kept as cross-links. Order follows the
+  // model's listing, appended after existing children.
+  const index = new Map(children.map((c, i) => [c.id, i]));
+  const tree = treeify(
+    [anchor.id, ...children.map((c) => c.id)],
+    generatedRelations,
+    anchor.id,
+    (id) => index.get(id) ?? -1,
+  );
+  const existing = board.nodes.filter((n) => n.parentId === anchor.id).length;
+  const placed = children.map((c) => {
+    const parentId = tree.parent.get(c.id) ?? anchor.id;
     return {
-      ...generated,
-      ...(item.visual
-        ? { visual: { ...item.visual, labels: [...item.visual.labels] } }
-        : {}),
+      ...c,
+      parentId,
+      order:
+        (tree.order.get(c.id) ?? 0) + (parentId === anchor.id ? existing : 0),
     };
   });
-  // Connect each disconnected generated component to the selected anchor. This does
-  // not invent semantic claims: the fallback labels only describe exploration.
-  const reachable = new Set([anchor.id]);
-  const visit = (id: string) => {
-    if (reachable.has(id)) return;
-    reachable.add(id);
-    for (const edge of generatedRelations) {
-      if (edge.source === id) visit(edge.target);
-      if (edge.target === id) visit(edge.source);
-    }
-  };
-  for (const edge of generatedRelations.filter(
-    (edge) => edge.source === anchor.id || edge.target === anchor.id,
-  ))
-    visit(edge.source === anchor.id ? edge.target : edge.source);
-  for (const child of children) {
-    if (!reachable.has(child.id)) {
-      generatedRelations.push(
-        relation(newId("relation"), anchor.id, child.id, "继续探索"),
-      );
-      visit(child.id);
-    }
-  }
+  const cross = tree.cross.map((r) =>
+    relation(r.id, r.source, r.target, r.label),
+  );
   return boardSchema.parse({
     ...board,
     updatedAt: now(),
@@ -377,8 +317,8 @@ export function buildMapFromAI(
             }
           : item,
       ),
-      ...children,
+      ...placed,
     ],
-    relations: [...board.relations, ...generatedRelations],
+    relations: [...board.relations, ...cross],
   });
 }
