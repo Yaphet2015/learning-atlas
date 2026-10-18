@@ -434,6 +434,10 @@ kbd,
 .is-dragging .plus {
   display: none;
 }
+/* In a multi-select the cards are a pick, not a place to grow: + only on hover. */
+.react-flow__node.is-picked:not(:hover) .plus:not(:focus-visible) {
+  opacity: 0;
+}
 /* The root's connectors fan out from its bottom edge: its + shows on hover or
    keyboard focus only, not merely because the root is selected. */
 .react-flow__node-root.selected:not(:hover) .plus.below:not(:focus-visible) {
@@ -1003,10 +1007,16 @@ kbd,
   white-space: nowrap;
   overflow: hidden;
 }
+/* "挂在 <card>": the card title ellipsizes inside its own button. */
 .dhead .m > span:nth-child(3) {
-  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.3em;
+  min-width: 5.5em;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+.dhead .m .extra {
+  flex: none;
 }
 .dhead .m .dot {
   width: 3px;
@@ -1016,7 +1026,11 @@ kbd,
   background: var(--ink-3);
 }
 .dhead .m .link {
-  display: inline;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 0;
   font: inherit;
   color: var(--ink-2);
@@ -2677,4 +2691,77 @@ kbd,
 /* Picked cards show their own selected state; no group rectangle over them. */
 .react-flow__nodesselection-rect {
   display: none;
+}
+
+/* ---- drawer: this board's conversations */
+.sessions {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--border);
+}
+.sessions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 10px;
+}
+.session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+  text-align: left;
+  color: var(--ink);
+}
+.session:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.session.on {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.session .st {
+  font: 700 15px var(--kai);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session .sm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font: 400 12.5px var(--kai);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.session .sm .an {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+}
+.session .sm .dot {
+  width: 3px;
+  height: 3px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+.session .sm time,
+.session .sm > span:last-child {
+  flex: none;
 }

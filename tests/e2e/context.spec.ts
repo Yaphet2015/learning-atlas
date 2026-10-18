@@ -96,7 +96,7 @@ test("Shift/⌘-click toggles cards; a plain click or Esc goes back to one", asy
   await expect(page.getByLabel("批注标题")).toHaveValue(
     "关于「等待期是什么」等 2 张卡",
   );
-  await expect(page.locator(".drawer .dhead")).toContainText("另带 1 张卡");
+  await expect(page.locator(".drawer .dhead")).toContainText("+1 张卡");
 });
 
 test("Space-drag pans instead of drawing a marquee", async ({ page }) => {

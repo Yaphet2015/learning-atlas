@@ -31,6 +31,7 @@ import {
 import { contextForNote } from "./model/context";
 import { plain } from "./model/answer";
 import { boxPick, toggleCard } from "./model/selection";
+import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import {
   firstLevelPrompt,
@@ -406,18 +407,13 @@ export default function App() {
       }),
     [flow],
   );
-  /** Open the drawer on the card's note (creating one if needed), or a free note. */
+  /** Open the drawer on the card's latest note (creating one if needed), or a free note; fresh always starts a new one. */
   const addNote = useCallback(
-    (attachment?: StickyNote["attachedTo"], text?: string) => {
+    (attachment?: StickyNote["attachedTo"], text?: string, fresh = false) => {
       const b = boardRef.current;
       if (!b) return;
-      const existing = attachment
-        ? b.notes.find(
-            (n) =>
-              n.attachedTo?.kind === attachment.kind &&
-              n.attachedTo.id === attachment.id,
-          )
-        : undefined;
+      const existing =
+        attachment && !fresh ? latestNoteOn(b, attachment) : undefined;
       if (existing && !text) {
         setDrawer(existing.id);
         return;
@@ -1043,7 +1039,11 @@ export default function App() {
         draggable:
           n.parentId !== null && tool === "select" && editingId !== n.id,
         selected: selectedNodeId === n.id || picked.includes(n.id),
-        className: dragging ? "is-dragging" : undefined,
+        className: dragging
+          ? "is-dragging"
+          : picked.length >= 2 && picked.includes(n.id)
+            ? "is-picked"
+            : undefined,
         data: {
           concept: n,
           multi: picked.length >= 2,
@@ -1533,6 +1533,29 @@ export default function App() {
             showToast("已删除这张批注。⌘Z 可以撤销。");
           }}
           onClose={closeDrawer}
+          sessions={listSessions(board)}
+          onOpenSession={(id) => {
+            const target = board.notes.find((n) => n.id === id);
+            if (!target) return;
+            setDrawer(id);
+            const at = target.attachedTo;
+            if (at?.kind === "node") {
+              setSelection({ kind: "node", id: at.id });
+              frameFamily(at.id, true);
+            } else if (at?.kind === "relation") {
+              setSelection({ kind: "relation", id: at.id });
+            }
+          }}
+          onNewSession={() =>
+            addNote(
+              drawerNote.attachedTo ?? {
+                kind: "node",
+                id: drawerAnchorOrRoot,
+              },
+              undefined,
+              true,
+            )
+          }
         />
       )}
       {board && study && (
