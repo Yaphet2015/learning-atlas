@@ -123,6 +123,8 @@ export default function App() {
     [picked, setPicked] = useState<string[]>([]),
     /** Space held: the canvas pans on drag instead of drawing a marquee. */
     [spacePan, setSpacePan] = useState(false),
+    /** The canvas is being panned: the minimap shows meanwhile. */
+    [panning, setPanning] = useState(false),
     [settings, setSettings] = useState<AISettings>(defaults),
     [showSettings, setShowSettings] = useState(false),
     [showNew, setShowNew] = useState(false),
@@ -1174,6 +1176,7 @@ export default function App() {
   }, [shown, layout, selection]);
   // Positions are controlled by layoutTree; only drag offsets and measured
   // sizes (needed by the minimap) flow back from React Flow.
+  const panEnd = useRef<ReturnType<typeof setTimeout>>(undefined);
   const boxing = useRef<{ base: string[]; inside: Set<string> } | null>(null);
   const onNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
     const sizes: Record<string, { width: number; height: number }> = {};
@@ -1274,7 +1277,9 @@ export default function App() {
       </div>
     );
   return (
-    <main className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""}`}>
+    <main
+      className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""} ${spacePan ? "space-pan" : ""} ${panning ? "is-panning" : ""}`}
+    >
       <div className="grain" />
       {chromeClasses.includes("mac-titlebar") && (
         <div className="titlebar-drag" aria-hidden="true" />
@@ -1369,12 +1374,23 @@ export default function App() {
             }}
             panOnScroll
             panOnDrag={tool === "hand" || spacePan ? true : [1, 2]}
+            onMoveStart={(e) => {
+              // Panning, not zooming: a drag, or a scroll without the pinch/ctrl modifier.
+              if (!e) return;
+              if (e.type === "wheel" && (e as WheelEvent).ctrlKey) return;
+              clearTimeout(panEnd.current);
+              setPanning(true);
+            }}
+            onMoveEnd={() => {
+              clearTimeout(panEnd.current);
+              panEnd.current = setTimeout(() => setPanning(false), 450);
+            }}
             zoomOnDoubleClick={false}
             nodeDragThreshold={4}
             proOptions={{ hideAttribution: true }}
           >
             <LevelGuides {...bounds} />
-            <MapUnit />
+            <MapUnit showMap={panning || tool === "hand"} />
           </ReactFlow>
           <MapSwitcher
             title={board.title}

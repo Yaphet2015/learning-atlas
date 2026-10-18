@@ -324,32 +324,55 @@ function MiniNode({ x, y, width, height, className }: MiniMapNodeProps) {
   );
 }
 
-/** Minimap and zoom controls as one unit, bottom-right. */
-export function MapUnit() {
+/**
+ * Zoom controls, bottom-right, always visible. The minimap floats above them only while the
+ * canvas is being panned (or the hand tool is on) and fades out shortly after.
+ */
+export function MapUnit({ showMap }: { showMap: boolean }) {
   const flow = useReactFlow();
   const { zoom } = useViewport();
+  // Keep the map up while the learner drags inside it.
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (!held) return;
+    const up = () => setHeld(false);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    return () => {
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+  }, [held]);
+  const visible = showMap || held;
   return (
-    <div className="chrome map-unit">
-      <MiniMap
-        pannable
-        zoomable
-        position="top-left"
-        className="atlas-minimap"
-        // Match the CSS box so the viewBox has the same aspect ratio; otherwise the
-        // mask's outer sub-path shows in the letterbox as a second frame.
-        style={{ width: 194, height: 120 }}
-        nodeComponent={MiniNode}
-        nodeClassName={(n) =>
-          n.type === "ghost"
-            ? "ghost"
-            : `s-${(n.data as { concept?: ConceptNode }).concept?.status ?? "exploring"}`
-        }
-        maskColor="transparent"
-        maskStrokeColor="var(--accent)"
-        maskStrokeWidth={1.25}
-        bgColor="transparent"
-      />
-      <div className="zoom">
+    <div className="map-unit">
+      <div
+        className={`chrome minimap-card ${visible ? "on" : ""}`}
+        aria-hidden={!visible}
+        data-visible={visible}
+        onPointerDown={() => setHeld(true)}
+      >
+        <MiniMap
+          pannable
+          zoomable
+          position="top-left"
+          className="atlas-minimap"
+          // Match the CSS box so the viewBox has the same aspect ratio; otherwise the
+          // mask's outer sub-path shows in the letterbox as a second frame.
+          style={{ width: 194, height: 120 }}
+          nodeComponent={MiniNode}
+          nodeClassName={(n) =>
+            n.type === "ghost"
+              ? "ghost"
+              : `s-${(n.data as { concept?: ConceptNode }).concept?.status ?? "exploring"}`
+          }
+          maskColor="transparent"
+          maskStrokeColor="var(--accent)"
+          maskStrokeWidth={1.25}
+          bgColor="transparent"
+        />
+      </div>
+      <div className="chrome zoom">
         <button
           aria-label="缩小"
           onClick={() => flow.zoomOut({ duration: 200 })}
@@ -366,7 +389,6 @@ export function MapUnit() {
         <span className="sep" />
         <button
           aria-label="查看全图"
-          title="查看全图 0"
           onClick={() => flow.fitView({ padding: 0.16, duration: 400 })}
         >
           <Crosshair size={15} className="ico" />

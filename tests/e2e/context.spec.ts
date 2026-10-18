@@ -109,6 +109,7 @@ test("Space-drag pans instead of drawing a marquee", async ({ page }) => {
     money.y + money.height + 40,
   );
   await page.keyboard.down("Space");
+  await expect(page.locator("main.space-pan")).toHaveCount(1);
   await page.mouse.down();
   await page.mouse.move(money.x - 80, money.y - 40, { steps: 8 });
   await page.mouse.up();

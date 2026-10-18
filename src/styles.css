@@ -716,10 +716,45 @@ kbd,
   border-radius: var(--r-md);
 }
 .map-unit {
+  position: fixed;
+  z-index: 20;
   right: var(--edge);
   bottom: var(--edge);
   width: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+/* The minimap shows only while panning (or with the hand tool), then fades. */
+.minimap-card {
+  position: static;
   padding: 8px;
+  opacity: 0;
+  transform: translateY(4px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 180ms var(--ease-out),
+    transform 180ms var(--ease-out),
+    visibility 0s linear 180ms;
+}
+.minimap-card.on {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 120ms var(--ease-out),
+    transform 120ms var(--ease-out),
+    visibility 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .minimap-card,
+  .minimap-card.on {
+    transition: none;
+    transform: none;
+  }
 }
 /* Chrome that belongs to the canvas follows its visible area. */
 .dock,
@@ -750,9 +785,6 @@ kbd,
     display: none;
   }
   .with-drawer .zoom {
-    border-top: 0;
-    margin-top: 0;
-    padding-top: 0;
     gap: 2px;
   }
 }
@@ -809,12 +841,11 @@ kbd,
   stroke: var(--accent);
 }
 .zoom {
+  position: static;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--border);
-  padding-top: 6px;
-  margin-top: 4px;
+  padding: 5px 8px;
 }
 .zoom button {
   width: 28px;
@@ -3027,4 +3058,12 @@ kbd,
 .mac-titlebar .settings-page {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/* Space held: the canvas pans on drag. */
+.space-pan .react-flow__pane {
+  cursor: grab;
+}
+.space-pan.is-panning .react-flow__pane {
+  cursor: grabbing;
 }
