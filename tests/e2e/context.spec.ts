@@ -154,3 +154,49 @@ test("「添加卡片」 searches the board and adds or removes context cards", 
     "c-wait",
   );
 });
+
+const notes = (page: Page) =>
+  page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("fake-atlas-disk")!)[0].notes as {
+        attachedTo?: { id: string };
+        contextCards?: string[];
+        title: string;
+      }[],
+  );
+
+test("selected cards come along: the dock's 问一问 and the drawer's new conversation", async ({
+  page,
+}) => {
+  await open(page);
+  const drawer = page.locator(".drawer");
+  // Two picked cards, then the dock's 问一问: one conversation carrying both.
+  await card(page, "c-how").click();
+  await card(page, "c-money").click({ modifiers: ["Shift"] });
+  await page.getByRole("button", { name: "问一问" }).click();
+  await expect(drawer).toBeVisible();
+  await expect(drawer.locator(".dhead .extra")).toHaveText("+1 张卡");
+  await expect
+    .poll(async () => (await notes(page)).at(-1))
+    .toMatchObject({ attachedTo: { id: "c-how" }, contextCards: ["c-money"] });
+  // With the drawer open on 怎么赔, pick two more cards and start a new conversation.
+  await card(page, "c-how").click();
+  await card(page, "c-when-not").click({ modifiers: ["Shift"] });
+  await card(page, "c-money").click({ modifiers: ["Shift"] });
+  await drawer.getByRole("button", { name: "新对话" }).click();
+  await expect(drawer.locator(".dhead .extra")).toHaveText("+2 张卡");
+  await expect
+    .poll(async () => (await notes(page)).at(-1))
+    .toMatchObject({
+      attachedTo: { id: "c-how" },
+      contextCards: ["c-when-not", "c-money"],
+      title: "关于「怎么赔」等 3 张卡",
+    });
+  // A single selected card reopens its latest conversation (no extra cards).
+  const count = (await notes(page)).length;
+  await page.keyboard.press("Escape");
+  await card(page, "c-how").click();
+  await page.keyboard.press("/");
+  await expect(drawer).toBeVisible();
+  expect((await notes(page)).length).toBe(count);
+});

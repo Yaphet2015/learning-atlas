@@ -30,7 +30,13 @@ import {
 } from "./model/boards";
 import { contextForNote } from "./model/context";
 import { plain } from "./model/answer";
-import { boxPick, toggleCard } from "./model/selection";
+import {
+  boxPick,
+  chatContext,
+  manyCardsTitle,
+  selectedCards,
+  toggleCard,
+} from "./model/selection";
 import { tip, TooltipLayer } from "./components/Tooltip";
 import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
@@ -411,24 +417,54 @@ export default function App() {
     [flow],
   );
   /** Open the drawer on the card's latest note (creating one if needed), or a free note; fresh always starts a new one. */
+  // What is selected right now, for chatContext (read inside stable callbacks).
+  const chatSelection = useRef<string[]>([]);
+  /**
+   * Open (or start) a conversation. Unless `cards: false`, the selected cards come along as
+   * context via chatContext; a conversation with extra cards is always a fresh one.
+   */
   const addNote = useCallback(
-    (attachment?: StickyNote["attachedTo"], text?: string, fresh = false) => {
+    (
+      attachment?: StickyNote["attachedTo"],
+      opts: { text?: string; fresh?: boolean; cards?: boolean } = {},
+    ) => {
       const b = boardRef.current;
       if (!b) return;
+      const exists = (id: string) => b.nodes.some((n) => n.id === id);
+      const ctx = chatContext(
+        opts.cards === false ? [] : chatSelection.current,
+        attachment?.kind === "node" ? attachment.id : undefined,
+        exists,
+      );
+      // A free note (no anchor) keeps its selected cards only as context.
+      const extra =
+        attachment?.kind === "node"
+          ? ctx.contextCards
+          : [
+              ...new Set(opts.cards === false ? [] : chatSelection.current),
+            ].filter(exists);
       const existing =
-        attachment && !fresh ? latestNoteOn(b, attachment) : undefined;
-      if (existing && !text) {
+        attachment && !opts.fresh && !extra.length
+          ? latestNoteOn(b, attachment)
+          : undefined;
+      if (existing && !opts.text) {
         setDrawer(existing.id);
-        return;
+        return existing.id;
       }
       const note = newNote(b, { x: 0, y: 0 }, attachment);
       if (attachment?.id === "scene-browser" && b.scene.explanation)
         note.text = b.scene.explanation;
-      if (text) note.text = text;
+      if (opts.text) note.text = opts.text;
       if (attachment?.kind === "node")
         note.title = b.nodes.find((n) => n.id === attachment.id)?.title ?? "";
+      if (extra.length) {
+        note.contextCards = extra;
+        if (attachment?.kind === "node")
+          note.title = manyCardsTitle(note.title, extra.length);
+      }
       edit((current) => ({ ...current, notes: [...current.notes, note] }));
       setDrawer(note.id);
+      return note.id;
     },
     [edit],
   );
@@ -584,17 +620,31 @@ export default function App() {
       setShowSettings(true);
       return;
     }
+    // Selected cards come along (chatContext); with extra cards it is a fresh start.
+    const extra = chatContext(chatSelection.current, root.id, (id) =>
+      b.nodes.some((n) => n.id === id),
+    ).contextCards;
     const existing = kickoffNote(b);
-    if (existing?.messages.length) {
+    if (existing?.messages.length && !extra.length) {
       setDrawer(existing.id);
       return;
     }
-    let noteId = existing?.id;
+    let noteId =
+      existing && !existing.messages.length ? existing.id : undefined;
     if (!noteId) {
       const note = newNote(b, { x: 0, y: 0 }, { kind: "node", id: root.id });
       note.title = "AI 带我开始";
+      if (extra.length) note.contextCards = extra;
       noteId = note.id;
       edit((current) => ({ ...current, notes: [...current.notes, note] }));
+    } else if (extra.length) {
+      const id = noteId;
+      edit((current) => ({
+        ...current,
+        notes: current.notes.map((n) =>
+          n.id === id ? { ...n, contextCards: extra } : n,
+        ),
+      }));
     }
     setDrawer(noteId);
     askNote(noteId, kickoffPrompt(b.topic));
@@ -732,6 +782,7 @@ export default function App() {
     [edit, addChildOf],
   );
   const selectedNodeId = selection?.kind === "node" ? selection.id : null;
+  chatSelection.current = selectedCards({ single: selectedNodeId, picked });
   // N / the dock's 批注: the selected card's conversation, else back to the
   // board's latest one (the drawer's strip lists the rest), else a free note.
   const openNotes = useCallback(() => {
@@ -757,22 +808,24 @@ export default function App() {
   const askMany = useCallback(
     (ids: string[]) => {
       const b = boardRef.current;
-      if (!b || !ids.length) return;
-      const cards = ids.filter((id) => b.nodes.some((n) => n.id === id));
-      const first = cards[0];
-      const note = newNote(b, { x: 0, y: 0 }, { kind: "node", id: first });
-      const title = b.nodes.find((n) => n.id === first)?.title ?? "";
-      note.title = `关于「${title}」等 ${cards.length} 张卡`.slice(0, 160);
-      note.contextCards = cards.slice(1);
-      edit((current) => ({ ...current, notes: [...current.notes, note] }));
+      if (!b) return;
+      chatSelection.current = ids;
+      const first = chatContext(ids, undefined, (id) =>
+        b.nodes.some((n) => n.id === id),
+      ).anchor;
+      if (!first) return;
+      addNote({ kind: "node", id: first }, { fresh: true });
       setPicked([]);
       setSelection({ kind: "node", id: first });
-      setDrawer(note.id);
     },
-    [edit],
+    [addNote],
   );
   const ask = useCallback(() => {
-    addNote(selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined);
+    if (chatSelection.current.length >= 2) askMany(chatSelection.current);
+    else
+      addNote(
+        selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined,
+      );
     // A newly opened drawer focuses its composer itself. For one that was already
     // open, move focus there, but never steal it from a field inside the drawer
     // (the learner may already be typing a note).
@@ -782,7 +835,7 @@ export default function App() {
         .querySelector<HTMLTextAreaElement>(".drawer footer textarea")
         ?.focus();
     }, 60);
-  }, [addNote, selectedNodeId]);
+  }, [addNote, askMany, selectedNodeId]);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
@@ -1098,7 +1151,8 @@ export default function App() {
               )),
           onScene: (patch: Partial<Board["scene"]>) =>
             edit((b) => ({ ...b, scene: { ...b.scene, ...patch } }), false),
-          onNote: (id: string) => addNote({ kind: "node", id }),
+          onNote: (id: string) =>
+            addNote({ kind: "node", id }, { cards: false }),
           ...(n.parentId === null && kickoffReady
             ? {
                 onKickoff: startKickoff,
@@ -1352,7 +1406,7 @@ export default function App() {
             }}
             onPaneContextMenu={(e) => {
               e.preventDefault();
-              addNote();
+              addNote(undefined, { cards: false });
             }}
             fitView
             fitViewOptions={{ padding: 0.16 }}
@@ -1582,7 +1636,7 @@ export default function App() {
               setSelection({ kind: "relation", id: at.id });
             }
           }}
-          onNewSession={() => addNote(drawerNote.attachedTo, undefined, true)}
+          onNewSession={() => addNote(drawerNote.attachedTo, { fresh: true })}
         />
       )}
       {board && study && (
@@ -1592,7 +1646,7 @@ export default function App() {
           onRate={setStatus}
           onAskAI={(id, text) => {
             setStudy(null);
-            addNote({ kind: "node", id }, text);
+            addNote({ kind: "node", id }, { text, cards: false });
           }}
           onClose={() => setStudy(null)}
         />

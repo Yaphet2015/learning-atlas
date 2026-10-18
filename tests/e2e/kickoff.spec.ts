@@ -48,9 +48,9 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   // Every answer request carries the board outline.
   expect(asks[1].context.structure).toContain("L0 起点 彩虹是怎么形成的？");
   expect(asks[1].context.structure).toContain("◀ 当前卡片");
-  await expect(page.getByRole("button", { name: /AI 带我开始/ })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.locator(".react-flow").getByRole("button", { name: /AI 带我开始/ }),
+  ).toHaveCount(0);
   await expect(
     drawer.getByRole("button", { name: "铺成第一层", exact: true }),
   ).toHaveCount(0);
