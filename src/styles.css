@@ -3067,3 +3067,43 @@ kbd,
 .space-pan.is-panning .react-flow__pane {
   cursor: grabbing;
 }
+
+/* ---- shared tooltip (components/Tooltip.tsx): ink chip, small delay */
+.tooltip {
+  position: fixed;
+  z-index: 100;
+  transform: translate(-50%, -100%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  color: var(--paper);
+  font: 400 12.5px/1.4 var(--kai);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-1);
+  animation: tip-in 120ms var(--ease-out);
+}
+.tooltip.below {
+  transform: translate(-50%, 0);
+}
+.tooltip kbd {
+  font: 400 11px var(--kai-mono);
+  padding: 0 4px;
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--paper) 18%, transparent);
+  color: var(--paper);
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    animation: none;
+  }
+}

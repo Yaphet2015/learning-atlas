@@ -33,6 +33,7 @@ import { displayMessage } from "../model/kickoff";
 import { outlineOf, type OutlineItem } from "../model/answer";
 import { AnswerBlocks } from "./AnswerBlocks";
 import { refKey } from "../model/context";
+import { tip } from "./Tooltip";
 import { toggleContextCard } from "../model/selection";
 import { sectionNumbers } from "../model/layout";
 import { LIMITS } from "../shared/validation";
@@ -458,7 +459,7 @@ function AnswerActs({
         </button>
         <button
           className="btn sm primary caret"
-          aria-label="更多加入方式"
+          {...tip("更多加入方式")}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen(!open)}
@@ -520,19 +521,13 @@ function AnswerActs({
       </span>
       <button
         className="ib"
-        title="复制"
-        aria-label="复制这条回答"
+        {...tip("复制这条回答")}
         onClick={() => copy(message.text)}
       >
         <Copy size={16} />
       </button>
       {onRedo && (
-        <button
-          className="ib"
-          title="重新回答"
-          aria-label="重新回答"
-          onClick={onRedo}
-        >
+        <button className="ib" {...tip("重新回答")} onClick={onRedo}>
           <RotateCcw size={16} />
         </button>
       )}
@@ -727,14 +722,18 @@ export function Drawer({
             <span className="dot" />
             <span>
               挂在{" "}
-              <button className="link" onClick={onLocate} title="在画布上定位">
+              <button
+                className="link"
+                onClick={onLocate}
+                data-tip="在画布上定位"
+              >
                 {anchor && anchor.parentId !== null ? anchorTitle : "起点问题"}
               </button>
             </span>
             {!!note.contextCards?.length && (
               <>
                 <span className="dot" />
-                <span className="extra" title="这段对话另外带上的卡片">
+                <span className="extra" data-tip="这段对话另外带上的卡片">
                   +{note.contextCards.length} 张卡
                 </span>
               </>
@@ -745,8 +744,7 @@ export function Drawer({
         </div>
         <button
           className={`ib ${sessionsOpen ? "on" : ""}`}
-          title="这张白板的对话"
-          aria-label="对话列表"
+          {...tip("对话列表")}
           aria-pressed={sessionsOpen}
           onClick={() => setSessionsOpen(!sessionsOpen)}
         >
@@ -755,8 +753,7 @@ export function Drawer({
         <span className="menu-anchor">
           <button
             className={`ib ${menu ? "on" : ""}`}
-            title="更多"
-            aria-label="更多操作"
+            {...tip("更多操作")}
             aria-haspopup="menu"
             aria-expanded={menu}
             onClick={() => setMenu(!menu)}
@@ -799,12 +796,7 @@ export function Drawer({
             </Menu>
           )}
         </span>
-        <button
-          className="ib"
-          title="关闭 Esc"
-          aria-label="关闭"
-          onClick={onClose}
-        >
+        <button className="ib" {...tip("关闭", "Esc")} onClick={onClose}>
           <X size={18} />
         </button>
       </header>
@@ -999,7 +991,7 @@ export function Drawer({
             <div className="row">
               <button
                 className="cchip"
-                title="AI 会参考这些内容，点开可以调整"
+                data-tip="AI 会参考这些内容，点开可以调整"
                 onClick={() => setRefsOpen(true)}
               >
                 <Link2 size={13} className="ico" />
@@ -1012,8 +1004,7 @@ export function Drawer({
               {busy ? (
                 <button
                   className="send stop"
-                  title="停止回答"
-                  aria-label="停止回答"
+                  {...tip("停止回答")}
                   onClick={onStop}
                 >
                   <Square size={11} fill="currentColor" />
@@ -1026,8 +1017,7 @@ export function Drawer({
               ) : (
                 <button
                   className={`send ${prompt.trim() ? "ready" : ""}`}
-                  title="发送 ↵"
-                  aria-label="发送提问"
+                  {...tip("发送提问", "↵")}
                   disabled={!prompt.trim()}
                   onClick={send}
                 >

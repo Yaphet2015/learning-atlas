@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import type { BoardSummary, ConceptNode } from "../shared/types";
 import { MOD } from "../model/shortcuts";
+import { tip } from "./Tooltip";
 
 function Compass() {
   return (
@@ -64,7 +65,12 @@ export function MapSwitcher({
   const concepts = nodes.filter((n) => n.parentId !== null);
   const explained = concepts.filter((n) => n.status === "explained").length;
   return (
-    <button className="chrome switcher" onClick={onOpen} title="切换地图 ⌘K">
+    <button
+      className="chrome switcher"
+      onClick={onOpen}
+      data-tip="切换地图"
+      data-keys={`${MOD}K`}
+    >
       <Compass />
       <span className="switcher-text">
         <strong title={title}>{title}</strong>
@@ -241,7 +247,6 @@ export function Progress({
         className="btn primary"
         onClick={onStudy}
         disabled={!concepts.length}
-        title="走一遍 F"
       >
         <Scan size={16} className="ico" />
         走一遍 <kbd>F</kbd>
@@ -269,8 +274,7 @@ export function Dock({
   const b = (t: Tool, label: string, key: string, icon: React.ReactNode) => (
     <button
       className={`b ${tool === t ? "on" : ""}`}
-      title={`${label} ${key}`}
-      aria-label={label}
+      {...tip(label, key)}
       aria-pressed={tool === t}
       onClick={() => setTool(t)}
     >
@@ -282,27 +286,21 @@ export function Dock({
       {b("select", "选择", "V", <MousePointer2 size={18} className="ico" />)}
       {b("hand", "平移", "H", <Hand size={18} className="ico" />)}
       <span className="sep" />
-      <button
-        className="b"
-        title="加概念 Tab"
-        aria-label="加概念"
-        onClick={onAddConcept}
-      >
+      <button className="b" {...tip("加概念", "Tab")} onClick={onAddConcept}>
         <SquarePen size={18} className="ico" />
       </button>
       {b("link", "连线", "L", <Link2 size={18} className="ico" />)}
-      <button className="b" title="批注 N" aria-label="批注" onClick={onNote}>
+      <button className="b" {...tip("批注", "N")} onClick={onNote}>
         <StickyNote size={18} className="ico" />
       </button>
       <span className="sep" />
-      <button className="ask" onClick={onAsk} title="问一问 /">
+      <button className="ask" onClick={onAsk}>
         <Sparkles size={17} className="ico" />
         问一问 <kbd>/</kbd>
       </button>
       <button
         className="b small"
-        title="设置"
-        aria-label="设置"
+        {...tip("设置", `${MOD}.`)}
         onClick={onSettings}
       >
         <Settings2 size={16} className="ico" />
@@ -374,21 +372,18 @@ export function MapUnit({ showMap }: { showMap: boolean }) {
       </div>
       <div className="chrome zoom">
         <button
-          aria-label="缩小"
+          {...tip("缩小")}
           onClick={() => flow.zoomOut({ duration: 200 })}
         >
           <Minus size={15} className="ico" />
         </button>
         <span className="lab">{Math.round(zoom * 100)}%</span>
-        <button
-          aria-label="放大"
-          onClick={() => flow.zoomIn({ duration: 200 })}
-        >
+        <button {...tip("放大")} onClick={() => flow.zoomIn({ duration: 200 })}>
           <Plus size={15} className="ico" />
         </button>
         <span className="sep" />
         <button
-          aria-label="查看全图"
+          {...tip("查看全图", "0")}
           onClick={() => flow.fitView({ padding: 0.16, duration: 400 })}
         >
           <Crosshair size={15} className="ico" />

@@ -21,6 +21,7 @@ import {
 } from "../model/connection";
 import { SHORTCUTS, MOD } from "../model/shortcuts";
 import pkg from "../../package.json";
+import { tip } from "./Tooltip";
 
 /**
  * The API key row. A saved key is shown only masked; the plaintext never comes back from the
@@ -204,12 +205,7 @@ export function Settings({
       <header className="settings-head">
         <h1 id="settings-title">设置</h1>
         <span className="lab">{MOD}. 打开 · Esc 关闭</span>
-        <button
-          className="ib"
-          aria-label="关闭设置"
-          data-tip="关闭设置 Esc"
-          onClick={onClose}
-        >
+        <button className="ib" {...tip("关闭设置", "Esc")} onClick={onClose}>
           <X size={18} />
         </button>
       </header>

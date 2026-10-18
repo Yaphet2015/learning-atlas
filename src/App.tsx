@@ -31,6 +31,7 @@ import {
 import { contextForNote } from "./model/context";
 import { plain } from "./model/answer";
 import { boxPick, toggleCard } from "./model/selection";
+import { tip, TooltipLayer } from "./components/Tooltip";
 import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import {
@@ -1281,6 +1282,7 @@ export default function App() {
       className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""} ${spacePan ? "space-pan" : ""} ${panning ? "is-panning" : ""}`}
     >
       <div className="grain" />
+      <TooltipLayer />
       {chromeClasses.includes("mac-titlebar") && (
         <div className="titlebar-drag" aria-hidden="true" />
       )}
@@ -1637,7 +1639,7 @@ export default function App() {
       {toast && (
         <div className="toast" role="status">
           {toast}
-          <button aria-label="关闭提示" onClick={() => setToast("")}>
+          <button {...tip("关闭提示")} onClick={() => setToast("")}>
             <X size={13} />
           </button>
         </div>
@@ -1668,7 +1670,7 @@ export default function App() {
             <button
               className="modal-close icon-button"
               onClick={() => setShowNew(false)}
-              aria-label="关闭"
+              {...tip("关闭", "Esc")}
             >
               <X size={19} />
             </button>
@@ -1717,7 +1719,7 @@ export default function App() {
             <button
               className="modal-close icon-button"
               onClick={() => setPromote(null)}
-              aria-label="关闭"
+              {...tip("关闭", "Esc")}
             >
               <X size={19} />
             </button>

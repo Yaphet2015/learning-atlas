@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { ConceptNode, SceneState } from "../shared/types";
 import { Seal } from "./Seal";
+import { tip } from "./Tooltip";
 
 export type CardData = {
   [key: string]: unknown;
@@ -144,8 +145,7 @@ function AddHandles({ data }: { data: CardData }) {
     <>
       <button
         className="plus below nodrag nopan"
-        title="加子概念 Tab"
-        aria-label="加子概念"
+        {...tip("加子概念", "Tab")}
         onMouseEnter={() => data.onPreviewAdd?.(id)}
         onMouseLeave={() => data.onPreviewAdd?.(null)}
         onClick={(e) => {
@@ -158,8 +158,7 @@ function AddHandles({ data }: { data: CardData }) {
       {data.concept.parentId && (
         <button
           className="plus right nodrag nopan"
-          title="加并列概念 Enter"
-          aria-label="加并列概念"
+          {...tip("加并列概念", "Enter")}
           onClick={(e) => {
             e.stopPropagation();
             data.onAddSibling?.(id);
@@ -212,8 +211,7 @@ function SelectToolbar({
       <span className="sep" />
       <button
         className="icon"
-        title="改标题 F2"
-        aria-label="改标题"
+        {...tip("改标题", "F2")}
         onClick={() => data.onStartEdit?.(n.id)}
       >
         <PencilLine size={15} className="ico" />
@@ -221,8 +219,7 @@ function SelectToolbar({
       {data.canExpand && (
         <button
           className="icon"
-          title="再看一层"
-          aria-label="再看一层"
+          {...tip("再看一层")}
           onClick={() => data.onExpand?.(n.id)}
         >
           <Layers3 size={15} className="ico" />
@@ -230,8 +227,7 @@ function SelectToolbar({
       )}
       <button
         className="icon accent"
-        title="问一问 /"
-        aria-label="问一问"
+        {...tip("问一问", "/")}
         onClick={() => data.onAsk?.(n.id)}
       >
         <Sparkles size={15} className="ico" />
@@ -260,7 +256,7 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
           {n.visual && (
             <button
               className="chip-fig nodrag nopan"
-              title="在批注里看图示"
+              data-tip="在批注里看图示"
               onClick={(e) => {
                 e.stopPropagation();
                 data.onNote?.(n.id);

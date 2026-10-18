@@ -102,8 +102,8 @@ function OutlineBlock({
             {actions.onAddItem && (
               <button
                 className="add"
-                title="加成一张卡"
                 aria-label={`把「${item.head}」加成一张卡`}
+                data-tip="加成一张卡"
                 onClick={() => actions.onAddItem?.(item)}
               >
                 <Plus size={14} className="ico" />
