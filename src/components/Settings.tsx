@@ -391,7 +391,9 @@ export function Settings({
               <p className="sec-lede">
                 字体：霞鹜文楷 LXGW WenKai / LXGW WenKai
                 Mono（随应用离线打包），以 SIL Open Font License 1.1
-                授权。图标：Lucide（ISC 许可）。
+                授权。图标：Lucide（ISC 许可）。对话抽屉的思考与流式动效参考了
+                Beautiful UI（MIT 许可，© 2026 Shane
+                Levine）的设计，按本应用的样式重写，未复制其代码。
               </p>
               <details className="licenses">
                 <summary>SIL Open Font License 1.1 全文</summary>

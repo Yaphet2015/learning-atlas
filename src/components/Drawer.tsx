@@ -39,6 +39,7 @@ import { sectionNumbers } from "../model/layout";
 import { LIMITS } from "../shared/validation";
 import { sessionClock, stripOrder, type SessionEntry } from "../model/sessions";
 import { isQuestionRoot } from "../model/kickoff";
+import { StreamStatus } from "./StreamStatus";
 
 const LEVEL = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const STATUS: Record<string, string> = {
@@ -654,6 +655,11 @@ export function Drawer({
   const [spoken, setSpoken] = useState("");
   const latest = useRef(pending);
   latest.current = pending;
+  // When the current answer started, for the elapsed time beside 正在思考 / 正在回答.
+  const [busySince, setBusySince] = useState(() => Date.now());
+  useEffect(() => {
+    if (busy) setBusySince(Date.now());
+  }, [busy]);
   useEffect(() => {
     if (!busy) return;
     const t = setInterval(() => setSpoken(latest.current ?? ""), 600);
@@ -959,12 +965,21 @@ export function Drawer({
               <div
                 className="msg assistant ans streaming"
                 aria-hidden={!!pending}
+                aria-busy="true"
               >
                 <div className="who">
                   <span>AI</span>
+                  <StreamStatus
+                    phase={pending ? "answering" : "thinking"}
+                    startedAt={busySince}
+                  />
                 </div>
-                <AnswerBlocks text={pending ?? ""} streaming />
-                <span className="streaming-caret" aria-hidden="true" />
+                {pending && (
+                  <>
+                    <AnswerBlocks text={pending} streaming />
+                    <span className="streaming-caret" aria-hidden="true" />
+                  </>
+                )}
               </div>
             )}
             {kickoff && lastAnswer && !busy && (

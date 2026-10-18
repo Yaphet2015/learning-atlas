@@ -1753,24 +1753,119 @@ kbd,
 .reply input::placeholder {
   color: var(--ink-3);
 }
+/* ---- streaming answer. Patterns adapted from Beautiful UI (MIT, © 2026 Shane Levine):
+   pixel-grid loader + shimmering label + elapsed time, blocks rising in as they arrive,
+   a slim caret, and actions fading in once the answer settles. v5 tokens throughout. */
 .streaming-caret {
   display: inline-block;
-  width: 7px;
-  height: 15px;
-  border-radius: 2px;
-  background: var(--ink-2);
-  vertical-align: -2px;
-  margin-left: 2px;
-  animation: caret 1s steps(2) infinite;
+  width: 2px;
+  height: 1.05em;
+  border-radius: 1px;
+  background: var(--ink);
+  vertical-align: -0.16em;
+  margin-left: 3px;
+  animation: caret-in 150ms ease-out both;
 }
-@keyframes caret {
-  50% {
+.stream-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  letter-spacing: 0;
+}
+.pixel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 3.5px);
+  gap: 1.5px;
+  flex: none;
+}
+.pixel-grid span {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 1px;
+  background: var(--ink);
+  opacity: 0.15;
+  animation: pixel-on 650ms ease-in-out infinite;
+}
+.stream-status[data-phase="answering"] .pixel-grid span {
+  background: var(--accent);
+}
+.stream-status .shimmer {
+  font: 500 12.5px var(--kai);
+  color: transparent;
+  background: linear-gradient(
+      90deg,
+      var(--ink-3) 35%,
+      var(--ink) 50%,
+      var(--ink-3) 65%
+    )
+    0 0 / 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: shimmer-text 1.4s linear infinite;
+}
+.stream-status .elapsed {
+  font: 400 11.5px var(--kai-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+/* New blocks rise in once while the answer streams (the settled answer does not replay it). */
+.ans.streaming > :not(.who):not(.streaming-caret) {
+  animation: rise-in 320ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.ans .acts {
+  animation: fade-in 360ms ease-out both;
+}
+@keyframes pixel-on {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  18%,
+  42% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 0.15;
+  }
+}
+@keyframes shimmer-text {
+  from {
+    background-position: 150% center;
+  }
+  to {
+    background-position: -50% center;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes caret-in {
+  from {
     opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .streaming-caret {
+  .streaming-caret,
+  .ans.streaming > *,
+  .ans .acts {
     animation: none;
+  }
+  .pixel-grid span {
+    animation: none;
+    opacity: 0.35;
+  }
+  .stream-status .shimmer {
+    animation: none;
+    color: var(--ink-2);
+    background: none;
   }
 }
 /* ---- composer: empty / typing / answering / failed */
@@ -1786,9 +1881,18 @@ kbd,
   flex: none;
   cursor: text;
 }
+.composer {
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent);
+}
+/* Focus is a firmer outline and a soft lift, not a heavy ring (after Beautiful UI's composer). */
 .composer:focus-within {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ink) 55%, var(--border));
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent),
+    0 6px 18px -10px color-mix(in srgb, var(--ink) 30%, transparent);
 }
 .composer.failed {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
@@ -1866,6 +1970,19 @@ kbd,
   place-items: center;
   flex: none;
   background: transparent;
+  transition:
+    background-color 200ms,
+    color 200ms,
+    transform 120ms;
+}
+.send:enabled:active {
+  transform: scale(0.94);
+}
+@media (prefers-reduced-motion: reduce) {
+  .send,
+  .composer {
+    transition: none;
+  }
 }
 .send:disabled {
   color: var(--ink-3);

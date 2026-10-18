@@ -134,16 +134,30 @@ export async function installFakeAtlas(
             : { ok: true, model: s.model, latencyMs: 842 },
         ask: async (request: any) => {
           (request.mode === "hint" ? hints : asks).push(request);
-          setTimeout(() => {
-            const update = {
-              boardId: request.boardId,
-              stickyId: request.stickyId,
-              requestId: request.requestId,
-              text: answer(request),
-              status: "done",
-            };
-            listeners.forEach((l) => l(update));
-          }, 120);
+          const emit = (text: string, status: string) =>
+            listeners.forEach((l) =>
+              l({
+                boardId: request.boardId,
+                stickyId: request.stickyId,
+                requestId: request.requestId,
+                text,
+                status,
+              }),
+            );
+          // Tests that look at the streaming state set __atlasSlow: think, stream half, finish.
+          const slow = (window as any).__atlasSlow as number | undefined;
+          if (slow && request.mode === "answer") {
+            const full = answer(request);
+            setTimeout(() => emit("", "streaming"), 20);
+            setTimeout(
+              () =>
+                emit(full.slice(0, Math.ceil(full.length / 2)), "streaming"),
+              slow,
+            );
+            setTimeout(() => emit(full, "done"), slow * 2);
+            return;
+          }
+          setTimeout(() => emit(answer(request), "done"), 120);
         },
         stop: async () => {},
         getHistory: async () => ({ messages: [], running: false }),
