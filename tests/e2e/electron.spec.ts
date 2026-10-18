@@ -103,8 +103,8 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     // Wait for the reopened board and the app's readiness signal (⌘K listener attached).
     await expect(nextPage.locator(".react-flow__node-root h2")).toBeVisible();
     await waitForApp(nextPage);
-    await nextPage.keyboard.press("ControlOrMeta+k");
-    await nextPage.getByRole("button", { name: /^批注 · / }).click();
+    // Nothing selected: N goes back to the board's latest conversation.
+    await nextPage.keyboard.press("n");
     await expect(nextPage.getByLabel("批注内容")).toHaveValue(
       "Close immediately: this edit must survive.",
     );

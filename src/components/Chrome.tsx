@@ -85,22 +85,18 @@ export function MapSwitcher({
 
 export function Palette({
   boards,
-  notes = [],
   footer,
   currentId,
   onPick,
-  onNote,
   onNew,
   onWalkthrough,
   onSettings,
   onClose,
 }: {
   boards: BoardSummary[];
-  notes?: { id: string; title: string }[];
   footer?: string;
   currentId?: string;
   onPick: (id: string) => void;
-  onNote?: (id: string) => void;
   onNew: () => void;
   onWalkthrough: () => void;
   onSettings: () => void;
@@ -118,15 +114,6 @@ export function Palette({
           hint: b.kind === "walkthrough" ? "内置演练" : "我的探索",
           run: () => onPick(b.id),
           current: b.id === currentId,
-        })),
-      ...notes
-        .filter((n) => n.title.toLowerCase().includes(q.toLowerCase()))
-        .map((n) => ({
-          key: "note:" + n.id,
-          label: `批注 · ${n.title}`,
-          hint: "N",
-          run: () => onNote?.(n.id),
-          current: false,
         })),
       {
         key: "+new",
@@ -150,17 +137,7 @@ export function Palette({
         current: false,
       },
     ],
-    [
-      boards,
-      notes,
-      q,
-      currentId,
-      onPick,
-      onNote,
-      onNew,
-      onWalkthrough,
-      onSettings,
-    ],
+    [boards, q, currentId, onPick, onNew, onWalkthrough, onSettings],
   );
   useEffect(() => setCursor(0), [q]);
   return (

@@ -209,6 +209,59 @@ function SessionList({
   );
 }
 
+/** The strip under the header: one tab per conversation, newest first. */
+function SessionStrip({
+  sessions,
+  current,
+  listOpen,
+  onOpen,
+  onNew,
+  onToggleList,
+}: {
+  sessions: SessionEntry[];
+  current: string;
+  listOpen: boolean;
+  onOpen: (id: string) => void;
+  onNew: () => void;
+  onToggleList: () => void;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    row.current
+      ?.querySelector<HTMLElement>('[aria-current="true"]')
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [current]);
+  return (
+    <div className="session-strip">
+      <button
+        className={`ib sm ${listOpen ? "on" : ""}`}
+        {...tip("对话列表")}
+        aria-pressed={listOpen}
+        onClick={onToggleList}
+      >
+        <History size={16} />
+      </button>
+      <div className="tabs" ref={row} role="group" aria-label="对话标签">
+        {sessions.map((s) => (
+          <button
+            key={s.id}
+            className={`stab ${s.id === current && !listOpen ? "on" : ""}`}
+            aria-current={s.id === current ? "true" : undefined}
+            data-tip={`${s.title} · ${s.anchorTitle}`}
+            onClick={() => onOpen(s.id)}
+          >
+            <span className="st">{s.title}</span>
+            {s.count > 0 && <span className="n">{s.count}</span>}
+          </button>
+        ))}
+      </div>
+      <button className="ib sm" {...tip("新对话")} onClick={onNew}>
+        <Plus size={16} />
+      </button>
+    </div>
+  );
+}
+
 function Refs({
   refs,
   excluded,
@@ -742,14 +795,6 @@ export function Drawer({
             <span>{note.messages.length} 条消息</span>
           </div>
         </div>
-        <button
-          className={`ib ${sessionsOpen ? "on" : ""}`}
-          {...tip("对话列表")}
-          aria-pressed={sessionsOpen}
-          onClick={() => setSessionsOpen(!sessionsOpen)}
-        >
-          <History size={18} />
-        </button>
         <span className="menu-anchor">
           <button
             className={`ib ${menu ? "on" : ""}`}
@@ -800,6 +845,16 @@ export function Drawer({
           <X size={18} />
         </button>
       </header>
+      <SessionStrip
+        sessions={sessions}
+        current={note.id}
+        listOpen={sessionsOpen}
+        onOpen={(id) =>
+          id === note.id ? setSessionsOpen(false) : onOpenSession(id)
+        }
+        onNew={onNewSession}
+        onToggleList={() => setSessionsOpen(!sessionsOpen)}
+      />
       {sessionsOpen ? (
         <SessionList
           sessions={sessions}

@@ -2727,6 +2727,72 @@ kbd,
   display: none;
 }
 
+/* ---- drawer: session strip (one tab per conversation) */
+.session-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px 8px 14px;
+}
+.session-strip .tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 8px,
+    #000 calc(100% - 16px),
+    transparent
+  );
+  padding: 0 8px;
+}
+.session-strip .tabs::-webkit-scrollbar {
+  display: none;
+}
+.ib.sm {
+  width: 28px;
+  height: 28px;
+}
+.stab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 168px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font: 500 13px var(--kai);
+  color: var(--ink-2);
+  background: transparent;
+}
+.stab:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.stab.on {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.stab .st {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stab .n {
+  flex: none;
+  font: 500 11px var(--kai);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
 /* ---- drawer: this board's conversations */
 .sessions {
   flex: 1;

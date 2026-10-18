@@ -117,3 +117,43 @@ test("sessions persist across reloads in the web preview", async ({ page }) => {
   );
   await expect(entries.filter({ hasText: "钱和手续" })).toHaveCount(2);
 });
+
+test("the drawer's session strip switches conversations; ⌘K lists only boards", async ({
+  page,
+}) => {
+  await installFakeAtlas(page, true, "web", [seeded()]);
+  await gotoApp(page);
+  const drawer = page.locator(".drawer");
+  await card(page, "c-how").click();
+  await page.keyboard.press("/");
+  await ask(page, "赔付次数怎么算？", 1);
+  const strip = drawer.getByRole("group", { name: "对话标签" });
+  const tabs = strip.getByRole("button");
+  await expect(tabs).toHaveCount(2);
+  await expect(tabs.nth(0)).toHaveAttribute("aria-current", "true");
+  await expect(tabs.nth(0)).toContainText("赔付次数怎么算？");
+  // + starts a fresh conversation on the same card; it becomes the first tab.
+  await drawer.getByRole("button", { name: "新对话" }).click();
+  await expect(drawer.locator(".msg")).toHaveCount(0);
+  await expect(tabs).toHaveCount(3);
+  await expect(tabs.nth(0)).toHaveAttribute("aria-current", "true");
+  // Switching tabs reopens that thread.
+  await tabs.nth(2).click();
+  await expect(drawer.locator(".msg.user").first()).toContainText("带我");
+  await expect(tabs.nth(2)).toHaveAttribute("aria-current", "true");
+  // Closed, with nothing selected: N returns to the latest conversation.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(drawer).toHaveCount(0);
+  await page
+    .locator(".react-flow__pane")
+    .click({ position: { x: 40, y: 600 } });
+  await page.keyboard.press("n");
+  await expect(drawer).toBeVisible();
+  // The board switcher (⌘K) is for boards only; conversations live in the drawer.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+k");
+  const palette = page.getByRole("dialog", { name: "切换地图" });
+  await expect(palette).toBeVisible();
+  await expect(palette.getByRole("button", { name: /^批注/ })).toHaveCount(0);
+});

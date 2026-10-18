@@ -732,6 +732,16 @@ export default function App() {
     [edit, addChildOf],
   );
   const selectedNodeId = selection?.kind === "node" ? selection.id : null;
+  // N / the dock's 批注: the selected card's conversation, else back to the
+  // board's latest one (the drawer's strip lists the rest), else a free note.
+  const openNotes = useCallback(() => {
+    const b = boardRef.current;
+    if (!b) return;
+    if (selectedNodeId) return addNote({ kind: "node", id: selectedNodeId });
+    const latest = listSessions(b)[0];
+    if (latest) setDrawer(latest.id);
+    else addNote(undefined);
+  }, [selectedNodeId, addNote]);
   const rootId = board?.nodes.find((n) => n.parentId === null)?.id ?? null;
   function removeSelected() {
     if (!selection) return;
@@ -856,9 +866,7 @@ export default function App() {
       else if (key === "l") {
         setTool((t) => (t === "link" ? "select" : "link"));
       } else if (key === "n") {
-        addNote(
-          selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined,
-        );
+        openNotes();
       } else if (e.key === "/") {
         e.preventDefault();
         if (picked.length >= 2) askMany(picked);
@@ -1410,13 +1418,7 @@ export default function App() {
               const parent = selectedNodeId ?? rootId;
               if (parent) addChildOf(parent);
             }}
-            onNote={() =>
-              addNote(
-                selectedNodeId
-                  ? { kind: "node", id: selectedNodeId }
-                  : undefined,
-              )
-            }
+            onNote={openNotes}
             onAsk={ask}
             onSettings={() => setShowSettings(true)}
           />
@@ -1580,16 +1582,7 @@ export default function App() {
               setSelection({ kind: "relation", id: at.id });
             }
           }}
-          onNewSession={() =>
-            addNote(
-              drawerNote.attachedTo ?? {
-                kind: "node",
-                id: drawerAnchorOrRoot,
-              },
-              undefined,
-              true,
-            )
-          }
+          onNewSession={() => addNote(drawerNote.attachedTo, undefined, true)}
         />
       )}
       {board && study && (
@@ -1607,15 +1600,7 @@ export default function App() {
       {palette && (
         <Palette
           boards={boards}
-          notes={(board?.notes ?? []).map((n) => ({
-            id: n.id,
-            title: n.title || n.text.slice(0, 24) || "未命名批注",
-          }))}
           footer={`${isDesktop ? "白板保存在这台 Mac" : "浏览器预览 · 仅当前浏览器保存"} · ${saveStatus === "saving" ? "保存中" : saveStatus === "saved" ? "已保存" : "保存失败"}`}
-          onNote={(id) => {
-            setPalette(false);
-            setDrawer(id);
-          }}
           currentId={board?.id}
           onClose={() => setPalette(false)}
           onPick={(id) => {
