@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Board, Understanding } from "../shared/types";
 import { layoutTree } from "../model/layout";
+import { isQuestionRoot } from "../model/kickoff";
 import { Seal } from "./Seal";
 
 const NEXT: Record<Understanding, Understanding> = {
@@ -29,7 +30,7 @@ export function Outline({
       out.push({ id, level });
       for (const c of layout.children.get(id) ?? []) walk(c, level + 1);
     };
-    if (layout.rootId) walk(layout.rootId, 0);
+    for (const r of layout.rootIds) walk(r, 0);
     return out.map((r) => ({ ...r, n: by.get(r.id)! }));
   }, [board.nodes]);
   const [open, setOpen] = useState<string | null>(null);
@@ -50,7 +51,7 @@ export function Outline({
           level === 0 ? (
             <li key={n.id} className="outline-root">
               <span className="eyebrow">起点 · 问题</span>
-              <h1>{board.topic}</h1>
+              <h1>{isQuestionRoot(board.nodes, n) ? board.topic : n.title}</h1>
             </li>
           ) : (
             <li

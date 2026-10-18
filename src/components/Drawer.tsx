@@ -33,10 +33,13 @@ import { displayMessage } from "../model/kickoff";
 import { outlineOf, type OutlineItem } from "../model/answer";
 import { AnswerBlocks } from "./AnswerBlocks";
 import { refKey } from "../model/context";
+import { tip } from "./Tooltip";
 import { toggleContextCard } from "../model/selection";
 import { sectionNumbers } from "../model/layout";
 import { LIMITS } from "../shared/validation";
-import { sessionClock, type SessionEntry } from "../model/sessions";
+import { sessionClock, stripOrder, type SessionEntry } from "../model/sessions";
+import { isQuestionRoot } from "../model/kickoff";
+import { StreamStatus } from "./StreamStatus";
 
 const LEVEL = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const STATUS: Record<string, string> = {
@@ -103,7 +106,7 @@ function CardPicker({
   const numbers = sectionNumbers(nodes);
   const q = query.trim().toLowerCase();
   const cards = nodes
-    .filter((n) => n.parentId !== null)
+    .filter((n) => !isQuestionRoot(nodes, n))
     .map((n) => ({ n, no: numbers.get(n.id) ?? "" }))
     .sort((a, b) => a.no.localeCompare(b.no, undefined, { numeric: true }))
     .filter(
@@ -208,6 +211,59 @@ function SessionList({
   );
 }
 
+/** The strip under the header: one tab per conversation, newest first. */
+function SessionStrip({
+  sessions,
+  current,
+  listOpen,
+  onOpen,
+  onNew,
+  onToggleList,
+}: {
+  sessions: SessionEntry[];
+  current: string;
+  listOpen: boolean;
+  onOpen: (id: string) => void;
+  onNew: () => void;
+  onToggleList: () => void;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    row.current
+      ?.querySelector<HTMLElement>('[aria-current="true"]')
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [current]);
+  return (
+    <div className="session-strip">
+      <button
+        className={`ib sm ${listOpen ? "on" : ""}`}
+        {...tip("对话列表")}
+        aria-pressed={listOpen}
+        onClick={onToggleList}
+      >
+        <History size={16} />
+      </button>
+      <div className="tabs" ref={row} role="group" aria-label="对话标签">
+        {stripOrder(sessions).map((s) => (
+          <button
+            key={s.id}
+            className={`stab ${s.id === current && !listOpen ? "on" : ""}`}
+            aria-current={s.id === current ? "true" : undefined}
+            data-tip={`${s.title} · ${s.anchorTitle}`}
+            onClick={() => onOpen(s.id)}
+          >
+            <span className="st">{s.title}</span>
+            {s.count > 0 && <span className="n">{s.count}</span>}
+          </button>
+        ))}
+      </div>
+      <button className="ib sm" {...tip("新对话")} onClick={onNew}>
+        <Plus size={16} />
+      </button>
+    </div>
+  );
+}
+
 function Refs({
   refs,
   excluded,
@@ -233,7 +289,8 @@ function Refs({
     (r) =>
       r.kind !== "note" &&
       !(
-        r.kind === "node" && nodes.find((n) => n.id === r.id)?.parentId === null
+        r.kind === "node" &&
+        nodes.some((n) => n.id === r.id && isQuestionRoot(nodes, n))
       ),
   );
   const on = list.filter((r) => !excluded.includes(refKey(r)));
@@ -458,7 +515,7 @@ function AnswerActs({
         </button>
         <button
           className="btn sm primary caret"
-          aria-label="更多加入方式"
+          {...tip("更多加入方式")}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen(!open)}
@@ -520,19 +577,13 @@ function AnswerActs({
       </span>
       <button
         className="ib"
-        title="复制"
-        aria-label="复制这条回答"
+        {...tip("复制这条回答")}
         onClick={() => copy(message.text)}
       >
         <Copy size={16} />
       </button>
       {onRedo && (
-        <button
-          className="ib"
-          title="重新回答"
-          aria-label="重新回答"
-          onClick={onRedo}
-        >
+        <button className="ib" {...tip("重新回答")} onClick={onRedo}>
           <RotateCcw size={16} />
         </button>
       )}
@@ -604,6 +655,11 @@ export function Drawer({
   const [spoken, setSpoken] = useState("");
   const latest = useRef(pending);
   latest.current = pending;
+  // When the current answer started, for the elapsed time beside 正在思考 / 正在回答.
+  const [busySince, setBusySince] = useState(() => Date.now());
+  useEffect(() => {
+    if (busy) setBusySince(Date.now());
+  }, [busy]);
   useEffect(() => {
     if (!busy) return;
     const t = setInterval(() => setSpoken(latest.current ?? ""), 600);
@@ -727,14 +783,20 @@ export function Drawer({
             <span className="dot" />
             <span>
               挂在{" "}
-              <button className="link" onClick={onLocate} title="在画布上定位">
-                {anchor && anchor.parentId !== null ? anchorTitle : "起点问题"}
+              <button
+                className="link"
+                onClick={onLocate}
+                data-tip="在画布上定位"
+              >
+                {anchor && !isQuestionRoot(nodes, anchor)
+                  ? anchorTitle
+                  : "起点问题"}
               </button>
             </span>
             {!!note.contextCards?.length && (
               <>
                 <span className="dot" />
-                <span className="extra" title="这段对话另外带上的卡片">
+                <span className="extra" data-tip="这段对话另外带上的卡片">
                   +{note.contextCards.length} 张卡
                 </span>
               </>
@@ -743,20 +805,10 @@ export function Drawer({
             <span>{note.messages.length} 条消息</span>
           </div>
         </div>
-        <button
-          className={`ib ${sessionsOpen ? "on" : ""}`}
-          title="这张白板的对话"
-          aria-label="对话列表"
-          aria-pressed={sessionsOpen}
-          onClick={() => setSessionsOpen(!sessionsOpen)}
-        >
-          <History size={18} />
-        </button>
         <span className="menu-anchor">
           <button
             className={`ib ${menu ? "on" : ""}`}
-            title="更多"
-            aria-label="更多操作"
+            {...tip("更多操作")}
             aria-haspopup="menu"
             aria-expanded={menu}
             onClick={() => setMenu(!menu)}
@@ -799,15 +851,20 @@ export function Drawer({
             </Menu>
           )}
         </span>
-        <button
-          className="ib"
-          title="关闭 Esc"
-          aria-label="关闭"
-          onClick={onClose}
-        >
+        <button className="ib" {...tip("关闭", "Esc")} onClick={onClose}>
           <X size={18} />
         </button>
       </header>
+      <SessionStrip
+        sessions={sessions}
+        current={note.id}
+        listOpen={sessionsOpen}
+        onOpen={(id) =>
+          id === note.id ? setSessionsOpen(false) : onOpenSession(id)
+        }
+        onNew={onNewSession}
+        onToggleList={() => setSessionsOpen(!sessionsOpen)}
+      />
       {sessionsOpen ? (
         <SessionList
           sessions={sessions}
@@ -908,12 +965,21 @@ export function Drawer({
               <div
                 className="msg assistant ans streaming"
                 aria-hidden={!!pending}
+                aria-busy="true"
               >
                 <div className="who">
                   <span>AI</span>
+                  <StreamStatus
+                    phase={pending ? "answering" : "thinking"}
+                    startedAt={busySince}
+                  />
                 </div>
-                <AnswerBlocks text={pending ?? ""} streaming />
-                <span className="streaming-caret" aria-hidden="true" />
+                {pending && (
+                  <>
+                    <AnswerBlocks text={pending} streaming />
+                    <span className="streaming-caret" aria-hidden="true" />
+                  </>
+                )}
               </div>
             )}
             {kickoff && lastAnswer && !busy && (
@@ -999,7 +1065,7 @@ export function Drawer({
             <div className="row">
               <button
                 className="cchip"
-                title="AI 会参考这些内容，点开可以调整"
+                data-tip="AI 会参考这些内容，点开可以调整"
                 onClick={() => setRefsOpen(true)}
               >
                 <Link2 size={13} className="ico" />
@@ -1012,8 +1078,7 @@ export function Drawer({
               {busy ? (
                 <button
                   className="send stop"
-                  title="停止回答"
-                  aria-label="停止回答"
+                  {...tip("停止回答")}
                   onClick={onStop}
                 >
                   <Square size={11} fill="currentColor" />
@@ -1026,8 +1091,7 @@ export function Drawer({
               ) : (
                 <button
                   className={`send ${prompt.trim() ? "ready" : ""}`}
-                  title="发送 ↵"
-                  aria-label="发送提问"
+                  {...tip("发送提问", "↵")}
                   disabled={!prompt.trim()}
                   onClick={send}
                 >

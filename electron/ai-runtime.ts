@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { maskKey, SavedKeyStore, type SecretCipher } from "./secret-store.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   createModels,
@@ -117,6 +118,11 @@ export function tutorInstructions(mode: AIRequest["mode"]): string {
     return `${base}
 通常回答不超过 250 个汉字；先直接回答问题，再给一个具体类比、可尝试的操作或一个检查理解的问题。
 格式约定（界面会按它分块显示）：结构化内容用编号列表，每项以 **短标题**：开头；类比、小练习、检查题分别另起一段，以“类比：”“小练习：”“检查：”开头。只用 **粗体** 强调，不要用标题、表格、引用或代码块。`;
+  if (mode === "hint")
+    return `${base}
+本次只输出一个有效 JSON 对象，不要 Markdown 代码围栏或额外说明，格式为 {"below":"…","right":"…","above":"…"}。
+这些是画布上 '+' 旁的淡色提示，学习者点一下就会变成一张新卡片：每项是一个具体的短问题或短概念名，最多 14 个汉字，不加标点以外的修饰。
+只填提示里要求的方向，其余省略；不要重复白板上已有的卡片标题，参考“白板结构”让它和已有的兄弟、子卡片互不重叠。`;
   return `${base}输出是可阅读的纯文本数据。\n本次只输出一个有效 JSON 对象，不要 Markdown 代码围栏或额外说明。
 格式为 {"nodes":[{"id":"c1","title":"短标题","body":"一两句具体解释或贴切类比","parent":"anchor"}],"relations":[{"source":"c2","target":"c4","label":"对照"}]}。
 ${mode === "map" ? "第一层给 3–5 个大图景节点，按“互不重叠、合起来覆盖整个问题”来拆。" : "围绕选中的概念（anchor）给出 2–4 个更具体的子问题。"}
@@ -401,13 +407,19 @@ function classifyConnectionFailureConfig(): AIConnectionResult {
   return { ok: false, kind: "config", message: CONNECTION_MESSAGES.config };
 }
 
-/** Main-process only. Credentials are kept in memory and never written to settings, SQLite or IPC results. */
+/**
+ * Main-process only. The key is never written to settings, SQLite or IPC results; with a usable
+ * safeStorage it is kept encrypted at rest in ai/key.json, otherwise only in memory.
+ */
 export class AIRuntime {
   private readonly directory: string;
   private readonly settingsPath: string;
   private model = DEFAULT_MODEL;
   private baseUrl = OFFICIAL_URL;
   private sessionKey: string | undefined;
+  /** True when sessionKey came from (or was written to) the encrypted store. */
+  private keySaved = false;
+  private readonly savedKeys: SavedKeyStore;
   private readonly credentials = new InMemoryCredentialStore();
   private readonly models: MutableModels;
   private readonly owners = new Map<string, Promise<Harness>>();
@@ -419,6 +431,7 @@ export class AIRuntime {
   constructor(
     userDataDir: string,
     private readonly emit: (update: AIUpdate) => void,
+    cipher: SecretCipher | null = null,
   ) {
     this.directory = join(userDataDir, "ai");
     this.settingsPath = join(this.directory, "settings.json");
@@ -451,6 +464,19 @@ export class AIRuntime {
         fileExists: async () => false,
       },
     });
+    this.savedKeys = new SavedKeyStore(
+      join(this.directory, "key.json"),
+      cipher,
+    );
+    const saved = this.savedKeys.load();
+    // A saved key belongs to the endpoint it was saved for; never forward it elsewhere.
+    if (saved && normalizeUrl(saved.baseUrl) === normalizeUrl(this.baseUrl)) {
+      this.sessionKey = saved.key;
+      this.keySaved = true;
+      this.settingsWrite = this.credentials
+        .modify("openai", async () => ({ type: "api_key", key: saved.key }))
+        .then(() => undefined);
+    }
     this.installProvider();
   }
 
@@ -461,16 +487,22 @@ export class AIRuntime {
     return `${idSchema.parse(boardId)}:${idSchema.parse(stickyId)}`;
   }
   getSettings(): AISettings {
+    const env = this.isOfficial() ? process.env.OPENAI_API_KEY?.trim() : "";
     const source = this.sessionKey
-      ? "session"
-      : this.isOfficial() && process.env.OPENAI_API_KEY?.trim()
+      ? this.keySaved
+        ? "saved"
+        : "session"
+      : env
         ? "environment"
         : "none";
+    const inUse = this.sessionKey ?? env;
     return {
       model: this.model,
       baseUrl: this.baseUrl,
       configured: source !== "none",
       source,
+      ...(inUse ? { keyHint: maskKey(inUse) } : {}),
+      keyStorage: this.savedKeys.available() ? "encrypted" : "unavailable",
     };
   }
 
@@ -507,6 +539,14 @@ export class AIRuntime {
         { mode: 0o600 },
       );
       await rename(nextFile, this.settingsPath);
+      // A new key is saved encrypted (when possible); a cleared key or a new destination
+      // without one removes the saved copy.
+      if (parsed.apiKey !== undefined || destinationChanged) {
+        await this.savedKeys.clear();
+        this.keySaved = key
+          ? await this.savedKeys.save({ key, baseUrl: parsed.baseUrl })
+          : false;
+      }
       this.model = parsed.model;
       this.baseUrl = parsed.baseUrl;
       this.sessionKey = key;

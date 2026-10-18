@@ -5,6 +5,15 @@ import type {
   Selection,
 } from "../shared/types";
 import { LIMITS } from "../shared/validation";
+import { questionId } from "./kickoff";
+
+/** Before growing a second root, remember which card is the board's question. */
+function markQuestion(nodes: ConceptNode[]): ConceptNode[] {
+  const q = questionId(nodes);
+  return nodes.map((n) =>
+    n.id === q && !n.question ? { ...n, question: true } : n,
+  );
+}
 
 /** Renumber each sibling group to 0..k-1, keeping the current relative order. */
 export function normalizeOrder(nodes: ConceptNode[]): ConceptNode[] {
@@ -70,6 +79,57 @@ export function addSibling(board: Board, siblingId: string, id: string): Board {
   );
 }
 
+/**
+ * Grow upward: a broader question above a root. It takes the root's place among the roots and
+ * the old root becomes its first child (its subtree comes along).
+ */
+export function addParent(
+  board: Board,
+  rootId: string,
+  id: string,
+  title = "更大的问题",
+): Board {
+  const root = board.nodes.find((n) => n.id === rootId);
+  if (!root || root.parentId !== null) return board;
+  const parent: ConceptNode = {
+    ...blank(id, "", root.order),
+    parentId: null,
+    title,
+  };
+  return {
+    ...board,
+    nodes: normalizeOrder([
+      ...markQuestion(board.nodes).map((n) =>
+        n.id === rootId ? { ...n, parentId: id, order: 0 } : n,
+      ),
+      parent,
+    ]),
+  };
+}
+
+/** Grow sideways: a new top-level root right after `besideId` (a forest). */
+export function addRoot(
+  board: Board,
+  besideId: string,
+  id: string,
+  title = "新的起点问题",
+): Board {
+  const beside = board.nodes.find((n) => n.id === besideId);
+  if (!beside || beside.parentId !== null) return board;
+  const order = beside.order + 1;
+  return {
+    ...board,
+    nodes: normalizeOrder([
+      ...markQuestion(board.nodes).map((n) =>
+        n.parentId === null && n.order >= order
+          ? { ...n, order: n.order + 1 }
+          : n,
+      ),
+      { ...blank(id, "", order), parentId: null, title },
+    ]),
+  };
+}
+
 function isInSubtree(board: Board, ancestor: string, id: string) {
   for (
     let cursor: string | null | undefined = id;
@@ -125,8 +185,14 @@ export function removeSelection(board: Board, selection: Selection): Board {
   if (kind === "note")
     return { ...board, notes: board.notes.filter((note) => note.id !== id) };
   const removed = board.nodes.find((n) => n.id === id);
-  // The root question cannot be removed: every map grows from it.
-  if (kind === "node" && removed?.parentId === null) return board;
+  // The last root cannot be removed: every map grows from it. With several roots one can go,
+  // and its children become roots in its place.
+  if (
+    kind === "node" &&
+    removed?.parentId === null &&
+    board.nodes.filter((n) => n.parentId === null).length < 2
+  )
+    return board;
   const removedRelations = new Set(
     board.relations
       .filter((edge) =>

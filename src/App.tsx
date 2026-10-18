@@ -29,8 +29,24 @@ import {
   buildMapFromAI,
 } from "./model/boards";
 import { contextForNote } from "./model/context";
+import {
+  HINT_DELAY,
+  cachedHints,
+  hintPrompt,
+  hintSignature,
+  parseHints,
+  withHints,
+  type HintSide,
+} from "./model/hints";
 import { plain } from "./model/answer";
-import { boxPick, toggleCard } from "./model/selection";
+import {
+  boxPick,
+  chatContext,
+  manyCardsTitle,
+  selectedCards,
+  toggleCard,
+} from "./model/selection";
+import { tip, TooltipLayer } from "./components/Tooltip";
 import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import {
@@ -38,11 +54,15 @@ import {
   kickoffNote,
   kickoffPrompt,
   learnerAnswers,
+  isQuestionRoot,
   needsKickoff,
   rootOf,
+  rootsOf,
 } from "./model/kickoff";
 import {
   addChild,
+  addParent,
+  addRoot,
   addSibling,
   cacheMessages,
   layOutline,
@@ -123,6 +143,8 @@ export default function App() {
     [picked, setPicked] = useState<string[]>([]),
     /** Space held: the canvas pans on drag instead of drawing a marquee. */
     [spacePan, setSpacePan] = useState(false),
+    /** The canvas is being panned: the minimap shows meanwhile. */
+    [panning, setPanning] = useState(false),
     [settings, setSettings] = useState<AISettings>(defaults),
     [showSettings, setShowSettings] = useState(false),
     [showNew, setShowNew] = useState(false),
@@ -169,6 +191,11 @@ export default function App() {
     requestMeta = useRef(
       new Map<string, { request: AIRequest; anchor?: string }>(),
     );
+  // Ghost hints: in flight (by card), failed (by card|signature), and hover debounce timers.
+  const hintBusy = useRef(new Set<string>());
+  const hintFailed = useRef(new Set<string>());
+  const hintTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const configured = useRef(false);
   const flow = useReactFlow<CanvasNode>();
   const showToast = useCallback((text: string) => {
     setToast(text);
@@ -320,6 +347,21 @@ export default function App() {
   useEffect(
     () =>
       api.onAIUpdate((update: AIUpdate) => {
+        // Ghost hints are a quiet cache: no thread, no toast, no busy state.
+        const hintMeta = requestMeta.current.get(update.requestId);
+        if (hintMeta?.request.mode === "hint") {
+          if (update.status === "streaming") return;
+          requestMeta.current.delete(update.requestId);
+          const id = hintMeta.anchor!;
+          hintBusy.current.delete(id);
+          const b = boardRef.current;
+          if (update.status !== "done" || b?.id !== update.boardId) return;
+          const hints = parseHints(update.text, b, id);
+          if (!hints) hintFailed.current.add(`${id}|${hintSignature(b, id)}`);
+          else if (!editingLocked.current)
+            putBoard(withHints(b, id, hints), false);
+          return;
+        }
         const key = `${update.boardId}/${update.stickyId}`;
         setPending((p) => ({
           ...p,
@@ -408,24 +450,54 @@ export default function App() {
     [flow],
   );
   /** Open the drawer on the card's latest note (creating one if needed), or a free note; fresh always starts a new one. */
+  // What is selected right now, for chatContext (read inside stable callbacks).
+  const chatSelection = useRef<string[]>([]);
+  /**
+   * Open (or start) a conversation. Unless `cards: false`, the selected cards come along as
+   * context via chatContext; a conversation with extra cards is always a fresh one.
+   */
   const addNote = useCallback(
-    (attachment?: StickyNote["attachedTo"], text?: string, fresh = false) => {
+    (
+      attachment?: StickyNote["attachedTo"],
+      opts: { text?: string; fresh?: boolean; cards?: boolean } = {},
+    ) => {
       const b = boardRef.current;
       if (!b) return;
+      const exists = (id: string) => b.nodes.some((n) => n.id === id);
+      const ctx = chatContext(
+        opts.cards === false ? [] : chatSelection.current,
+        attachment?.kind === "node" ? attachment.id : undefined,
+        exists,
+      );
+      // A free note (no anchor) keeps its selected cards only as context.
+      const extra =
+        attachment?.kind === "node"
+          ? ctx.contextCards
+          : [
+              ...new Set(opts.cards === false ? [] : chatSelection.current),
+            ].filter(exists);
       const existing =
-        attachment && !fresh ? latestNoteOn(b, attachment) : undefined;
-      if (existing && !text) {
+        attachment && !opts.fresh && !extra.length
+          ? latestNoteOn(b, attachment)
+          : undefined;
+      if (existing && !opts.text) {
         setDrawer(existing.id);
-        return;
+        return existing.id;
       }
       const note = newNote(b, { x: 0, y: 0 }, attachment);
       if (attachment?.id === "scene-browser" && b.scene.explanation)
         note.text = b.scene.explanation;
-      if (text) note.text = text;
+      if (opts.text) note.text = opts.text;
       if (attachment?.kind === "node")
         note.title = b.nodes.find((n) => n.id === attachment.id)?.title ?? "";
+      if (extra.length) {
+        note.contextCards = extra;
+        if (attachment?.kind === "node")
+          note.title = manyCardsTitle(note.title, extra.length);
+      }
       edit((current) => ({ ...current, notes: [...current.notes, note] }));
       setDrawer(note.id);
+      return note.id;
     },
     [edit],
   );
@@ -581,17 +653,31 @@ export default function App() {
       setShowSettings(true);
       return;
     }
+    // Selected cards come along (chatContext); with extra cards it is a fresh start.
+    const extra = chatContext(chatSelection.current, root.id, (id) =>
+      b.nodes.some((n) => n.id === id),
+    ).contextCards;
     const existing = kickoffNote(b);
-    if (existing?.messages.length) {
+    if (existing?.messages.length && !extra.length) {
       setDrawer(existing.id);
       return;
     }
-    let noteId = existing?.id;
+    let noteId =
+      existing && !existing.messages.length ? existing.id : undefined;
     if (!noteId) {
       const note = newNote(b, { x: 0, y: 0 }, { kind: "node", id: root.id });
       note.title = "AI 带我开始";
+      if (extra.length) note.contextCards = extra;
       noteId = note.id;
       edit((current) => ({ ...current, notes: [...current.notes, note] }));
+    } else if (extra.length) {
+      const id = noteId;
+      edit((current) => ({
+        ...current,
+        notes: current.notes.map((n) =>
+          n.id === id ? { ...n, contextCards: extra } : n,
+        ),
+      }));
     }
     setDrawer(noteId);
     askNote(noteId, kickoffPrompt(b.topic));
@@ -728,11 +814,47 @@ export default function App() {
     },
     [edit, addChildOf],
   );
+  /** Grow a root upward: a broader question above it; the old root becomes its child. */
+  const addParentOf = useCallback(
+    (rootId: string) => {
+      const id = newId("root");
+      edit((b) => addParent(b, rootId, id));
+      setSelection({ kind: "node", id });
+      setEditingId(id);
+    },
+    [edit],
+  );
+  /** Grow sideways: another top-level root right of this one. */
+  const addRootBeside = useCallback(
+    (rootId: string) => {
+      const id = newId("root");
+      edit((b) => addRoot(b, rootId, id));
+      setSelection({ kind: "node", id });
+      setEditingId(id);
+    },
+    [edit],
+  );
   const selectedNodeId = selection?.kind === "node" ? selection.id : null;
-  const rootId = board?.nodes.find((n) => n.parentId === null)?.id ?? null;
+  chatSelection.current = selectedCards({ single: selectedNodeId, picked });
+  // N / the dock's 批注: the selected card's conversation, else back to the
+  // board's latest one (the drawer's strip lists the rest), else a free note.
+  const openNotes = useCallback(() => {
+    const b = boardRef.current;
+    if (!b) return;
+    if (selectedNodeId) return addNote({ kind: "node", id: selectedNodeId });
+    const latest = listSessions(b)[0];
+    if (latest) setDrawer(latest.id);
+    else addNote(undefined);
+  }, [selectedNodeId, addNote]);
+  const rootId = (board && rootOf(board)?.id) ?? null;
   function removeSelected() {
     if (!selection) return;
-    if (selection.kind === "node" && selection.id === rootId) {
+    if (
+      selection.kind === "node" &&
+      board &&
+      rootsOf(board.nodes).length < 2 &&
+      board.nodes.find((n) => n.id === selection.id)?.parentId === null
+    ) {
       showToast("起点问题不能删除，地图都从这里长出来。");
       return;
     }
@@ -744,22 +866,24 @@ export default function App() {
   const askMany = useCallback(
     (ids: string[]) => {
       const b = boardRef.current;
-      if (!b || !ids.length) return;
-      const cards = ids.filter((id) => b.nodes.some((n) => n.id === id));
-      const first = cards[0];
-      const note = newNote(b, { x: 0, y: 0 }, { kind: "node", id: first });
-      const title = b.nodes.find((n) => n.id === first)?.title ?? "";
-      note.title = `关于「${title}」等 ${cards.length} 张卡`.slice(0, 160);
-      note.contextCards = cards.slice(1);
-      edit((current) => ({ ...current, notes: [...current.notes, note] }));
+      if (!b) return;
+      chatSelection.current = ids;
+      const first = chatContext(ids, undefined, (id) =>
+        b.nodes.some((n) => n.id === id),
+      ).anchor;
+      if (!first) return;
+      addNote({ kind: "node", id: first }, { fresh: true });
       setPicked([]);
       setSelection({ kind: "node", id: first });
-      setDrawer(note.id);
     },
-    [edit],
+    [addNote],
   );
   const ask = useCallback(() => {
-    addNote(selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined);
+    if (chatSelection.current.length >= 2) askMany(chatSelection.current);
+    else
+      addNote(
+        selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined,
+      );
     // A newly opened drawer focuses its composer itself. For one that was already
     // open, move focus there, but never steal it from a field inside the drawer
     // (the learner may already be typing a note).
@@ -769,12 +893,21 @@ export default function App() {
         .querySelector<HTMLTextAreaElement>(".drawer footer textarea")
         ?.focus();
     }, 60);
-  }, [addNote, selectedNodeId]);
+  }, [addNote, askMany, selectedNodeId]);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
   const [fullscreen, setFullscreen] = useState(false);
   useEffect(() => api.onFullscreenChange(setFullscreen), []);
+  // Electron app menu: Settings… (⌘. and ⌘,).
+  useEffect(
+    () =>
+      api.onOpenSettings?.(() => {
+        setPalette(false);
+        setShowSettings(true);
+      }),
+    [],
+  );
   const chromeClasses = windowChromeClasses(api.platform, fullscreen);
   useEffect(() => {
     const root = document.documentElement.classList;
@@ -790,6 +923,13 @@ export default function App() {
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette((p) => !p);
+        return;
+      }
+      // ⌘. as asked, plus the macOS-standard ⌘, (Ctrl+. / Ctrl+, elsewhere).
+      if (mod && (e.key === "." || e.key === ",")) {
+        e.preventDefault();
+        setPalette(false);
+        setShowSettings(true);
         return;
       }
       if (e.key === "Escape") {
@@ -837,9 +977,7 @@ export default function App() {
       else if (key === "l") {
         setTool((t) => (t === "link" ? "select" : "link"));
       } else if (key === "n") {
-        addNote(
-          selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined,
-        );
+        openNotes();
       } else if (e.key === "/") {
         e.preventDefault();
         if (picked.length >= 2) askMany(picked);
@@ -914,6 +1052,87 @@ export default function App() {
     [shown, board, baseLayout, layoutOptions],
   );
   const slotRef = useRef<{ id: string; slot: Slot } | null>(null);
+  configured.current = settings.configured;
+  /**
+   * One batched hint request per card (all its directions at once), only with a provider,
+   * never while another hint is in flight, never twice for a card that has not changed, and
+   * never again after a failure for the same card state.
+   */
+  const requestHints = useCallback((id: string) => {
+    const b = boardRef.current;
+    if (!b || !configured.current || editingLocked.current) return;
+    if (!b.nodes.some((n) => n.id === id) || cachedHints(b, id)) return;
+    const key = `${id}|${hintSignature(b, id)}`;
+    if (hintFailed.current.has(key) || hintBusy.current.size) return;
+    const virtual = newNote(b, { x: 0, y: 0 }, { kind: "node", id });
+    const request: AIRequest = {
+      boardId: b.id,
+      stickyId: "hint-" + id,
+      requestId: uid(),
+      mode: "hint",
+      prompt: hintPrompt(b, id),
+      context: contextForNote(
+        { ...b, notes: [...b.notes, virtual] },
+        virtual.id,
+      ),
+    };
+    hintBusy.current.add(id);
+    requestMeta.current.set(request.requestId, { request, anchor: id });
+    api.ask(request).catch(() => {
+      requestMeta.current.delete(request.requestId);
+      hintBusy.current.delete(id);
+      hintFailed.current.add(key);
+    });
+  }, []);
+  /** Hover / selection: ask for a card's hints after it has had attention for a moment. */
+  const wantHints = useCallback(
+    (id: string, on: boolean) => {
+      const timers = hintTimers.current;
+      clearTimeout(timers.get(id));
+      timers.delete(id);
+      if (on && configured.current)
+        timers.set(
+          id,
+          setTimeout(() => {
+            timers.delete(id);
+            requestHints(id);
+          }, HINT_DELAY),
+        );
+    },
+    [requestHints],
+  );
+  useEffect(() => {
+    const timers = hintTimers.current;
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, []);
+  /** Clicking a ghost hint grows that card with the suggested title. */
+  const growFromHint = useCallback(
+    (from: string, side: HintSide, title: string) => {
+      const b = boardRef.current;
+      const node = b?.nodes.find((n) => n.id === from);
+      if (!b || !node) return;
+      const id = newId(
+        node.parentId === null && side !== "below" ? "root" : "concept",
+      );
+      setPreview(null);
+      edit((current) => {
+        const grown =
+          side === "below"
+            ? addChild(current, from, id)
+            : side === "above"
+              ? addParent(current, from, id)
+              : node.parentId === null
+                ? addRoot(current, from, id)
+                : addSibling(current, from, id);
+        return {
+          ...grown,
+          nodes: grown.nodes.map((n) => (n.id === id ? { ...n, title } : n)),
+        };
+      });
+      setSelection({ kind: "node", id });
+    },
+    [edit],
+  );
   const hoverAdd = useCallback((id: string | null) => {
     const b = boardRef.current;
     setPreview(id && b ? addChild(b, id, GHOST) : null);
@@ -925,8 +1144,7 @@ export default function App() {
   const drawerAnchor =
     drawerNoteAttachment?.kind === "node" ? drawerNoteAttachment.id : null;
   /** Where 「铺成第一层」 lays cards: the anchor card, or the root for a free note. */
-  const drawerAnchorOrRoot =
-    drawerAnchor ?? board?.nodes.find((n) => n.parentId === null)?.id ?? "";
+  const drawerAnchorOrRoot = drawerAnchor ?? (board && rootOf(board)?.id) ?? "";
   /** Bring a card and its children into the visible canvas; with onlyIfHidden, leave a visible card alone. */
   const frameFamily = useCallback(
     (anchorId: string, onlyIfHidden = false) => {
@@ -1049,7 +1267,7 @@ export default function App() {
           multi: picked.length >= 2,
           noteOpen: drawerAnchor === n.id,
           no: numbers.get(n.id),
-          topic: board.topic,
+          topic: isQuestionRoot(board.nodes, n) ? board.topic : undefined,
           createdAt: board.createdAt,
           scene: board.scene,
           editing: editingId === n.id,
@@ -1058,7 +1276,17 @@ export default function App() {
           onEditDone: () => setEditingId(null),
           onAddChild: addChildOf,
           onAddSibling: addSiblingOf,
+          ...(n.parentId === null
+            ? { onAddParent: addParentOf, onAddRoot: addRootBeside }
+            : {}),
           onPreviewAdd: hoverAdd,
+          ...(settings.configured && tool === "select"
+            ? {
+                hints: cachedHints(board, n.id),
+                onWantHints: wantHints,
+                onHint: growFromHint,
+              }
+            : {}),
           onStatus: setStatus,
           onStartEdit: setEditingId,
           onAsk: (id: string) => addNote({ kind: "node", id }),
@@ -1071,8 +1299,9 @@ export default function App() {
               )),
           onScene: (patch: Partial<Board["scene"]>) =>
             edit((b) => ({ ...b, scene: { ...b.scene, ...patch } }), false),
-          onNote: (id: string) => addNote({ kind: "node", id }),
-          ...(n.parentId === null && kickoffReady
+          onNote: (id: string) =>
+            addNote({ kind: "node", id }, { cards: false }),
+          ...(n.id === rootId && kickoffReady
             ? {
                 onKickoff: startKickoff,
                 kickoffStarted: Boolean(kickoffNote(board)?.messages.length),
@@ -1104,6 +1333,11 @@ export default function App() {
     drawerAnchor,
     numbers,
     picked,
+    addParentOf,
+    addRootBeside,
+    settings.configured,
+    wantHints,
+    growFromHint,
   ]);
   const edges = useMemo<Edge[]>(() => {
     if (!shown) return [];
@@ -1158,6 +1392,7 @@ export default function App() {
   }, [shown, layout, selection]);
   // Positions are controlled by layoutTree; only drag offsets and measured
   // sizes (needed by the minimap) flow back from React Flow.
+  const panEnd = useRef<ReturnType<typeof setTimeout>>(undefined);
   const boxing = useRef<{ base: string[]; inside: Set<string> } | null>(null);
   const onNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
     const sizes: Record<string, { width: number; height: number }> = {};
@@ -1258,8 +1493,11 @@ export default function App() {
       </div>
     );
   return (
-    <main className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""}`}>
+    <main
+      className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""} ${spacePan ? "space-pan" : ""} ${panning ? "is-panning" : ""}`}
+    >
       <div className="grain" />
+      <TooltipLayer />
       {chromeClasses.includes("mac-titlebar") && (
         <div className="titlebar-drag" aria-hidden="true" />
       )}
@@ -1321,7 +1559,7 @@ export default function App() {
             }}
             onPaneContextMenu={(e) => {
               e.preventDefault();
-              addNote();
+              addNote(undefined, { cards: false });
             }}
             fitView
             fitViewOptions={{ padding: 0.16 }}
@@ -1353,12 +1591,23 @@ export default function App() {
             }}
             panOnScroll
             panOnDrag={tool === "hand" || spacePan ? true : [1, 2]}
+            onMoveStart={(e) => {
+              // Panning, not zooming: a drag, or a scroll without the pinch/ctrl modifier.
+              if (!e) return;
+              if (e.type === "wheel" && (e as WheelEvent).ctrlKey) return;
+              clearTimeout(panEnd.current);
+              setPanning(true);
+            }}
+            onMoveEnd={() => {
+              clearTimeout(panEnd.current);
+              panEnd.current = setTimeout(() => setPanning(false), 450);
+            }}
             zoomOnDoubleClick={false}
             nodeDragThreshold={4}
             proOptions={{ hideAttribution: true }}
           >
             <LevelGuides {...bounds} />
-            <MapUnit />
+            <MapUnit showMap={panning || tool === "hand"} />
           </ReactFlow>
           <MapSwitcher
             title={board.title}
@@ -1376,13 +1625,7 @@ export default function App() {
               const parent = selectedNodeId ?? rootId;
               if (parent) addChildOf(parent);
             }}
-            onNote={() =>
-              addNote(
-                selectedNodeId
-                  ? { kind: "node", id: selectedNodeId }
-                  : undefined,
-              )
-            }
+            onNote={openNotes}
             onAsk={ask}
             onSettings={() => setShowSettings(true)}
           />
@@ -1546,16 +1789,7 @@ export default function App() {
               setSelection({ kind: "relation", id: at.id });
             }
           }}
-          onNewSession={() =>
-            addNote(
-              drawerNote.attachedTo ?? {
-                kind: "node",
-                id: drawerAnchorOrRoot,
-              },
-              undefined,
-              true,
-            )
-          }
+          onNewSession={() => addNote(drawerNote.attachedTo, { fresh: true })}
         />
       )}
       {board && study && (
@@ -1565,7 +1799,7 @@ export default function App() {
           onRate={setStatus}
           onAskAI={(id, text) => {
             setStudy(null);
-            addNote({ kind: "node", id }, text);
+            addNote({ kind: "node", id }, { text, cards: false });
           }}
           onClose={() => setStudy(null)}
         />
@@ -1573,15 +1807,7 @@ export default function App() {
       {palette && (
         <Palette
           boards={boards}
-          notes={(board?.notes ?? []).map((n) => ({
-            id: n.id,
-            title: n.title || n.text.slice(0, 24) || "未命名批注",
-          }))}
           footer={`${isDesktop ? "白板保存在这台 Mac" : "浏览器预览 · 仅当前浏览器保存"} · ${saveStatus === "saving" ? "保存中" : saveStatus === "saved" ? "已保存" : "保存失败"}`}
-          onNote={(id) => {
-            setPalette(false);
-            setDrawer(id);
-          }}
           currentId={board?.id}
           onClose={() => setPalette(false)}
           onPick={(id) => {
@@ -1605,7 +1831,7 @@ export default function App() {
       {toast && (
         <div className="toast" role="status">
           {toast}
-          <button aria-label="关闭提示" onClick={() => setToast("")}>
+          <button {...tip("关闭提示")} onClick={() => setToast("")}>
             <X size={13} />
           </button>
         </div>
@@ -1613,10 +1839,11 @@ export default function App() {
       {showSettings && (
         <Settings
           settings={settings}
+          dark={dark}
+          onTheme={setDark}
           onClose={() => setShowSettings(false)}
           onSave={async (input) => {
             setSettings(await api.setAISettings(input));
-            showToast("AI 设置已更新。发出提问时才会调用模型。");
           }}
           onTest={(input) => api.testAIConnection(input)}
         />
@@ -1635,7 +1862,7 @@ export default function App() {
             <button
               className="modal-close icon-button"
               onClick={() => setShowNew(false)}
-              aria-label="关闭"
+              {...tip("关闭", "Esc")}
             >
               <X size={19} />
             </button>
@@ -1684,7 +1911,7 @@ export default function App() {
             <button
               className="modal-close icon-button"
               onClick={() => setPromote(null)}
-              aria-label="关闭"
+              {...tip("关闭", "Esc")}
             >
               <X size={19} />
             </button>
@@ -1723,7 +1950,7 @@ export default function App() {
                   const parent =
                     note?.attachedTo?.kind === "node"
                       ? note.attachedTo.id
-                      : (b.nodes.find((n) => n.parentId === null)?.id ?? "");
+                      : (rootOf(b)?.id ?? "");
                   const next = addChild(b, parent, id);
                   return {
                     ...next,

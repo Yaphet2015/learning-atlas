@@ -41,6 +41,8 @@
     -1px 0 0 rgba(42, 49, 51, 0.06), 0 24px 60px -30px rgba(40, 35, 25, 0.45);
   --ring: 0 0 0 1.5px var(--accent), 0 0 0 6px var(--accent-wash);
   --drawer-w: 420px;
+  /* Gap between floating chrome and the window edge. */
+  --gutter: 12px;
   color-scheme: light;
 }
 :root.dark {
@@ -173,7 +175,7 @@ kbd,
 /* The drawer squeezes the canvas instead of covering it; the right edge fades
    out so level rules stop before the drawer. */
 .with-drawer .react-flow {
-  right: calc(var(--drawer-w) + 40px);
+  right: calc(var(--drawer-w) + 2 * var(--gutter));
 }
 .with-drawer .react-flow__renderer {
   -webkit-mask-image: linear-gradient(
@@ -427,9 +429,86 @@ kbd,
   right: -40px;
   top: calc(50% - 13px);
 }
+.plus.above {
+  left: calc(50% - 13px);
+  top: -40px;
+}
 .react-flow__node:hover .plus,
 .react-flow__node.selected .plus {
   opacity: 1;
+}
+/* AI ghost hints: faded suggestions beside the '+' handles; a click grows that card. */
+.ghost-hint {
+  position: absolute;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in srgb, var(--ink) 24%, transparent);
+  /* Opaque so a hint over a neighbouring card reads cleanly; low emphasis comes from the
+     dashed outline and the faint ink, not from transparency. */
+  background: var(--paper);
+  color: color-mix(in srgb, var(--ink-3) 85%, var(--paper));
+  font: 400 13px/1 var(--kai);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 160ms,
+    color 120ms,
+    border-color 120ms;
+}
+.ghost-hint span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ghost-hint .ico {
+  flex: none;
+  color: var(--accent);
+  opacity: 0.7;
+}
+.ghost-hint.below {
+  left: calc(50% + 22px);
+  bottom: -39px;
+}
+.ghost-hint.above {
+  left: calc(50% + 22px);
+  top: -39px;
+}
+.ghost-hint.right {
+  left: calc(100% + 14px);
+  top: calc(50% + 20px);
+}
+.react-flow__node:hover .ghost-hint,
+.react-flow__node:focus-within .ghost-hint {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ghost-hint:hover,
+.ghost-hint:focus-visible {
+  color: var(--ink);
+  border-style: solid;
+  box-shadow: var(--shadow-1);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: var(--card);
+}
+/* The hovered card lifts so its hints can overlap a neighbour like a popover. */
+.react-flow__node:hover,
+.react-flow__node:focus-within {
+  z-index: 1000 !important;
+}
+.is-dragging .ghost-hint,
+.react-flow__node.is-picked .ghost-hint {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ghost-hint {
+    transition: none;
+  }
 }
 .is-dragging .plus {
   display: none;
@@ -440,7 +519,7 @@ kbd,
 }
 /* The root's connectors fan out from its bottom edge: its + shows on hover or
    keyboard focus only, not merely because the root is selected. */
-.react-flow__node-root.selected:not(:hover) .plus.below:not(:focus-visible) {
+.react-flow__node-root.selected:not(:hover) .plus:not(:focus-visible) {
   opacity: 0;
 }
 .ghost {
@@ -560,7 +639,7 @@ kbd,
 }
 .switcher {
   left: var(--chrome-inset-left);
-  top: 14px;
+  top: var(--gutter);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -587,8 +666,8 @@ kbd,
   color: var(--ink);
 }
 .progress {
-  right: 20px;
-  top: 14px;
+  right: var(--gutter);
+  top: var(--gutter);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -676,7 +755,7 @@ kbd,
 }
 .dock {
   left: 50%;
-  bottom: 22px;
+  bottom: var(--gutter);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -714,10 +793,45 @@ kbd,
   border-radius: var(--r-md);
 }
 .map-unit {
-  right: 20px;
-  bottom: 20px;
+  position: fixed;
+  z-index: 20;
+  right: var(--gutter);
+  bottom: var(--gutter);
   width: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+/* The minimap shows only while panning (or with the hand tool), then fades. */
+.minimap-card {
+  position: static;
   padding: 8px;
+  opacity: 0;
+  transform: translateY(4px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 180ms var(--ease-out),
+    transform 180ms var(--ease-out),
+    visibility 0s linear 180ms;
+}
+.minimap-card.on {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 120ms var(--ease-out),
+    transform 120ms var(--ease-out),
+    visibility 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .minimap-card,
+  .minimap-card.on {
+    transition: none;
+    transform: none;
+  }
 }
 /* Chrome that belongs to the canvas follows its visible area. */
 .dock,
@@ -734,11 +848,11 @@ kbd,
 .with-drawer .toast,
 .with-drawer .hint,
 .with-drawer .map-progress {
-  left: calc((100% - var(--drawer-w) - 40px) / 2);
+  left: calc((100% - var(--drawer-w) - 2 * var(--gutter)) / 2);
 }
 .with-drawer .progress,
 .with-drawer .map-unit {
-  right: calc(var(--drawer-w) + 40px);
+  right: calc(var(--drawer-w) + 2 * var(--gutter));
 }
 @media (max-width: 1180px) {
   .with-drawer .map-unit {
@@ -748,9 +862,6 @@ kbd,
     display: none;
   }
   .with-drawer .zoom {
-    border-top: 0;
-    margin-top: 0;
-    padding-top: 0;
     gap: 2px;
   }
 }
@@ -807,12 +918,11 @@ kbd,
   stroke: var(--accent);
 }
 .zoom {
+  position: static;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--border);
-  padding-top: 6px;
-  margin-top: 4px;
+  padding: 5px 8px;
 }
 .zoom button {
   width: 28px;
@@ -828,7 +938,7 @@ kbd,
 .hint {
   position: fixed;
   left: 50%;
-  bottom: 86px;
+  bottom: calc(var(--gutter) + 64px);
   transform: translateX(-50%);
   z-index: 20;
   background: var(--paper);
@@ -837,7 +947,7 @@ kbd,
 }
 .relation-bar {
   left: 50%;
-  top: 14px;
+  top: var(--gutter);
   transform: translateX(-50%);
   display: flex;
   gap: 8px;
@@ -881,7 +991,7 @@ kbd,
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 90px;
+  bottom: calc(var(--gutter) + 68px);
   transform: translateX(-50%);
   z-index: 40;
   display: flex;
@@ -913,7 +1023,7 @@ kbd,
 }
 .palette {
   left: var(--chrome-inset-left);
-  top: 70px;
+  top: calc(var(--gutter) + 58px);
   width: 420px;
   padding: 10px;
   box-shadow: var(--shadow-2);
@@ -953,9 +1063,9 @@ kbd,
 /* ---- right drawer (AI) */
 .drawer {
   box-shadow: var(--shadow-drawer);
-  right: 20px;
-  top: 16px;
-  bottom: 16px;
+  right: var(--gutter);
+  top: var(--gutter);
+  bottom: var(--gutter);
   width: var(--drawer-w);
   display: flex;
   flex-direction: column;
@@ -1643,24 +1753,119 @@ kbd,
 .reply input::placeholder {
   color: var(--ink-3);
 }
+/* ---- streaming answer. Patterns adapted from Beautiful UI (MIT, © 2026 Shane Levine):
+   pixel-grid loader + shimmering label + elapsed time, blocks rising in as they arrive,
+   a slim caret, and actions fading in once the answer settles. v5 tokens throughout. */
 .streaming-caret {
   display: inline-block;
-  width: 7px;
-  height: 15px;
-  border-radius: 2px;
-  background: var(--ink-2);
-  vertical-align: -2px;
-  margin-left: 2px;
-  animation: caret 1s steps(2) infinite;
+  width: 2px;
+  height: 1.05em;
+  border-radius: 1px;
+  background: var(--ink);
+  vertical-align: -0.16em;
+  margin-left: 3px;
+  animation: caret-in 150ms ease-out both;
 }
-@keyframes caret {
-  50% {
+.stream-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  letter-spacing: 0;
+}
+.pixel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 3.5px);
+  gap: 1.5px;
+  flex: none;
+}
+.pixel-grid span {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 1px;
+  background: var(--ink);
+  opacity: 0.15;
+  animation: pixel-on 650ms ease-in-out infinite;
+}
+.stream-status[data-phase="answering"] .pixel-grid span {
+  background: var(--accent);
+}
+.stream-status .shimmer {
+  font: 500 12.5px var(--kai);
+  color: transparent;
+  background: linear-gradient(
+      90deg,
+      var(--ink-3) 35%,
+      var(--ink) 50%,
+      var(--ink-3) 65%
+    )
+    0 0 / 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: shimmer-text 1.4s linear infinite;
+}
+.stream-status .elapsed {
+  font: 400 11.5px var(--kai-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+/* New blocks rise in once while the answer streams (the settled answer does not replay it). */
+.ans.streaming > :not(.who):not(.streaming-caret) {
+  animation: rise-in 320ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.ans .acts {
+  animation: fade-in 360ms ease-out both;
+}
+@keyframes pixel-on {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  18%,
+  42% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 0.15;
+  }
+}
+@keyframes shimmer-text {
+  from {
+    background-position: 150% center;
+  }
+  to {
+    background-position: -50% center;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes caret-in {
+  from {
     opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .streaming-caret {
+  .streaming-caret,
+  .ans.streaming > *,
+  .ans .acts {
     animation: none;
+  }
+  .pixel-grid span {
+    animation: none;
+    opacity: 0.35;
+  }
+  .stream-status .shimmer {
+    animation: none;
+    color: var(--ink-2);
+    background: none;
   }
 }
 /* ---- composer: empty / typing / answering / failed */
@@ -1676,9 +1881,18 @@ kbd,
   flex: none;
   cursor: text;
 }
+.composer {
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent);
+}
+/* Focus is a firmer outline and a soft lift, not a heavy ring (after Beautiful UI's composer). */
 .composer:focus-within {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ink) 55%, var(--border));
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent),
+    0 6px 18px -10px color-mix(in srgb, var(--ink) 30%, transparent);
 }
 .composer.failed {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
@@ -1756,6 +1970,19 @@ kbd,
   place-items: center;
   flex: none;
   background: transparent;
+  transition:
+    background-color 200ms,
+    color 200ms,
+    transform 120ms;
+}
+.send:enabled:active {
+  transform: scale(0.94);
+}
+@media (prefers-reduced-motion: reduce) {
+  .send,
+  .composer {
+    transition: none;
+  }
 }
 .send:disabled {
   color: var(--ink-3);
@@ -2632,12 +2859,13 @@ kbd,
   animation: spin 2s linear infinite;
 }
 
-/* macOS hidden-inset title bar: the traffic lights sit at (20, 20) and span ~56px. */
+/* macOS hidden-inset title bar: the traffic lights sit at x = 16 (main.ts), are 52px wide
+   and vertically centred on the switcher; the switcher starts one --gutter after them. */
 :root {
-  --chrome-inset-left: 20px;
+  --chrome-inset-left: var(--gutter);
 }
 .mac-titlebar {
-  --chrome-inset-left: 92px;
+  --chrome-inset-left: 80px;
 }
 .titlebar-drag {
   position: fixed;
@@ -2691,6 +2919,72 @@ kbd,
 /* Picked cards show their own selected state; no group rectangle over them. */
 .react-flow__nodesselection-rect {
   display: none;
+}
+
+/* ---- drawer: session strip (one tab per conversation) */
+.session-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px 8px 14px;
+}
+.session-strip .tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 8px,
+    #000 calc(100% - 16px),
+    transparent
+  );
+  padding: 0 8px;
+}
+.session-strip .tabs::-webkit-scrollbar {
+  display: none;
+}
+.ib.sm {
+  width: 28px;
+  height: 28px;
+}
+.stab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 168px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font: 500 13px var(--kai);
+  color: var(--ink-2);
+  background: transparent;
+}
+.stab:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.stab.on {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.stab .st {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stab .n {
+  flex: none;
+  font: 500 11px var(--kai);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
 }
 
 /* ---- drawer: this board's conversations */
@@ -2764,4 +3058,312 @@ kbd,
 .session .sm time,
 .session .sm > span:last-child {
   flex: none;
+}
+
+/* ---- settings page: a full view over the canvas (⌘. / Ctrl+.) */
+.settings-page {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  outline: none;
+  animation: settings-in 160ms var(--ease-out);
+}
+@keyframes settings-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-page {
+    animation: none;
+  }
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 14px 0 var(--chrome-inset-left, 20px);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+.settings-head > * {
+  -webkit-app-region: no-drag;
+}
+.settings-head h1 {
+  margin: 0;
+  font: 700 19px var(--kai);
+}
+.settings-head .lab {
+  flex: 1;
+}
+.settings-main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 12px;
+  border-right: 1px solid var(--border);
+}
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  font: 700 15px var(--kai);
+  color: var(--ink-2);
+  text-align: left;
+}
+.settings-nav button:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink);
+}
+.settings-nav button.on {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.settings-body {
+  overflow: auto;
+  padding: 28px 40px 60px;
+}
+.settings-section {
+  max-width: 620px;
+}
+.settings-section h2 {
+  margin: 0 0 8px;
+  font: 700 22px var(--kai);
+}
+.sec-lede {
+  margin: 0 0 18px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.7;
+}
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.settings-form label,
+.key-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.key-label {
+  font: 400 12px var(--kai-mono);
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+.settings-form input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--card);
+  color: var(--ink);
+  font: 400 15px var(--kai);
+  outline: none;
+}
+.settings-form input:focus-visible {
+  border-color: var(--border-strong);
+}
+.settings-form input:disabled {
+  opacity: 0.6;
+}
+.key-saved {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--card);
+}
+.key-saved .ico {
+  color: var(--ink-3);
+  flex: none;
+}
+.key-saved .mask {
+  font: 400 14px var(--kai-mono);
+  letter-spacing: 0.04em;
+}
+.key-saved .where {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.key-acts {
+  display: flex;
+  gap: 6px;
+}
+.key-warn {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent-ink);
+}
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-actions .connection-status {
+  flex: 1;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.settings-actions .connection-status[data-state="failure"] {
+  color: var(--accent-ink);
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.setting-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.setting-row b {
+  font: 700 15.5px var(--kai);
+}
+.setting-row small {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.setting-row .seg {
+  padding: 3px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.shortcut-group {
+  margin: 18px 0 0;
+}
+.shortcut-group h3 {
+  margin: 0 0 6px;
+}
+.shortcut-group dl {
+  margin: 0;
+}
+.shortcut {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14.5px;
+}
+.shortcut dd {
+  margin: 0;
+}
+.shortcut .kbd {
+  font-size: 12px;
+  padding: 2px 7px;
+}
+.settings-section .licenses pre {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 400 12px/1.6 var(--kai-mono);
+  color: var(--ink-2);
+}
+.settings-section .licenses summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.settings-page .privacy-note,
+.settings-page .setup-notice,
+.settings-page .inline-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--ink) 3%, var(--card));
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.settings-page .setup-notice {
+  margin-bottom: 16px;
+}
+.settings-page .inline-error {
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.settings-page .settings-foot {
+  margin: 0 !important;
+  text-align: left;
+  font-size: 12.5px !important;
+  color: var(--ink-3) !important;
+}
+.mac-titlebar .settings-page {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* Space held: the canvas pans on drag. */
+.space-pan .react-flow__pane {
+  cursor: grab;
+}
+.space-pan.is-panning .react-flow__pane {
+  cursor: grabbing;
+}
+
+/* ---- shared tooltip (components/Tooltip.tsx): ink chip, small delay */
+.tooltip {
+  position: fixed;
+  z-index: 100;
+  transform: translate(-50%, -100%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  color: var(--paper);
+  font: 400 12.5px/1.4 var(--kai);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-1);
+  animation: tip-in 120ms var(--ease-out);
+}
+.tooltip.below {
+  transform: translate(-50%, 0);
+}
+.tooltip kbd {
+  font: 400 11px var(--kai-mono);
+  padding: 0 4px;
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--paper) 18%, transparent);
+  color: var(--paper);
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    animation: none;
+  }
 }

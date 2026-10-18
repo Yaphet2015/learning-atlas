@@ -1,8 +1,37 @@
 import type { Board, StickyNote } from "../shared/types";
 
-/** The root question of a board. */
-export const rootOf = (board: Board) =>
-  board.nodes.find((n) => n.parentId === null);
+/** Top-level cards, left to right. A board can grow several roots side by side. */
+export const rootsOf = <T extends { parentId: string | null; order: number }>(
+  nodes: T[],
+): T[] =>
+  nodes.filter((n) => n.parentId === null).sort((a, b) => a.order - b.order);
+/** The primary root: the leftmost top-level card. */
+export const rootOf = (board: Board) => rootsOf(board.nodes)[0];
+/** The board's question card: the node marked `question`, else the leftmost root (older boards). */
+export function questionId<
+  T extends {
+    id: string;
+    parentId: string | null;
+    order: number;
+    question?: boolean;
+  },
+>(nodes: T[]): string | undefined {
+  return (nodes.find((n) => n.question) ?? rootsOf(nodes)[0])?.id;
+}
+/**
+ * A root that shows the board's topic. Roots grown later (above or beside it) and cards
+ * promoted to roots show their own title.
+ */
+export function isQuestionRoot<
+  T extends {
+    id: string;
+    parentId: string | null;
+    order: number;
+    question?: boolean;
+  },
+>(nodes: T[], n: T): boolean {
+  return n.parentId === null && n.id === questionId(nodes);
+}
 
 /** An AI board whose root question has no children yet: the user needs an obvious next step. */
 export function needsKickoff(board: Board | null | undefined): boolean {

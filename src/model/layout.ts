@@ -8,6 +8,8 @@ export const CARD_MAX = 320;
 export const ROOT_W = 500;
 export const GAP_IN = 28;
 export const GAP_GROUP = 56;
+/** Between neighbouring top-level trees (a forest of roots side by side). */
+export const GAP_FOREST = 120;
 /** Assumed heights before the DOM has measured a card. */
 export const CARD_H = 130;
 export const ROOT_H = 150;
@@ -20,7 +22,10 @@ export interface Placement {
   level: number;
 }
 export interface TreeLayout {
+  /** The primary (leftmost) root. */
   rootId: string | null;
+  /** Every top-level card, left to right. */
+  rootIds: string[];
   positions: Map<string, Placement>;
   children: Map<string, string[]>;
   /** rows[l] = top of level l, in flow coordinates. */
@@ -80,7 +85,9 @@ export function childrenOf<T extends TreeNode>(nodes: T[]) {
  * centred on x = 0. Neighbouring siblings sit GAP_IN apart, or GAP_GROUP when
  * either one fans out wider than its own card. Row tops follow the tallest
  * card of the row above, so a tall card never crosses the next level's rule.
- * Pure and O(n).
+ * Several roots (a forest) sit side by side, GAP_FOREST apart and sharing the
+ * level rows; the primary (first) tree stays centred on x = 0 so adding a root
+ * beside it never moves the existing map. Pure and O(n).
  */
 export function layoutTree<T extends TreeNode>(
   nodes: T[],
@@ -88,8 +95,12 @@ export function layoutTree<T extends TreeNode>(
 ): TreeLayout {
   const positions = new Map<string, Placement>();
   const children = childrenOf(nodes);
-  const root = nodes.find((n) => n.parentId === null);
-  if (!root) return { rootId: null, positions, children, rows: [] };
+  const roots = nodes
+    .filter((n) => n.parentId === null)
+    .sort((a, b) => a.order - b.order);
+  const root = roots[0];
+  if (!root)
+    return { rootId: null, rootIds: [], positions, children, rows: [] };
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const own = (id: string, level: number) => {
     const n = byId.get(id)!;
@@ -100,7 +111,9 @@ export function layoutTree<T extends TreeNode>(
   const levels = new Map<string, number>();
   // Iterative pre-order so deep trees cannot overflow the stack.
   const order: string[] = [];
-  const stack: [string, number][] = [[root.id, 0]];
+  const stack: [string, number][] = [...roots]
+    .reverse()
+    .map((r): [string, number] => [r.id, 0]);
   while (stack.length) {
     const [id, level] = stack.pop()!;
     if (levels.has(id)) continue; // defensive: ignore cycles
@@ -134,7 +147,12 @@ export function layoutTree<T extends TreeNode>(
   for (let l = 1; l < depth; l++)
     rows.push(rows[l - 1] + tallest[l - 1] + ROW_GAP);
   // Iterative placement as well.
-  const queue: [string, number][] = [[root.id, -widths.get(root.id)! / 2]];
+  const queue: [string, number][] = [];
+  let edge = -widths.get(root.id)! / 2;
+  for (const r of roots) {
+    queue.push([r.id, edge]);
+    edge += widths.get(r.id)! + GAP_FOREST;
+  }
   while (queue.length) {
     const [id, left] = queue.pop()!;
     const level = levels.get(id)!;
@@ -149,7 +167,13 @@ export function layoutTree<T extends TreeNode>(
       cursor += widths.get(c)!;
     });
   }
-  return { rootId: root.id, positions, children, rows };
+  return {
+    rootId: root.id,
+    rootIds: roots.map((r) => r.id),
+    positions,
+    children,
+    rows,
+  };
 }
 
 export function isDescendant(
@@ -219,20 +243,42 @@ export function insertSlot<T extends TreeNode>(
   return null;
 }
 
-/** Hierarchical section numbers from the ancestors' order: §1, §1.1, §2.3. The root has none. */
+/**
+ * Hierarchical section numbers from the ancestors' order: §1, §1.1, §2.3. The primary root has
+ * none; further roots side by side are lettered (§B, with children §B1, §B1.2) so the first
+ * tree's numbers never change when a root is added beside it.
+ */
 export function sectionNumbers<T extends TreeNode>(nodes: T[]) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const out = new Map<string, string>();
+  const roots = nodes
+    .filter((n) => n.parentId === null)
+    .sort((a, b) => a.order - b.order);
+  roots.forEach((r, i) => out.set(r.id, i ? rootLetter(i) : ""));
   const of = (n: T, depth = 0): string => {
     const known = out.get(n.id);
     if (known !== undefined) return known;
     const parent = n.parentId ? byId.get(n.parentId) : undefined;
     if (!parent || depth > 64) return "";
     const up = of(parent, depth + 1);
-    const no = up ? `${up}.${n.order + 1}` : `${n.order + 1}`;
+    const no = !up
+      ? `${n.order + 1}`
+      : /^[A-Z]+$/.test(up)
+        ? `${up}${n.order + 1}`
+        : `${up}.${n.order + 1}`;
     out.set(n.id, no);
     return no;
   };
   for (const n of nodes) of(n);
-  return new Map([...out].map(([id, no]) => [id, `§${no}`]));
+  return new Map(
+    [...out].filter(([, no]) => no).map(([id, no]) => [id, `§${no}`]),
+  );
+}
+
+/** 1 → B, 25 → Z, 26 → AA … (the primary root, index 0, is unlettered). */
+function rootLetter(i: number): string {
+  let s = "";
+  for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26))
+    s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+  return s;
 }

@@ -16,8 +16,10 @@ import {
   Sparkles,
   StickyNote,
 } from "lucide-react";
-import type { ConceptNode, SceneState } from "../shared/types";
+import type { CardHints, ConceptNode, SceneState } from "../shared/types";
+import type { HintSide } from "../model/hints";
 import { Seal } from "./Seal";
+import { tip } from "./Tooltip";
 
 export type CardData = {
   [key: string]: unknown;
@@ -38,6 +40,13 @@ export type CardData = {
   onEditDone?: () => void;
   onAddChild?: (id: string) => void;
   onAddSibling?: (id: string) => void;
+  /** Roots only: grow upward (a broader parent) or sideways (another root). */
+  onAddParent?: (id: string) => void;
+  onAddRoot?: (id: string) => void;
+  /** AI ghost hints for the '+' handles (only with a provider configured). */
+  hints?: CardHints;
+  onWantHints?: (id: string, on: boolean) => void;
+  onHint?: (id: string, side: HintSide, title: string) => void;
   onPreviewAdd?: (id: string | null) => void;
   onScene?: (patch: Partial<SceneState>) => void;
   onNote?: (id: string) => void;
@@ -138,14 +147,84 @@ const NoteTab = () => (
   </span>
 );
 
+const HINT_LABEL: Record<HintSide, string> = {
+  below: "加子概念",
+  right: "加并列概念",
+  above: "加更大的问题",
+};
+
+/** A faded AI suggestion beside a '+': clicking it grows the card in that direction. */
+function GhostHint({ data, side }: { data: CardData; side: HintSide }) {
+  const text = data.hints?.[side];
+  if (!text || !data.onHint) return null;
+  const label =
+    side === "right" && data.concept.parentId === null
+      ? "加并列的起点"
+      : HINT_LABEL[side];
+  return (
+    <button
+      className={`ghost-hint ${side} nodrag nopan`}
+      aria-label={`AI 提示 · ${label}：${text}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        data.onHint?.(data.concept.id, side, text);
+      }}
+    >
+      <Sparkles size={11} className="ico" aria-hidden="true" />
+      <span>{text}</span>
+    </button>
+  );
+}
+
+/**
+ * Lazy hints: a card asks for its hints only after it has been hovered or selected for a
+ * moment (App debounces; leaving cancels).
+ */
+function useHintAttention(data: CardData, selected: boolean) {
+  const id = data.concept.id;
+  const want = data.onWantHints;
+  const hovered = useRef(false);
+  useEffect(() => {
+    if (!want) return;
+    if (selected) want(id, true);
+    else if (!hovered.current) want(id, false);
+  }, [selected, want, id]);
+  useEffect(() => () => want?.(id, false), [want, id]);
+  return {
+    onMouseEnter: () => {
+      hovered.current = true;
+      want?.(id, true);
+    },
+    onMouseLeave: () => {
+      hovered.current = false;
+      if (!selected) want?.(id, false);
+    },
+  };
+}
+
 function AddHandles({ data }: { data: CardData }) {
   const id = data.concept.id;
+  const isRoot = data.concept.parentId === null;
   return (
     <>
+      <GhostHint data={data} side="below" />
+      <GhostHint data={data} side="right" />
+      {isRoot && <GhostHint data={data} side="above" />}
+      {isRoot && data.onAddParent && (
+        <button
+          className="plus above nodrag nopan"
+          {...tip("加更大的问题")}
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onAddParent?.(id);
+          }}
+        >
+          +
+        </button>
+      )}
       <button
         className="plus below nodrag nopan"
-        title="加子概念 Tab"
-        aria-label="加子概念"
+        {...tip("加子概念", "Tab")}
         onMouseEnter={() => data.onPreviewAdd?.(id)}
         onMouseLeave={() => data.onPreviewAdd?.(null)}
         onClick={(e) => {
@@ -155,11 +234,10 @@ function AddHandles({ data }: { data: CardData }) {
       >
         +
       </button>
-      {data.concept.parentId && (
+      {!isRoot ? (
         <button
           className="plus right nodrag nopan"
-          title="加并列概念 Enter"
-          aria-label="加并列概念"
+          {...tip("加并列概念", "Enter")}
           onClick={(e) => {
             e.stopPropagation();
             data.onAddSibling?.(id);
@@ -167,6 +245,19 @@ function AddHandles({ data }: { data: CardData }) {
         >
           +
         </button>
+      ) : (
+        data.onAddRoot && (
+          <button
+            className="plus right nodrag nopan"
+            {...tip("加并列的起点")}
+            onClick={(e) => {
+              e.stopPropagation();
+              data.onAddRoot?.(id);
+            }}
+          >
+            +
+          </button>
+        )
       )}
     </>
   );
@@ -212,8 +303,7 @@ function SelectToolbar({
       <span className="sep" />
       <button
         className="icon"
-        title="改标题 F2"
-        aria-label="改标题"
+        {...tip("改标题", "F2")}
         onClick={() => data.onStartEdit?.(n.id)}
       >
         <PencilLine size={15} className="ico" />
@@ -221,8 +311,7 @@ function SelectToolbar({
       {data.canExpand && (
         <button
           className="icon"
-          title="再看一层"
-          aria-label="再看一层"
+          {...tip("再看一层")}
           onClick={() => data.onExpand?.(n.id)}
         >
           <Layers3 size={15} className="ico" />
@@ -230,8 +319,7 @@ function SelectToolbar({
       )}
       <button
         className="icon accent"
-        title="问一问 /"
-        aria-label="问一问"
+        {...tip("问一问", "/")}
         onClick={() => data.onAsk?.(n.id)}
       >
         <Sparkles size={15} className="ico" />
@@ -245,8 +333,10 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
   // Stamp only when the status changes while mounted, not on first paint.
   const first = useRef(n.status);
   const animate = first.current !== n.status;
+  const attention = useHintAttention(data, !!selected);
   return (
     <article
+      {...attention}
       className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""}`}
     >
       {data.noteOpen && <NoteTab />}
@@ -260,7 +350,7 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
           {n.visual && (
             <button
               className="chip-fig nodrag nopan"
-              title="在批注里看图示"
+              data-tip="在批注里看图示"
               onClick={(e) => {
                 e.stopPropagation();
                 data.onNote?.(n.id);
@@ -291,8 +381,10 @@ const dateLabel = (iso?: string) => {
 export function RootCard({ data, selected }: NodeProps<CardNode>) {
   const n = data.concept;
   const [open, setOpen] = useState(false);
+  const attention = useHintAttention(data, !!selected);
   return (
     <article
+      {...attention}
       className={`origin ${selected || data.noteOpen ? "is-selected" : ""}`}
     >
       {data.noteOpen && <NoteTab />}

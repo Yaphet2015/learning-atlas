@@ -62,3 +62,33 @@ export function toggleContextCard(
     excludedRefs: excluded.filter((k) => k !== key),
   };
 }
+
+/** The cards currently selected on the canvas: the pick, else the single card. */
+export function selectedCards(state: CardPick): string[] {
+  return state.picked.length
+    ? [...state.picked]
+    : state.single
+      ? [state.single]
+      : [];
+}
+
+/**
+ * The one rule for every entry point that opens an AI conversation (问 AI, /, the card
+ * menu, 让 AI 带我开始, the drawer's new conversation): the selected cards come along as
+ * context. The anchor is the entry point's own card when it has one, else the first selected
+ * card; every other selected card that still exists becomes a context card.
+ */
+export function chatContext(
+  selected: string[],
+  anchor: string | null | undefined,
+  exists: (id: string) => boolean = () => true,
+): { anchor: string | null; contextCards: string[] } {
+  const cards = [...new Set(selected)].filter(exists);
+  const main = anchor ?? cards[0] ?? null;
+  return { anchor: main, contextCards: cards.filter((id) => id !== main) };
+}
+
+/** Title for a conversation that carries several cards. */
+export function manyCardsTitle(anchorTitle: string, extra: number): string {
+  return `关于「${anchorTitle}」等 ${extra + 1} 张卡`.slice(0, 160);
+}

@@ -7,13 +7,28 @@ export interface VisualDiagram {
   caption?: string;
   basis: "literal" | "analogy";
 }
+/** AI ghost hints cached on a card, one short suggestion per direction it can grow. */
+export interface CardHints {
+  /** hintSignature() when they were made; stale hints are asked for again. */
+  sig: string;
+  below?: string;
+  right?: string;
+  above?: string;
+}
 export interface ConceptNode {
   id: string;
   kind: "concept" | "scene";
   title: string;
   body: string;
-  /** null only for the root question. Tree edges are implied by parentId. */
+  /** null for a top-level card (a root). Tree edges are implied by parentId. */
   parentId: string | null;
+  /**
+   * The board's original question, once roots have grown above or beside it. Absent on
+   * older boards: the leftmost root is the question then.
+   */
+  question?: boolean;
+  /** Cached ghost hints for the '+' handles (optional; older boards have none). */
+  hints?: CardHints;
   /** Position among siblings (0-based, contiguous); also reads as 先→后. */
   order: number;
   /** Derived from the parentId chain; never persisted. */
@@ -102,7 +117,12 @@ export interface AISettings {
   model: string;
   baseUrl: string;
   configured: boolean;
-  source: "session" | "environment" | "none";
+  /** saved: encrypted at rest (safeStorage); session: in memory until the app quits. */
+  source: "saved" | "session" | "environment" | "none";
+  /** A masked form of the key in use ("sk-••••a1b2"); never the key itself. */
+  keyHint?: string;
+  /** Whether a key can be saved encrypted on this machine; "web" in the browser preview. */
+  keyStorage?: "encrypted" | "unavailable" | "web";
 }
 export interface AISettingsInput {
   model: string;
@@ -131,7 +151,7 @@ export interface AIRequest {
   requestId: string;
   prompt: string;
   context: ContextBundle;
-  mode: "answer" | "map" | "expand";
+  mode: "answer" | "map" | "expand" | "hint";
 }
 export interface AIUpdate {
   boardId: string;
@@ -150,6 +170,8 @@ export interface AtlasAPI {
   platform: string;
   /** Native fullscreen changes (macOS hides the traffic lights there). */
   onFullscreenChange(callback: (fullscreen: boolean) => void): () => void;
+  /** The app menu's 「Settings…」 item (desktop only). */
+  onOpenSettings?(callback: () => void): () => void;
   onBeforeClose(callback: () => Promise<void>): () => void;
   listBoards(): Promise<BoardSummary[]>;
   loadBoard(id: string): Promise<Board | null>;

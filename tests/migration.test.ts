@@ -125,7 +125,7 @@ describe("migrateV1toV2", () => {
     expect(board.nodes).toHaveLength(1);
     expect(board.nodes[0]).toMatchObject({ parentId: null, title: "Topic" });
   });
-  it("parseBoard passes v2 through and rejects broken trees", () => {
+  it("parseBoard passes v2 through and accepts a forest and rejects broken trees", () => {
     const board = migrateV1toV2(
       v1([v1node("root", 0, 0), v1node("a", 0, 400)], [rel("r1", "root", "a")]),
     );
@@ -134,7 +134,19 @@ describe("migrateV1toV2", () => {
       ...board,
       nodes: board.nodes.map((n) => ({ ...n, parentId: null })),
     };
-    expect(() => parseBoard(twoRoots)).toThrow();
+    // Several roots side by side (a forest) are a valid board now; no root at all is not.
+    expect(parseBoard(twoRoots).nodes.every((n) => n.parentId === null)).toBe(
+      true,
+    );
+    const noRoot = {
+      ...board,
+      nodes: [
+        { ...board.nodes[0], id: "x", parentId: "y" },
+        { ...board.nodes[1], id: "y", parentId: "x" },
+      ],
+      relations: [],
+    };
+    expect(() => parseBoard(noRoot)).toThrow();
     const cycle = {
       ...board,
       nodes: [

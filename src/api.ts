@@ -51,6 +51,7 @@ const preview: AtlasAPI = {
       baseUrl: "https://api.openai.com/v1",
       configured: false,
       source: "none",
+      keyStorage: "web",
     };
   },
   async setAISettings() {

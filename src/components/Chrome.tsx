@@ -20,6 +20,8 @@ import {
   StickyNote,
 } from "lucide-react";
 import type { BoardSummary, ConceptNode } from "../shared/types";
+import { MOD } from "../model/shortcuts";
+import { tip } from "./Tooltip";
 
 function Compass() {
   return (
@@ -63,7 +65,12 @@ export function MapSwitcher({
   const concepts = nodes.filter((n) => n.parentId !== null);
   const explained = concepts.filter((n) => n.status === "explained").length;
   return (
-    <button className="chrome switcher" onClick={onOpen} title="切换地图 ⌘K">
+    <button
+      className="chrome switcher"
+      onClick={onOpen}
+      data-tip="切换地图"
+      data-keys={`${MOD}K`}
+    >
       <Compass />
       <span className="switcher-text">
         <strong title={title}>{title}</strong>
@@ -78,22 +85,18 @@ export function MapSwitcher({
 
 export function Palette({
   boards,
-  notes = [],
   footer,
   currentId,
   onPick,
-  onNote,
   onNew,
   onWalkthrough,
   onSettings,
   onClose,
 }: {
   boards: BoardSummary[];
-  notes?: { id: string; title: string }[];
   footer?: string;
   currentId?: string;
   onPick: (id: string) => void;
-  onNote?: (id: string) => void;
   onNew: () => void;
   onWalkthrough: () => void;
   onSettings: () => void;
@@ -112,15 +115,6 @@ export function Palette({
           run: () => onPick(b.id),
           current: b.id === currentId,
         })),
-      ...notes
-        .filter((n) => n.title.toLowerCase().includes(q.toLowerCase()))
-        .map((n) => ({
-          key: "note:" + n.id,
-          label: `批注 · ${n.title}`,
-          hint: "N",
-          run: () => onNote?.(n.id),
-          current: false,
-        })),
       {
         key: "+new",
         label: q.trim() ? `新的问题：${q.trim()}` : "新的问题…",
@@ -137,23 +131,13 @@ export function Palette({
       },
       {
         key: "+ai",
-        label: "AI 设置",
-        hint: "",
+        label: "设置",
+        hint: `${MOD}.`,
         run: onSettings,
         current: false,
       },
     ],
-    [
-      boards,
-      notes,
-      q,
-      currentId,
-      onPick,
-      onNote,
-      onNew,
-      onWalkthrough,
-      onSettings,
-    ],
+    [boards, q, currentId, onPick, onNew, onWalkthrough, onSettings],
   );
   useEffect(() => setCursor(0), [q]);
   return (
@@ -240,7 +224,6 @@ export function Progress({
         className="btn primary"
         onClick={onStudy}
         disabled={!concepts.length}
-        title="走一遍 F"
       >
         <Scan size={16} className="ico" />
         走一遍 <kbd>F</kbd>
@@ -268,8 +251,7 @@ export function Dock({
   const b = (t: Tool, label: string, key: string, icon: React.ReactNode) => (
     <button
       className={`b ${tool === t ? "on" : ""}`}
-      title={`${label} ${key}`}
-      aria-label={label}
+      {...tip(label, key)}
       aria-pressed={tool === t}
       onClick={() => setTool(t)}
     >
@@ -281,27 +263,21 @@ export function Dock({
       {b("select", "选择", "V", <MousePointer2 size={18} className="ico" />)}
       {b("hand", "平移", "H", <Hand size={18} className="ico" />)}
       <span className="sep" />
-      <button
-        className="b"
-        title="加概念 Tab"
-        aria-label="加概念"
-        onClick={onAddConcept}
-      >
+      <button className="b" {...tip("加概念", "Tab")} onClick={onAddConcept}>
         <SquarePen size={18} className="ico" />
       </button>
       {b("link", "连线", "L", <Link2 size={18} className="ico" />)}
-      <button className="b" title="批注 N" aria-label="批注" onClick={onNote}>
+      <button className="b" {...tip("批注", "N")} onClick={onNote}>
         <StickyNote size={18} className="ico" />
       </button>
       <span className="sep" />
-      <button className="ask" onClick={onAsk} title="问一问 /">
+      <button className="ask" onClick={onAsk}>
         <Sparkles size={17} className="ico" />
         问一问 <kbd>/</kbd>
       </button>
       <button
         className="b small"
-        title="AI 设置"
-        aria-label="AI 设置"
+        {...tip("设置", `${MOD}.`)}
         onClick={onSettings}
       >
         <Settings2 size={16} className="ico" />
@@ -323,49 +299,68 @@ function MiniNode({ x, y, width, height, className }: MiniMapNodeProps) {
   );
 }
 
-/** Minimap and zoom controls as one unit, bottom-right. */
-export function MapUnit() {
+/**
+ * Zoom controls, bottom-right, always visible. The minimap floats above them only while the
+ * canvas is being panned (or the hand tool is on) and fades out shortly after.
+ */
+export function MapUnit({ showMap }: { showMap: boolean }) {
   const flow = useReactFlow();
   const { zoom } = useViewport();
+  // Keep the map up while the learner drags inside it.
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (!held) return;
+    const up = () => setHeld(false);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    return () => {
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+  }, [held]);
+  const visible = showMap || held;
   return (
-    <div className="chrome map-unit">
-      <MiniMap
-        pannable
-        zoomable
-        position="top-left"
-        className="atlas-minimap"
-        // Match the CSS box so the viewBox has the same aspect ratio; otherwise the
-        // mask's outer sub-path shows in the letterbox as a second frame.
-        style={{ width: 194, height: 120 }}
-        nodeComponent={MiniNode}
-        nodeClassName={(n) =>
-          n.type === "ghost"
-            ? "ghost"
-            : `s-${(n.data as { concept?: ConceptNode }).concept?.status ?? "exploring"}`
-        }
-        maskColor="transparent"
-        maskStrokeColor="var(--accent)"
-        maskStrokeWidth={1.25}
-        bgColor="transparent"
-      />
-      <div className="zoom">
+    <div className="map-unit">
+      <div
+        className={`chrome minimap-card ${visible ? "on" : ""}`}
+        aria-hidden={!visible}
+        data-visible={visible}
+        onPointerDown={() => setHeld(true)}
+      >
+        <MiniMap
+          pannable
+          zoomable
+          position="top-left"
+          className="atlas-minimap"
+          // Match the CSS box so the viewBox has the same aspect ratio; otherwise the
+          // mask's outer sub-path shows in the letterbox as a second frame.
+          style={{ width: 194, height: 120 }}
+          nodeComponent={MiniNode}
+          nodeClassName={(n) =>
+            n.type === "ghost"
+              ? "ghost"
+              : `s-${(n.data as { concept?: ConceptNode }).concept?.status ?? "exploring"}`
+          }
+          maskColor="transparent"
+          maskStrokeColor="var(--accent)"
+          maskStrokeWidth={1.25}
+          bgColor="transparent"
+        />
+      </div>
+      <div className="chrome zoom">
         <button
-          aria-label="缩小"
+          {...tip("缩小")}
           onClick={() => flow.zoomOut({ duration: 200 })}
         >
           <Minus size={15} className="ico" />
         </button>
         <span className="lab">{Math.round(zoom * 100)}%</span>
-        <button
-          aria-label="放大"
-          onClick={() => flow.zoomIn({ duration: 200 })}
-        >
+        <button {...tip("放大")} onClick={() => flow.zoomIn({ duration: 200 })}>
           <Plus size={15} className="ico" />
         </button>
         <span className="sep" />
         <button
-          aria-label="查看全图"
-          title="查看全图 0"
+          {...tip("查看全图", "0")}
           onClick={() => flow.fitView({ padding: 0.16, duration: 400 })}
         >
           <Crosshair size={15} className="ico" />

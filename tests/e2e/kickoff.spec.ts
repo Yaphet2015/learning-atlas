@@ -48,9 +48,9 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   // Every answer request carries the board outline.
   expect(asks[1].context.structure).toContain("L0 起点 彩虹是怎么形成的？");
   expect(asks[1].context.structure).toContain("◀ 当前卡片");
-  await expect(page.getByRole("button", { name: /AI 带我开始/ })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.locator(".react-flow").getByRole("button", { name: /AI 带我开始/ }),
+  ).toHaveCount(0);
   await expect(
     drawer.getByRole("button", { name: "铺成第一层", exact: true }),
   ).toHaveCount(0);
@@ -78,7 +78,8 @@ test("without an AI provider the kickoff leads to settings", async ({
   await page.getByLabel("关闭设置").click();
   await page.getByRole("button", { name: "让 AI 带我开始" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.locator("#settings-title")).toHaveText("为你的问题连接 AI");
+  await expect(page.locator("#settings-title")).toHaveText("设置");
+  await expect(page.getByRole("heading", { name: "AI 服务" })).toBeVisible();
 });
 
 test("「测试连接」 shows success with model and latency, then a readable failure", async ({
@@ -86,7 +87,7 @@ test("「测试连接」 shows success with model and latency, then a readable f
 }) => {
   await installFakeAtlas(page, false);
   await gotoApp(page);
-  await page.getByRole("button", { name: "AI 设置", exact: true }).click();
+  await page.getByRole("button", { name: "设置", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel(/API 密钥/).fill("good");
   await dialog.getByRole("button", { name: "测试连接" }).click();

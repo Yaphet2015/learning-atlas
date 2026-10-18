@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   boxPick,
+  chatContext,
+  manyCardsTitle,
+  selectedCards,
   settle,
   toggleCard,
   toggleContextCard,
@@ -112,5 +115,41 @@ describe("saved boards", () => {
     const parsed = boardSchema.parse(JSON.parse(JSON.stringify(board)));
     expect(parsed.notes.at(-1)?.contextCards).toEqual(["concept-style"]);
     expect(parsed.notes.at(-1)?.createdAt).toMatch(/^\d{4}-/);
+  });
+});
+
+describe("selected cards as chat context (chatContext)", () => {
+  it("reads the pick, else the single card", () => {
+    expect(selectedCards({ single: null, picked: ["a", "b"] })).toEqual([
+      "a",
+      "b",
+    ]);
+    expect(selectedCards({ single: "a", picked: [] })).toEqual(["a"]);
+    expect(selectedCards({ single: null, picked: [] })).toEqual([]);
+  });
+  it("anchors on the entry point's card and brings the other selected cards", () => {
+    expect(chatContext(["a", "b", "c"], "b")).toEqual({
+      anchor: "b",
+      contextCards: ["a", "c"],
+    });
+    // The anchor alone selected: nothing extra, so an existing chat can be reopened.
+    expect(chatContext(["b"], "b")).toEqual({ anchor: "b", contextCards: [] });
+  });
+  it("falls back to the first selected card, and drops cards that no longer exist", () => {
+    expect(
+      chatContext(["a", "gone", "c", "a"], undefined, (id) => id !== "gone"),
+    ).toEqual({ anchor: "a", contextCards: ["c"] });
+    expect(chatContext([], undefined)).toEqual({
+      anchor: null,
+      contextCards: [],
+    });
+    // The root as anchor (让 AI 带我开始) with another selected card.
+    expect(chatContext(["x"], "root")).toEqual({
+      anchor: "root",
+      contextCards: ["x"],
+    });
+  });
+  it("names a several-card conversation", () => {
+    expect(manyCardsTitle("怎么赔", 2)).toBe("关于「怎么赔」等 3 张卡");
   });
 });

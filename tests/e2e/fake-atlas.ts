@@ -30,7 +30,18 @@ export async function installFakeAtlas(
       const listeners = new Set<(update: any) => void>();
       const asks: any[] = [];
       (window as any).__atlasAsks = asks;
+      // Ghost-hint requests are recorded apart so flows that count asks stay exact.
+      const hints: any[] = [];
+      (window as any).__atlasHints = hints;
       const answer = (request: any) => {
+        if (request.mode === "hint") {
+          const i = hints.indexOf(request);
+          return JSON.stringify({
+            below: "提示·子" + i,
+            right: "提示·并列" + i,
+            above: "提示·更大" + i,
+          });
+        }
         if (request.mode === "map")
           return JSON.stringify({
             nodes: [
@@ -58,6 +69,14 @@ export async function installFakeAtlas(
           });
         return "在开始之前想先了解你：你听说过光的“折射”吗？你更想弄懂颜色从哪来，还是彩虹为什么是弯的？接下来我们会先拆成三个子问题：阳光的颜色、水滴里的折射、弧形的角度。";
       };
+      let settings: any = {
+        model: "gpt-4o-mini",
+        baseUrl: "https://api.openai.com/v1",
+        configured: isConfigured,
+        source: isConfigured ? "saved" : "none",
+        keyStorage: "encrypted",
+        ...(isConfigured ? { keyHint: "sk-••••7f3a" } : {}),
+      };
       (window as any).atlas = {
         platform: os,
         onFullscreenChange: (callback: (value: boolean) => void) => {
@@ -81,17 +100,29 @@ export async function installFakeAtlas(
           boards.delete(id);
           persist();
         },
-        getAISettings: async () => ({
-          model: "gpt-4o-mini",
-          baseUrl: "https://api.openai.com/v1",
-          configured: isConfigured,
-          source: isConfigured ? "session" : "none",
-        }),
-        setAISettings: async (s: any) => ({
-          ...s,
-          configured: true,
-          source: "session",
-        }),
+        getAISettings: async () => ({ ...settings }),
+        // Like the desktop runtime with safeStorage: a key is saved encrypted, shown masked.
+        setAISettings: async (s: any) => {
+          const { apiKey, ...rest } = s;
+          if (apiKey === "")
+            settings = {
+              ...settings,
+              ...rest,
+              configured: false,
+              source: "none",
+            };
+          else if (apiKey)
+            settings = {
+              ...settings,
+              ...rest,
+              configured: true,
+              source: "saved",
+              keyHint: `sk-••••${String(apiKey).slice(-4)}`,
+            };
+          else settings = { ...settings, ...rest };
+          if (!settings.configured) delete settings.keyHint;
+          return { ...settings };
+        },
         testAIConnection: async (s: any) =>
           s.apiKey === "bad"
             ? {
@@ -102,17 +133,31 @@ export async function installFakeAtlas(
               }
             : { ok: true, model: s.model, latencyMs: 842 },
         ask: async (request: any) => {
-          asks.push(request);
-          setTimeout(() => {
-            const update = {
-              boardId: request.boardId,
-              stickyId: request.stickyId,
-              requestId: request.requestId,
-              text: answer(request),
-              status: "done",
-            };
-            listeners.forEach((l) => l(update));
-          }, 120);
+          (request.mode === "hint" ? hints : asks).push(request);
+          const emit = (text: string, status: string) =>
+            listeners.forEach((l) =>
+              l({
+                boardId: request.boardId,
+                stickyId: request.stickyId,
+                requestId: request.requestId,
+                text,
+                status,
+              }),
+            );
+          // Tests that look at the streaming state set __atlasSlow: think, stream half, finish.
+          const slow = (window as any).__atlasSlow as number | undefined;
+          if (slow && request.mode === "answer") {
+            const full = answer(request);
+            setTimeout(() => emit("", "streaming"), 20);
+            setTimeout(
+              () =>
+                emit(full.slice(0, Math.ceil(full.length / 2)), "streaming"),
+              slow,
+            );
+            setTimeout(() => emit(full, "done"), slow * 2);
+            return;
+          }
+          setTimeout(() => emit(answer(request), "done"), 120);
         },
         stop: async () => {},
         getHistory: async () => ({ messages: [], running: false }),
