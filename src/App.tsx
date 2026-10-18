@@ -45,11 +45,15 @@ import {
   kickoffNote,
   kickoffPrompt,
   learnerAnswers,
+  isQuestionRoot,
   needsKickoff,
   rootOf,
+  rootsOf,
 } from "./model/kickoff";
 import {
   addChild,
+  addParent,
+  addRoot,
   addSibling,
   cacheMessages,
   layOutline,
@@ -781,6 +785,26 @@ export default function App() {
     },
     [edit, addChildOf],
   );
+  /** Grow a root upward: a broader question above it; the old root becomes its child. */
+  const addParentOf = useCallback(
+    (rootId: string) => {
+      const id = newId("root");
+      edit((b) => addParent(b, rootId, id));
+      setSelection({ kind: "node", id });
+      setEditingId(id);
+    },
+    [edit],
+  );
+  /** Grow sideways: another top-level root right of this one. */
+  const addRootBeside = useCallback(
+    (rootId: string) => {
+      const id = newId("root");
+      edit((b) => addRoot(b, rootId, id));
+      setSelection({ kind: "node", id });
+      setEditingId(id);
+    },
+    [edit],
+  );
   const selectedNodeId = selection?.kind === "node" ? selection.id : null;
   chatSelection.current = selectedCards({ single: selectedNodeId, picked });
   // N / the dock's 批注: the selected card's conversation, else back to the
@@ -793,10 +817,15 @@ export default function App() {
     if (latest) setDrawer(latest.id);
     else addNote(undefined);
   }, [selectedNodeId, addNote]);
-  const rootId = board?.nodes.find((n) => n.parentId === null)?.id ?? null;
+  const rootId = (board && rootOf(board)?.id) ?? null;
   function removeSelected() {
     if (!selection) return;
-    if (selection.kind === "node" && selection.id === rootId) {
+    if (
+      selection.kind === "node" &&
+      board &&
+      rootsOf(board.nodes).length < 2 &&
+      board.nodes.find((n) => n.id === selection.id)?.parentId === null
+    ) {
       showToast("起点问题不能删除，地图都从这里长出来。");
       return;
     }
@@ -1005,8 +1034,7 @@ export default function App() {
   const drawerAnchor =
     drawerNoteAttachment?.kind === "node" ? drawerNoteAttachment.id : null;
   /** Where 「铺成第一层」 lays cards: the anchor card, or the root for a free note. */
-  const drawerAnchorOrRoot =
-    drawerAnchor ?? board?.nodes.find((n) => n.parentId === null)?.id ?? "";
+  const drawerAnchorOrRoot = drawerAnchor ?? (board && rootOf(board)?.id) ?? "";
   /** Bring a card and its children into the visible canvas; with onlyIfHidden, leave a visible card alone. */
   const frameFamily = useCallback(
     (anchorId: string, onlyIfHidden = false) => {
@@ -1129,7 +1157,7 @@ export default function App() {
           multi: picked.length >= 2,
           noteOpen: drawerAnchor === n.id,
           no: numbers.get(n.id),
-          topic: board.topic,
+          topic: isQuestionRoot(board.nodes, n) ? board.topic : undefined,
           createdAt: board.createdAt,
           scene: board.scene,
           editing: editingId === n.id,
@@ -1138,6 +1166,9 @@ export default function App() {
           onEditDone: () => setEditingId(null),
           onAddChild: addChildOf,
           onAddSibling: addSiblingOf,
+          ...(n.parentId === null
+            ? { onAddParent: addParentOf, onAddRoot: addRootBeside }
+            : {}),
           onPreviewAdd: hoverAdd,
           onStatus: setStatus,
           onStartEdit: setEditingId,
@@ -1153,7 +1184,7 @@ export default function App() {
             edit((b) => ({ ...b, scene: { ...b.scene, ...patch } }), false),
           onNote: (id: string) =>
             addNote({ kind: "node", id }, { cards: false }),
-          ...(n.parentId === null && kickoffReady
+          ...(n.id === rootId && kickoffReady
             ? {
                 onKickoff: startKickoff,
                 kickoffStarted: Boolean(kickoffNote(board)?.messages.length),
@@ -1797,7 +1828,7 @@ export default function App() {
                   const parent =
                     note?.attachedTo?.kind === "node"
                       ? note.attachedTo.id
-                      : (b.nodes.find((n) => n.parentId === null)?.id ?? "");
+                      : (rootOf(b)?.id ?? "");
                   const next = addChild(b, parent, id);
                   return {
                     ...next,

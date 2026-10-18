@@ -429,6 +429,10 @@ kbd,
   right: -40px;
   top: calc(50% - 13px);
 }
+.plus.above {
+  left: calc(50% - 13px);
+  top: -40px;
+}
 .react-flow__node:hover .plus,
 .react-flow__node.selected .plus {
   opacity: 1;
@@ -442,7 +446,7 @@ kbd,
 }
 /* The root's connectors fan out from its bottom edge: its + shows on hover or
    keyboard focus only, not merely because the root is selected. */
-.react-flow__node-root.selected:not(:hover) .plus.below:not(:focus-visible) {
+.react-flow__node-root.selected:not(:hover) .plus:not(:focus-visible) {
   opacity: 0;
 }
 .ghost {

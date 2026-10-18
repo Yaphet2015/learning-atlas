@@ -12,8 +12,13 @@ export interface ConceptNode {
   kind: "concept" | "scene";
   title: string;
   body: string;
-  /** null only for the root question. Tree edges are implied by parentId. */
+  /** null for a top-level card (a root). Tree edges are implied by parentId. */
   parentId: string | null;
+  /**
+   * The board's original question, once roots have grown above or beside it. Absent on
+   * older boards: the leftmost root is the question then.
+   */
+  question?: boolean;
   /** Position among siblings (0-based, contiguous); also reads as 先→后. */
   order: number;
   /** Derived from the parentId chain; never persisted. */

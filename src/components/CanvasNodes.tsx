@@ -39,6 +39,9 @@ export type CardData = {
   onEditDone?: () => void;
   onAddChild?: (id: string) => void;
   onAddSibling?: (id: string) => void;
+  /** Roots only: grow upward (a broader parent) or sideways (another root). */
+  onAddParent?: (id: string) => void;
+  onAddRoot?: (id: string) => void;
   onPreviewAdd?: (id: string | null) => void;
   onScene?: (patch: Partial<SceneState>) => void;
   onNote?: (id: string) => void;
@@ -141,8 +144,21 @@ const NoteTab = () => (
 
 function AddHandles({ data }: { data: CardData }) {
   const id = data.concept.id;
+  const isRoot = data.concept.parentId === null;
   return (
     <>
+      {isRoot && data.onAddParent && (
+        <button
+          className="plus above nodrag nopan"
+          {...tip("加更大的问题")}
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onAddParent?.(id);
+          }}
+        >
+          +
+        </button>
+      )}
       <button
         className="plus below nodrag nopan"
         {...tip("加子概念", "Tab")}
@@ -155,7 +171,7 @@ function AddHandles({ data }: { data: CardData }) {
       >
         +
       </button>
-      {data.concept.parentId && (
+      {!isRoot ? (
         <button
           className="plus right nodrag nopan"
           {...tip("加并列概念", "Enter")}
@@ -166,6 +182,19 @@ function AddHandles({ data }: { data: CardData }) {
         >
           +
         </button>
+      ) : (
+        data.onAddRoot && (
+          <button
+            className="plus right nodrag nopan"
+            {...tip("加并列的起点")}
+            onClick={(e) => {
+              e.stopPropagation();
+              data.onAddRoot?.(id);
+            }}
+          >
+            +
+          </button>
+        )
       )}
     </>
   );

@@ -37,11 +37,8 @@ import { tip } from "./Tooltip";
 import { toggleContextCard } from "../model/selection";
 import { sectionNumbers } from "../model/layout";
 import { LIMITS } from "../shared/validation";
-import {
-  sessionClock,
-  stripOrder,
-  type SessionEntry,
-} from "../model/sessions";
+import { sessionClock, stripOrder, type SessionEntry } from "../model/sessions";
+import { isQuestionRoot } from "../model/kickoff";
 
 const LEVEL = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const STATUS: Record<string, string> = {
@@ -108,7 +105,7 @@ function CardPicker({
   const numbers = sectionNumbers(nodes);
   const q = query.trim().toLowerCase();
   const cards = nodes
-    .filter((n) => n.parentId !== null)
+    .filter((n) => !isQuestionRoot(nodes, n))
     .map((n) => ({ n, no: numbers.get(n.id) ?? "" }))
     .sort((a, b) => a.no.localeCompare(b.no, undefined, { numeric: true }))
     .filter(
@@ -291,7 +288,8 @@ function Refs({
     (r) =>
       r.kind !== "note" &&
       !(
-        r.kind === "node" && nodes.find((n) => n.id === r.id)?.parentId === null
+        r.kind === "node" &&
+        nodes.some((n) => n.id === r.id && isQuestionRoot(nodes, n))
       ),
   );
   const on = list.filter((r) => !excluded.includes(refKey(r)));
@@ -784,7 +782,9 @@ export function Drawer({
                 onClick={onLocate}
                 data-tip="在画布上定位"
               >
-                {anchor && anchor.parentId !== null ? anchorTitle : "起点问题"}
+                {anchor && !isQuestionRoot(nodes, anchor)
+                  ? anchorTitle
+                  : "起点问题"}
               </button>
             </span>
             {!!note.contextCards?.length && (

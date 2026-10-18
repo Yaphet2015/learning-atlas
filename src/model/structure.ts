@@ -1,5 +1,6 @@
 import type { Board, ConceptNode } from "../shared/types";
 import { sectionNumbers } from "./layout";
+import { isQuestionRoot } from "./kickoff";
 
 /** Characters the outline may take in a request (CJK ≈ one token per character). */
 export const STRUCTURE_BUDGET = 3_500;
@@ -29,7 +30,8 @@ export function serializeStructure(
   for (const n of board.nodes)
     kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
   for (const list of kids.values()) list.sort((a, b) => a.order - b.order);
-  const root = kids.get(null)?.[0];
+  const roots = kids.get(null) ?? [];
+  const root = roots[0];
   if (!root) return "";
   const no = sectionNumbers(board.nodes);
   const depth = new Map<string, number>();
@@ -37,25 +39,38 @@ export function serializeStructure(
     depth.set(n.id, d);
     for (const k of kids.get(n.id) ?? []) walk(k, d + 1);
   };
-  walk(root, 0);
+  for (const r of roots) walk(r, 0);
   const anchor = focus.anchor && byId.has(focus.anchor) ? focus.anchor : null;
   const picked = (focus.cards ?? []).filter(
     (id) => byId.has(id) && id !== anchor,
   );
+  // The original question shows the board's topic; roots added later show their own title.
+  const rootText = (n: ConceptNode, max: number) =>
+    clip(
+      isQuestionRoot(board.nodes, n) ? board.topic || n.title : n.title,
+      max,
+    );
   const label = (n: ConceptNode) =>
-    `${no.get(n.id) ?? "起点"} ${clip(n.title, 40)}`;
+    n.parentId
+      ? `${no.get(n.id) ?? ""} ${clip(n.title, 40)}`
+      : `${no.get(n.id) ? `${no.get(n.id)} ` : ""}起点 ${rootText(n, 40)}`;
+  const rootName = (n: ConceptNode) =>
+    n.id === root.id && roots.length === 1 ? "起点问题" : label(n);
   const tag = (n: ConceptNode) =>
     n.id === anchor ? " ◀ 当前卡片" : picked.includes(n.id) ? " ◀ 已选入" : "";
   const line = (n: ConceptNode) =>
-    `${"  ".repeat(depth.get(n.id) ?? 0)}${n.parentId ? (no.get(n.id) ?? "") : "L0 起点"} ${
-      n.parentId ? `L${depth.get(n.id)} ` : ""
-    }${clip(n.parentId ? n.title : board.topic || n.title, n.parentId ? 40 : 80)} [${STATUS[n.status]}]${tag(n)}`;
+    n.parentId
+      ? `${"  ".repeat(depth.get(n.id) ?? 0)}${no.get(n.id) ?? ""} L${depth.get(n.id)} ${clip(n.title, 40)} [${STATUS[n.status]}]${tag(n)}`
+      : `${no.get(n.id) ? `${no.get(n.id)} ` : ""}L0 起点 ${rootText(n, 80)} [${STATUS[n.status]}]${tag(n)}`;
 
   // Cards that are always written out: the path to every focus card, the focus
   // cards, their siblings and children, and the whole first level.
   const focusIds = [anchor, ...picked].filter(Boolean) as string[];
-  const keep = new Set<string>([root.id]);
-  for (const k of kids.get(root.id) ?? []) keep.add(k.id);
+  const keep = new Set<string>();
+  for (const r of roots) {
+    keep.add(r.id);
+    for (const k of kids.get(r.id) ?? []) keep.add(k.id);
+  }
   for (const id of focusIds) {
     for (
       let c = byId.get(id);
@@ -89,13 +104,18 @@ export function serializeStructure(
         );
       }
     };
-    emit(root);
+    for (const r of roots) emit(r);
     return { out, hidden };
   };
 
   const head = [
     "白板结构（树形大纲）：缩进表示父子；L0 是起点问题，L1 是第一层，同一层 L 号相同的卡片是并列的子问题，不是先后深入；",
     "§ 编号由祖先次序拼成（§2.1 是 §2 下的第 1 张），同一父卡下按编号从左到右排列。方括号里是学习者的掌握度。",
+    ...(roots.length > 1
+      ? [
+          `这张白板有 ${roots.length} 个并列的起点（L0），从左到右排列；第一个之后的起点用字母编号（§B 下的卡片是 §B1、§B1.2）。`,
+        ]
+      : []),
   ];
   const links = board.relations
     .filter((r) => byId.has(r.source) && byId.has(r.target))
@@ -112,13 +132,13 @@ export function serializeStructure(
       c;
       c = c.parentId ? byId.get(c.parentId) : undefined
     )
-      path.unshift(c.parentId ? label(c) : "起点问题");
+      path.unshift(c.parentId ? label(c) : rootName(c));
     const siblings = (kids.get(n.parentId) ?? []).filter((s) => s.id !== id);
     const children = kids.get(id) ?? [];
     about.push(
-      `${id === anchor ? "当前卡片" : "已选入的卡片"}：${n.parentId ? label(n) : "起点问题"}（L${depth.get(id)}，${STATUS[n.status]}）`,
+      `${id === anchor ? "当前卡片" : "已选入的卡片"}：${n.parentId ? label(n) : rootName(n)}（L${depth.get(id)}，${STATUS[n.status]}）`,
       `  路径：${path.join(" › ")}`,
-      `  同层兄弟（按顺序）：${n.parentId ? siblings.map(label).join("、") || "无" : "无"}`,
+      `  同层兄弟（按顺序）：${siblings.map(label).join("、") || "无"}`,
       `  子卡片（按顺序）：${children.map(label).join("、") || "无"}`,
     );
   }

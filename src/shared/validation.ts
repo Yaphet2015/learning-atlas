@@ -58,6 +58,7 @@ export const conceptNodeSchema = z
     hand: z.string().max(200).optional(),
     expanded: z.boolean().optional(),
     visual: visualDiagramSchema.optional(),
+    question: z.boolean().optional(),
   })
   .strict();
 /** v1 node shape, accepted only as migration input. */
@@ -174,11 +175,13 @@ export const boardSchema = z
   .superRefine((board, ctx) => {
     const byId = new Map(board.nodes.map((node) => [node.id, node]));
     const roots = board.nodes.filter((node) => node.parentId === null);
-    if (board.nodes.length && roots.length !== 1)
+    // One or more top-level cards: a root can grow a broader parent above it or
+    // further roots beside it (a forest). Older single-root boards are unchanged.
+    if (board.nodes.length && roots.length < 1)
       ctx.addIssue({
         code: "custom",
         path: ["nodes"],
-        message: "A board needs exactly one root question",
+        message: "A board needs at least one root question",
       });
     board.nodes.forEach((node, index) => {
       if (node.parentId !== null && !byId.has(node.parentId)) {
