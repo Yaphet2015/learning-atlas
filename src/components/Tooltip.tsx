@@ -46,6 +46,9 @@ export function TooltipLayer() {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const target = useRef<Element | null>(null);
   const lastHide = useRef(0);
+  // A clicked control stays quiet until the pointer leaves it (matched by its label, since
+  // a click can re-render the control under the pointer).
+  const pressed = useRef<string | null>(null);
   useEffect(() => {
     const hide = () => {
       clearTimeout(timer.current);
@@ -69,6 +72,9 @@ export function TooltipLayer() {
     const over = (e: PointerEvent) => {
       if (e.pointerType === "touch") return;
       const el = (e.target as Element)?.closest?.(SELECTOR);
+      if (el && pressed.current && labelFor(el)?.text === pressed.current)
+        return;
+      pressed.current = null;
       if (el) show(el, false);
       else if (target.current) hide();
     };
@@ -84,7 +90,12 @@ export function TooltipLayer() {
       if (e.key === "Escape") hide();
     };
     document.addEventListener("pointerover", over);
-    document.addEventListener("pointerdown", hide, true);
+    const down = (e: PointerEvent) => {
+      const el = (e.target as Element)?.closest?.(SELECTOR);
+      pressed.current = el ? (labelFor(el)?.text ?? null) : null;
+      hide();
+    };
+    document.addEventListener("pointerdown", down, true);
     document.addEventListener("focusin", focus);
     document.addEventListener("focusout", blur);
     document.addEventListener("keydown", key, true);
@@ -93,7 +104,7 @@ export function TooltipLayer() {
     return () => {
       clearTimeout(timer.current);
       document.removeEventListener("pointerover", over);
-      document.removeEventListener("pointerdown", hide, true);
+      document.removeEventListener("pointerdown", down, true);
       document.removeEventListener("focusin", focus);
       document.removeEventListener("focusout", blur);
       document.removeEventListener("keydown", key, true);
