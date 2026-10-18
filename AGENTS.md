@@ -34,7 +34,7 @@ app.whenReady().then(async () => {
   app.exit(0);
 });
 EOF
-npx electron /tmp/check-proxy-fetch.mjs
+pnpm exec electron /tmp/check-proxy-fetch.mjs
 ```
 
 再跑 `pnpm typecheck`；动过主进程启动链路时，追加打包冒烟：

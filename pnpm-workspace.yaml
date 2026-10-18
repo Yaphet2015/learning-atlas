@@ -1,0 +1,11 @@
+# pnpm settings (single-package repo; no workspace packages).
+# Build-script decisions (allowBuilds replaced ignoredBuiltDependencies in pnpm 11).
+# All four are deliberately `false` — the app runs without their postinstalls:
+# - esbuild: platform binary arrives via @esbuild/<platform> optional deps.
+# - electron-winstaller: Windows-only packaging helper.
+# - @google/genai, protobufjs: postinstalls not required at runtime (tests pass without).
+allowBuilds:
+  "@google/genai": false
+  electron-winstaller: false
+  esbuild: false
+  protobufjs: false

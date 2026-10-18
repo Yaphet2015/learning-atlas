@@ -19,14 +19,14 @@ This is an early, local-first macOS MVP. The interface is primarily Chinese. It 
 
 ## 本地运行（macOS）
 
-需要 Node.js 22.19.0 或更新版本，推荐 Node 24.19.0。应用锁定 Electron 44.8.0，内嵌 Node 24.22.0，支持 `node:sqlite`。
+需要 Node.js 22.19.0 或更新版本，推荐 Node 24.19.0。包管理器锁定为 pnpm（见 package.json 的 packageManager 字段，可用 `corepack enable` 启用）。应用锁定 Electron 44.8.0，内嵌 Node 24.22.0，支持 `node:sqlite`。
 
 ```sh
-npm ci
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-开发进程由 Vite、TypeScript 和 Electron 组成。`npm run dev:web` 只用于界面预览：浏览器本地存储白板，不接收 API 密钥，也不调用 AI。
+开发进程由 Vite、TypeScript 和 Electron 组成。`pnpm dev:web` 只用于界面预览：浏览器本地存储白板，不接收 API 密钥，也不调用 AI。
 
 ## 连接真实 AI
 
@@ -75,14 +75,14 @@ npm run dev
 ## 检查和构建
 
 ```sh
-npm run typecheck
-npm test
-npm run build
-npm run test:e2e
-npm run dist:mac
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm test:e2e
+pnpm dist:mac
 ```
 
-UI 测试需要 Playwright Chromium：`npx playwright install chromium`。可以通过 `PLAYWRIGHT_CHROMIUM_PATH` 指定已安装的 Chromium。
+UI 测试需要 Playwright Chromium：`pnpm exec playwright install chromium`。可以通过 `PLAYWRIGHT_CHROMIUM_PATH` 指定已安装的 Chromium。
 
 GitHub Actions 工作流会在 macOS 上执行检查、实际 Electron + SQLite + durable reopen smoke、浏览器交互测试，然后构建 Apple Silicon `.dmg` / `.zip` 预览产物。PR 的产物在对应 Actions run 的 Artifacts 下载。成功构建不等于已完成真机试用。
 
