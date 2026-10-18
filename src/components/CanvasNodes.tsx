@@ -14,6 +14,7 @@ import {
   MessageCircle,
   PencilLine,
   Sparkles,
+  StickyNote,
 } from "lucide-react";
 import type { ConceptNode, SceneState } from "../shared/types";
 import { Seal } from "./Seal";
@@ -29,6 +30,8 @@ export type CardData = {
   editing?: boolean;
   linkMode?: boolean;
   dimmed?: boolean;
+  /** The drawer is open on this card's note. */
+  noteOpen?: boolean;
   onRename?: (id: string, title: string) => void;
   onEditDone?: () => void;
   onAddChild?: (id: string) => void;
@@ -113,6 +116,14 @@ function Title({ data, as: Tag }: { data: CardData; as: "h2" | "h3" }) {
     );
   return <Tag>{Tag === "h2" ? (data.topic ?? n.title) : n.title}</Tag>;
 }
+
+/** Hangs on the card the drawer is talking about. */
+const NoteTab = () => (
+  <span className="note-tab" aria-hidden="true">
+    <StickyNote size={13} className="ico" />
+    批注
+  </span>
+);
 
 function AddHandles({ data }: { data: CardData }) {
   const id = data.concept.id;
@@ -223,8 +234,9 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
   const animate = first.current !== n.status;
   return (
     <article
-      className={`card s-${n.status} ${selected ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""}`}
+      className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""}`}
     >
+      {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />
       {n.status === "explained" && <Seal />}
       {data.no && <span className="no">{data.no}</span>}
@@ -264,7 +276,10 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
   const n = data.concept;
   const [open, setOpen] = useState(false);
   return (
-    <article className={`origin ${selected ? "is-selected" : ""}`}>
+    <article
+      className={`origin ${selected || data.noteOpen ? "is-selected" : ""}`}
+    >
+      {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />
       <div className="origin-head">
         <span className="eyebrow">起点 · 问题</span>

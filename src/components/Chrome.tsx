@@ -299,7 +299,7 @@ function MiniNode({ x, y, width, height, className }: MiniMapNodeProps) {
       y={y}
       width={width}
       height={height}
-      rx={3}
+      rx={20} // ≈ 2px at the minimap’s ~0.1 scale
       className={`mini-node ${className ?? ""}`}
     />
   );
@@ -316,6 +316,9 @@ export function MapUnit() {
         zoomable
         position="top-left"
         className="atlas-minimap"
+        // Match the CSS box so the viewBox has the same aspect ratio; otherwise the
+        // mask's outer sub-path shows in the letterbox as a second frame.
+        style={{ width: 194, height: 120 }}
         nodeComponent={MiniNode}
         nodeClassName={(n) =>
           n.type === "ghost"
@@ -324,7 +327,7 @@ export function MapUnit() {
         }
         maskColor="transparent"
         maskStrokeColor="var(--accent)"
-        maskStrokeWidth={2}
+        maskStrokeWidth={1.25}
         bgColor="transparent"
       />
       <div className="zoom">

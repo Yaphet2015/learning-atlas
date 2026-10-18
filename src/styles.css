@@ -164,6 +164,24 @@ kbd,
   --xy-background-color: transparent;
   --xy-node-border-radius: 0;
   background: transparent;
+  position: absolute !important;
+  inset: 0;
+  width: auto !important;
+  height: auto !important;
+  transition: right 280ms var(--ease-out);
+}
+/* The drawer squeezes the canvas instead of covering it; the right edge fades
+   out so level rules stop before the drawer. */
+.with-drawer .react-flow {
+  right: calc(var(--drawer-w) + 40px);
+}
+.with-drawer .react-flow__renderer {
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    #000 calc(100% - 36px),
+    transparent
+  );
+  mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
 }
 .react-flow__node {
   font-family: var(--kai);
@@ -663,8 +681,59 @@ kbd,
   width: 210px;
   padding: 8px;
 }
+/* Chrome that belongs to the canvas follows its visible area. */
+.dock,
+.progress,
+.map-unit,
+.toast,
+.hint,
+.map-progress {
+  transition:
+    left 280ms var(--ease-out),
+    right 280ms var(--ease-out);
+}
+.with-drawer .dock,
+.with-drawer .toast,
+.with-drawer .hint,
+.with-drawer .map-progress {
+  left: calc((100% - var(--drawer-w) - 40px) / 2);
+}
+.with-drawer .progress,
 .with-drawer .map-unit {
-  display: none;
+  right: calc(var(--drawer-w) + 40px);
+}
+@media (max-width: 1180px) {
+  .with-drawer .map-unit {
+    width: auto;
+  }
+  .with-drawer .atlas-minimap {
+    display: none;
+  }
+  .with-drawer .zoom {
+    border-top: 0;
+    margin-top: 0;
+    padding-top: 0;
+    gap: 2px;
+  }
+}
+.note-tab {
+  position: absolute;
+  right: 20px;
+  top: -12px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px 0 7px;
+  font: 700 12px var(--kai);
+  color: #fff6ec;
+  background: var(--accent);
+  border-radius: var(--r-pill);
+  pointer-events: none;
+}
+.card .note-tab {
+  right: 44px;
 }
 .react-flow__minimap.atlas-minimap {
   position: relative;
@@ -676,6 +745,9 @@ kbd,
 .react-flow__minimap svg {
   width: 194px;
   height: 120px;
+  /* Clip the mask's outer sub-path so only the single viewport frame shows. */
+  overflow: hidden;
+  border-radius: var(--r-sm);
 }
 .mini-node {
   fill: var(--card);
@@ -837,9 +909,9 @@ kbd,
 .drawer {
   box-shadow: var(--shadow-drawer);
   right: 20px;
-  top: 20px;
-  bottom: 20px;
-  width: 360px;
+  top: 16px;
+  bottom: 16px;
+  width: var(--drawer-w);
   display: flex;
   flex-direction: column;
   padding: 16px 18px 12px;

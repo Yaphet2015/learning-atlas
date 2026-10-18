@@ -829,6 +829,67 @@ export default function App() {
     setPreview(id && b ? addChild(b, id, GHOST) : null);
   }, []);
   const kickoffReady = needsKickoff(board) && !mapBusy && !study;
+  const drawerNoteAttachment = board?.notes.find(
+    (n) => n.id === drawer,
+  )?.attachedTo;
+  const drawerAnchor =
+    drawerNoteAttachment?.kind === "node" ? drawerNoteAttachment.id : null;
+  // The drawer squeezes the canvas (CSS). Once the container has resized, bring
+  // the anchor and its children into view, but only if the anchor is not
+  // already visible: never move the viewport needlessly.
+  useEffect(() => {
+    if (!drawerAnchor) return;
+    const t = setTimeout(() => {
+      const pane = document
+        .querySelector(".react-flow")
+        ?.getBoundingClientRect();
+      const anchor = flow.getInternalNode(drawerAnchor);
+      if (!pane || !anchor?.measured.width) return;
+      const a = anchor.internals.positionAbsolute;
+      const tl = flow.flowToScreenPosition(a);
+      const br = flow.flowToScreenPosition({
+        x: a.x + anchor.measured.width,
+        y: a.y + (anchor.measured.height ?? 0),
+      });
+      const visible =
+        tl.x >= pane.left &&
+        br.x <= pane.right - 36 &&
+        tl.y >= pane.top &&
+        br.y <= pane.bottom;
+      if (visible) return;
+      const ids = [
+        drawerAnchor,
+        ...(boardRef.current?.nodes ?? [])
+          .filter((n) => n.parentId === drawerAnchor)
+          .map((n) => n.id),
+      ];
+      const boxes = ids.flatMap((id) => {
+        const n = flow.getInternalNode(id);
+        if (!n?.measured.width) return [];
+        const p = n.internals.positionAbsolute;
+        return [
+          {
+            x: p.x,
+            y: p.y,
+            r: p.x + n.measured.width,
+            b: p.y + (n.measured.height ?? 0),
+          },
+        ];
+      });
+      const x = Math.min(...boxes.map((b) => b.x)),
+        y = Math.min(...boxes.map((b) => b.y));
+      void flow.fitBounds(
+        {
+          x,
+          y,
+          width: Math.max(...boxes.map((b) => b.r)) - x,
+          height: Math.max(...boxes.map((b) => b.b)) - y,
+        },
+        { padding: 0.18, duration: 320 },
+      );
+    }, 300);
+    return () => clearTimeout(t);
+  }, [drawerAnchor, flow]);
   const nodes = useMemo<CanvasNode[]>(() => {
     if (!shown || !board) return [];
     const out: CanvasNode[] = [];
@@ -876,6 +937,7 @@ export default function App() {
         className: dragging ? "is-dragging" : undefined,
         data: {
           concept: n,
+          noteOpen: drawerAnchor === n.id,
           no: n.parentId
             ? `§${String(n.order + 1).padStart(2, "0")}`
             : undefined,
@@ -931,6 +993,7 @@ export default function App() {
     edit,
     kickoffReady,
     startKickoff,
+    drawerAnchor,
   ]);
   const edges = useMemo<Edge[]>(() => {
     if (!shown) return [];

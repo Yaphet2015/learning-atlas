@@ -32,9 +32,13 @@ for (const mode of ["light", "dark"] as const) {
     await page.goto("/");
     await expect(page.locator(".react-flow__node-concept")).toHaveCount(6);
     await theme(page, mode === "dark");
+    await page.waitForTimeout(800);
     await page.locator(".react-flow__node-root").click();
     await page.keyboard.press("/");
     await expect(page.locator(".drawer")).toBeVisible();
+    // Fit the whole map into the squeezed canvas (the mockup's state).
+    await page.waitForTimeout(1000);
+    await page.getByRole("button", { name: "查看全图" }).click();
     await page.waitForTimeout(900);
     await page.screenshot({ path: `${dir}/canvas-${mode}.png` });
     const drawer = page.locator(".drawer");
