@@ -447,7 +447,7 @@ export default function App() {
     [showToast],
   );
   const askNote = useCallback(
-    (noteId: string, prompt: string) => {
+    (noteId: string, prompt: string, retry = false) => {
       if (editingLocked.current) return false;
       const b = boardRef.current;
       if (!b) return false;
@@ -464,28 +464,30 @@ export default function App() {
         context,
         mode: "answer",
       };
-      edit(
-        (current) => ({
-          ...current,
-          notes: current.notes.map((n) =>
-            n.id === noteId
-              ? {
-                  ...n,
-                  messages: cacheMessages([
-                    ...n.messages,
-                    {
-                      id: request.requestId,
-                      role: "user" as const,
-                      text: prompt,
-                      createdAt: now(),
-                    },
-                  ]),
-                }
-              : n,
-          ),
-        }),
-        false,
-      );
+      // A retry resends the question already in the thread.
+      if (!retry)
+        edit(
+          (current) => ({
+            ...current,
+            notes: current.notes.map((n) =>
+              n.id === noteId
+                ? {
+                    ...n,
+                    messages: cacheMessages([
+                      ...n.messages,
+                      {
+                        id: request.requestId,
+                        role: "user" as const,
+                        text: prompt,
+                        createdAt: now(),
+                      },
+                    ]),
+                  }
+                : n,
+            ),
+          }),
+          false,
+        );
       void sendAI(request);
       return true;
     },
@@ -1304,8 +1306,16 @@ export default function App() {
               board,
               drawerNote.id,
               selection?.kind === "note" ? null : selection,
+              true,
             ).references
           }
+          nodes={board.nodes}
+          onRetry={() => {
+            const q = drawerNote.messages
+              .filter((m) => m.role === "user")
+              .at(-1);
+            if (q) askNote(drawerNote.id, q.text, true);
+          }}
           pending={pending[`${board.id}/${drawerNote.id}`]?.text}
           busy={pending[`${board.id}/${drawerNote.id}`]?.busy}
           error={pending[`${board.id}/${drawerNote.id}`]?.error}

@@ -86,7 +86,7 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
     "Help me compare the two changes",
   );
   await expect(
-    page.locator(".drawer .chip", { hasText: "样式计算" }),
+    page.locator(".drawer .ctx", { hasText: "样式计算" }),
   ).toBeVisible();
   await expect
     .poll(async () =>

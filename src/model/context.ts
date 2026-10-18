@@ -7,6 +7,10 @@ import type {
 } from "../shared/types";
 import { contextBundleSchema } from "../shared/validation";
 
+/** How a reference is named in note.excludedRefs. */
+export const refKey = (r: Pick<ContextReference, "kind" | "id">) =>
+  `${r.kind}:${r.id}`;
+
 const clip = (value: string, length: number) =>
   value.length <= length ? value : `${value.slice(0, length - 1)}…`;
 
@@ -15,6 +19,8 @@ export function contextForNote(
   board: Board,
   noteId: string,
   selection?: Selection,
+  /** The drawer lists unticked references too, so they can be ticked back. */
+  keepExcluded = false,
 ): ContextBundle {
   const note = board.notes.find((item) => item.id === noteId);
   if (!note) throw new Error("找不到这张便签。");
@@ -137,6 +143,12 @@ export function contextForNote(
         .forEach(addRelation);
     }
   }
+  // Unticked in the drawer: not sent. The topic and the note itself always are.
+  const excluded = new Set(keepExcluded ? [] : (note.excludedRefs ?? []));
+  const sent = references.filter(
+    (r) => r.kind === "topic" || r.kind === "note" || !excluded.has(refKey(r)),
+  );
+  references.splice(0, references.length, ...sent);
   const summary = references
     .map((item) => `[${item.kind}:${item.id}] ${item.title}\n${item.text}`)
     .join("\n\n");

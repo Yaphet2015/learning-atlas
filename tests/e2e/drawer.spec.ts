@@ -66,3 +66,36 @@ test("the ⋯ menu deletes the note without a confirm, and ⌘Z brings it back",
   await page.keyboard.press("/");
   await expect(page.locator(".drawer .msg.assistant")).toHaveCount(1);
 });
+
+test("参考 is one line that opens into a checklist; unticked items are remembered", async ({
+  page,
+}) => {
+  const drawer = await open(page, insuranceBoard(true));
+  const ctx = drawer.locator(".ctx");
+  await expect(ctx).toContainText("起点问题");
+  await expect(drawer.locator(".ctx-list")).toHaveCount(0);
+  await ctx.click();
+  const list = drawer.locator(".ctx-list");
+  await expect(list.getByRole("checkbox").first()).toBeDisabled();
+  const item = list.getByRole("checkbox", { name: /保什么/ });
+  await item.uncheck();
+  await expect(drawer.locator(".cchip")).toContainText("第一层");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("studyboard-preview-boards-v1")!)[0]
+            .notes[0].excludedRefs,
+      ),
+    )
+    .toEqual(["node:c-what"]);
+});
+
+test("the composer shows its state: empty, typing", async ({ page }) => {
+  const drawer = await open(page, insuranceBoard(false));
+  const send = drawer.getByLabel("发送提问");
+  await expect(send).toBeDisabled();
+  await drawer.getByLabel("向 AI 提问").fill("等待期多长算正常？");
+  await expect(send).toHaveClass(/ready/);
+  await expect(drawer.locator(".hint-kbd")).toHaveText("⇧↵ 换行");
+});

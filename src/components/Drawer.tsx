@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AlertCircle,
   ArrowUp,
   ChevronDown,
+  ChevronUp,
+  Link2,
   Copy,
   Delete,
   Layers3,
@@ -26,6 +29,145 @@ import { StructuredVisual } from "./StructuredVisual";
 import { displayMessage } from "../model/kickoff";
 import { outlineOf, type OutlineItem } from "../model/answer";
 import { AnswerBlocks } from "./AnswerBlocks";
+import { refKey } from "../model/context";
+
+const LEVEL = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
+const STATUS: Record<string, string> = {
+  unseen: "未看",
+  exploring: "探索中",
+  explained: "讲清楚了",
+};
+function depth(nodes: ConceptNode[], id: string) {
+  let d = 0;
+  for (
+    let n = nodes.find((x) => x.id === id);
+    n?.parentId && d < 50;
+    n = nodes.find((x) => x.id === n!.parentId)
+  )
+    d++;
+  return d;
+}
+const refTitle = (r: ContextReference) =>
+  r.kind === "topic"
+    ? "起点问题"
+    : r.kind === "relation"
+      ? `~ ${r.title}`
+      : r.title;
+/** 「起点问题 + 第一层 4 张」: what the next question carries. */
+function refSummary(
+  refs: ContextReference[],
+  excluded: string[],
+  nodes: ConceptNode[],
+) {
+  const on = refs.filter(
+    (r) => r.kind !== "note" && !excluded.includes(refKey(r)),
+  );
+  const parts: string[] = [];
+  if (on.some((r) => r.kind === "topic")) parts.push("起点问题");
+  const levels = new Map<number, number>();
+  for (const r of on)
+    if (r.kind === "node") {
+      const d = depth(nodes, r.id);
+      if (d > 0) levels.set(d, (levels.get(d) ?? 0) + 1);
+    }
+  for (const [d, k] of [...levels].sort((a, b) => a[0] - b[0]))
+    parts.push(`第${LEVEL[d] ?? d}层 ${k} 张`);
+  const links = on.filter((r) => r.kind === "relation").length;
+  if (links) parts.push(`${links} 条连线`);
+  return parts.join(" + ") || "只有这张批注";
+}
+
+/** 参考: one line normally; opens in place into a checklist. */
+function Refs({
+  refs,
+  excluded,
+  nodes,
+  open,
+  onToggleOpen,
+  onExclude,
+}: {
+  refs: ContextReference[];
+  excluded: string[];
+  nodes: ConceptNode[];
+  open: boolean;
+  onToggleOpen: () => void;
+  onExclude: (next: string[]) => void;
+}) {
+  // The root card is the 起点问题 itself; list it once.
+  const list = refs.filter(
+    (r) =>
+      r.kind !== "note" &&
+      !(
+        r.kind === "node" && nodes.find((n) => n.id === r.id)?.parentId === null
+      ),
+  );
+  const on = list.filter((r) => !excluded.includes(refKey(r)));
+  const shown = on.slice(0, 4);
+  return (
+    <div className={`ctx-wrap ${open ? "open" : ""}`}>
+      <button
+        className={`ctx ${open ? "open" : ""}`}
+        aria-expanded={open}
+        aria-label={`AI 会参考 ${on.length} 项，点开调整`}
+        onClick={onToggleOpen}
+      >
+        <span className="k">参考</span>
+        <span className="items">
+          {open
+            ? `${on.length} 项 · AI 只看到勾选的内容`
+            : shown.map(refTitle).join(" · ")}
+        </span>
+        {!open && on.length > shown.length && (
+          <span className="more">+{on.length - shown.length}</span>
+        )}
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+      {open && (
+        <ul className="ctx-list">
+          {list.map((r) => {
+            const key = refKey(r);
+            const locked = r.kind === "topic";
+            const checked = locked || !excluded.includes(key);
+            const node =
+              r.kind === "node" ? nodes.find((n) => n.id === r.id) : undefined;
+            return (
+              <li key={key}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={locked}
+                    onChange={() =>
+                      onExclude(
+                        checked
+                          ? [...excluded, key]
+                          : excluded.filter((k) => k !== key),
+                      )
+                    }
+                  />
+                  <span className="tt" title={r.text}>
+                    {refTitle(r)}
+                  </span>
+                  <span className="lv">
+                    {r.kind === "topic"
+                      ? "L0 · 总是带上"
+                      : node
+                        ? `L${depth(nodes, node.id)} · ${STATUS[node.status] ?? ""}`
+                        : "连线"}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+          <li className="add-hint">
+            <Plus size={14} className="ico" />
+            添加卡片：在画布上点选一张卡，它就会被带上
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
 
 const clock = (iso: string) => {
   const d = new Date(iso);
@@ -238,8 +380,10 @@ export function Drawer({
   onPromote,
   onLay,
   onLocate,
+  onRetry,
   onRemove,
   onClose,
+  nodes,
 }: {
   note: StickyNote;
   /** The card this conversation hangs on; its diagram renders here, not on the card. */
@@ -259,11 +403,19 @@ export function Drawer({
   /** Lay items as unseen cards under the anchor; with messageId, that answer counts as laid. */
   onLay: (items: OutlineItem[], messageId?: string) => void;
   onLocate: () => void;
+  /** Resend the last question after an error, without repeating it in the thread. */
+  onRetry: () => void;
+  /** Board cards, for each reference's level and status. */
+  nodes: ConceptNode[];
   onRemove: () => void;
   onClose: () => void;
 }) {
   const [prompt, setPrompt] = useState("");
   const [menu, setMenu] = useState(false);
+  const [refsOpen, setRefsOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const thread = useRef<HTMLDivElement>(null);
+  const onScroll = () => setScrolled((thread.current?.scrollTop ?? 0) > 4);
   const [sel, setSel] = useState<{ text: string; x: number; y: number }>();
   const root = useRef<HTMLElement>(null);
   const title = useRef<HTMLInputElement>(null);
@@ -424,23 +576,17 @@ export function Drawer({
           <X size={18} />
         </button>
       </header>
-      <div className="refs">
-        <span className="lab">AI 会参考</span>
-        <div>
-          {refs
-            .filter((r) => r.kind !== "note")
-            .map((r) => (
-              <span className="chip" key={`${r.kind}-${r.id}`} title={r.text}>
-                {r.kind === "topic"
-                  ? "起点问题"
-                  : r.kind === "relation"
-                    ? `~ ${r.title}`
-                    : r.title}
-              </span>
-            ))}
-        </div>
-      </div>
-      <div className="thread">
+      <Refs
+        refs={refs}
+        excluded={note.excludedRefs ?? []}
+        nodes={nodes}
+        open={refsOpen}
+        onToggleOpen={() => setRefsOpen(!refsOpen)}
+        onExclude={(excludedRefs) => onChange({ excludedRefs })}
+      />
+      <div className="rule-h" />
+      <div className="thread" ref={thread} onScroll={onScroll}>
+        {scrolled && <div className="fadeTop" aria-hidden="true" />}
         {anchor?.visual && (
           <section className="this-card" aria-label="这张卡">
             <span className="lab">这张卡 · {anchor.title}</span>
@@ -502,24 +648,21 @@ export function Drawer({
             </div>
           );
         })}
-        {pending && (
-          <div className="msg assistant ans streaming" aria-live="polite">
+        {busy && (
+          <div className="msg assistant ans streaming">
             <div className="who">
               <span>AI</span>
             </div>
-            <AnswerBlocks text={pending} streaming />
+            <AnswerBlocks text={pending ?? ""} streaming />
             <span className="streaming-caret" aria-hidden="true" />
           </div>
         )}
-        {busy && !pending && (
-          <div className="lab thinking">正在看这片上下文…</div>
-        )}
-        {error && <div className="inline-error">{error}</div>}
         {kickoff && lastAnswer && !busy && (
           <span className="lab kickoff-tip">
             先在下面回答它的问题，拆得会更贴合你；也可以直接铺成第一层，之后再调整。
           </span>
         )}
+        <div className="fadeBot" aria-hidden="true" />
       </div>
       {sel && (
         <div
@@ -555,15 +698,35 @@ export function Drawer({
           </button>
         </div>
       )}
-      <footer>
+      <footer
+        className={`composer ${error && !busy ? "failed" : ""}`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) composer.current?.focus();
+        }}
+      >
+        {error && !busy && (
+          <div className="composer-error" role="alert">
+            <AlertCircle size={15} className="ico" />
+            <span>{error} 问题没有丢，可以重试。</span>
+          </div>
+        )}
         <textarea
           ref={composer}
           aria-label="向 AI 提问"
-          placeholder="继续追问…"
+          placeholder={
+            answers.some((m) => /检查/.test(m.text))
+              ? "继续追问，或回答上面的检查题…"
+              : "继续追问…"
+          }
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {
             e.stopPropagation();
+            if (e.key === "Escape") {
+              e.preventDefault();
+              if (busy) onStop();
+              else onClose();
+            }
             if (
               e.key === "Enter" &&
               !e.shiftKey &&
@@ -574,26 +737,45 @@ export function Drawer({
             }
           }}
         />
-        {busy ? (
+        <div className="row">
           <button
-            className="icon"
-            title="停止回答"
-            aria-label="停止回答"
-            onClick={onStop}
+            className="cchip"
+            title="AI 会参考这些内容，点开可以调整"
+            onClick={() => setRefsOpen(true)}
           >
-            <Square size={14} />
+            <Link2 size={13} className="ico" />
+            带上：{refSummary(refs, note.excludedRefs ?? [], nodes)}
           </button>
-        ) : (
-          <button
-            className="icon"
-            title="发送 ↵"
-            aria-label="发送提问"
-            disabled={!prompt.trim()}
-            onClick={send}
-          >
-            <ArrowUp size={16} />
-          </button>
-        )}
+          <span className="grow" />
+          <span className="kbd hint-kbd">
+            {busy ? "Esc 停止" : prompt.trim() ? "⇧↵ 换行" : "↵ 发送"}
+          </span>
+          {busy ? (
+            <button
+              className="send stop"
+              title="停止回答"
+              aria-label="停止回答"
+              onClick={onStop}
+            >
+              <Square size={11} fill="currentColor" />
+            </button>
+          ) : error && !prompt.trim() && lastQuestion ? (
+            <button className="btn sm retry" onClick={onRetry}>
+              <RotateCcw size={14} className="ico" />
+              重试
+            </button>
+          ) : (
+            <button
+              className={`send ${prompt.trim() ? "ready" : ""}`}
+              title="发送 ↵"
+              aria-label="发送提问"
+              disabled={!prompt.trim()}
+              onClick={send}
+            >
+              <ArrowUp size={16} />
+            </button>
+          )}
+        </div>
       </footer>
     </aside>
   );
