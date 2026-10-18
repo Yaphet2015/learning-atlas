@@ -740,13 +740,15 @@ export default function App() {
   }
   const ask = useCallback(() => {
     addNote(selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined);
-    setTimeout(
-      () =>
-        document
-          .querySelector<HTMLTextAreaElement>(".drawer footer textarea")
-          ?.focus(),
-      60,
-    );
+    // A newly opened drawer focuses its composer itself. For one that was already
+    // open, move focus there, but never steal it from a field inside the drawer
+    // (the learner may already be typing a note).
+    setTimeout(() => {
+      if (document.activeElement?.closest(".drawer")) return;
+      document
+        .querySelector<HTMLTextAreaElement>(".drawer footer textarea")
+        ?.focus();
+    }, 60);
   }, [addNote, selectedNodeId]);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
