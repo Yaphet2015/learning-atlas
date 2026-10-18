@@ -24,7 +24,7 @@ test("the root grows upward: a broader question above, the old root becomes its 
   await gotoApp(page);
   const root = card(page, "topic-ci");
   await root.hover();
-  await root.getByRole("button", { name: "加更大的问题" }).click();
+  await root.getByRole("button", { name: "加更大的问题", exact: true }).click();
   const input = page.getByLabel("概念标题");
   await expect(input).toBeFocused();
   await input.fill("保险怎么选");
@@ -54,7 +54,7 @@ test("roots side by side: a new root beside, its own tree, 走一遍 and the out
     how: (await card(page, "c-how").boundingBox())!,
   };
   await root.hover();
-  await root.getByRole("button", { name: "加并列的起点" }).click();
+  await root.getByRole("button", { name: "加并列的起点", exact: true }).click();
   const input = page.getByLabel("概念标题");
   await input.fill("医疗险怎么选");
   await input.press("Enter");
@@ -62,7 +62,7 @@ test("roots side by side: a new root beside, its own tree, 走一遍 and the out
   const side = roots(page).filter({ hasText: "医疗险怎么选" });
   // Grow a child under the new root: it is numbered §B1.
   await side.hover();
-  await side.getByRole("button", { name: "加子概念" }).click();
+  await side.getByRole("button", { name: "加子概念", exact: true }).click();
   await page.getByLabel("概念标题").fill("免赔额");
   await page.getByLabel("概念标题").press("Enter");
   const child = page

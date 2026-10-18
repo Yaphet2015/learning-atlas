@@ -44,28 +44,46 @@ test("web preview and other platforms keep the original top-left layout", async 
   await expect(page.locator(".titlebar-drag")).toHaveCount(0);
 });
 
-test("floating chrome sits 12px from the window edges", async ({ page }) => {
-  await gotoApp(page);
-  const vw = page.viewportSize()!.width,
-    vh = page.viewportSize()!.height;
-  const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
-  const sw = await box(".switcher");
-  expect([sw.x, sw.y]).toEqual([12, 12]);
-  const pr = await box(".progress");
-  expect([Math.round(vw - pr.x - pr.width), pr.y]).toEqual([12, 12]);
-  const dock = await box(".dock");
-  expect(Math.round(vh - dock.y - dock.height)).toBe(12);
-  const map = await box(".map-unit");
-  expect([
-    Math.round(vw - map.x - map.width),
-    Math.round(vh - map.y - map.height),
-  ]).toEqual([12, 12]);
-  await page.locator(".react-flow__node-root").click();
-  await page.keyboard.press("/");
-  const drawer = await box(".drawer");
-  expect([
-    Math.round(vw - drawer.x - drawer.width),
-    drawer.y,
-    Math.round(vh - drawer.y - drawer.height),
-  ]).toEqual([12, 12, 12]);
-});
+for (const scheme of ["light", "dark"] as const)
+  test(`floating chrome sits 12px from the window edges · ${scheme}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await gotoApp(page);
+    // The spacing token must not shadow a colour token (it once overrode --edge).
+    const dark = await page.evaluate(() =>
+      document.documentElement.classList.contains("dark"),
+    );
+    if (dark !== (scheme === "dark")) await page.keyboard.press("d");
+    const tokens = await page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement);
+      return [
+        cs.getPropertyValue("--gutter").trim(),
+        cs.getPropertyValue("--edge").trim(),
+      ];
+    });
+    expect(tokens[0]).toBe("12px");
+    expect(tokens[1]).toMatch(/^rgba\(/);
+    const vw = page.viewportSize()!.width,
+      vh = page.viewportSize()!.height;
+    const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+    const sw = await box(".switcher");
+    expect([sw.x, sw.y]).toEqual([12, 12]);
+    const pr = await box(".progress");
+    expect([Math.round(vw - pr.x - pr.width), pr.y]).toEqual([12, 12]);
+    const dock = await box(".dock");
+    expect(Math.round(vh - dock.y - dock.height)).toBe(12);
+    const map = await box(".map-unit");
+    expect([
+      Math.round(vw - map.x - map.width),
+      Math.round(vh - map.y - map.height),
+    ]).toEqual([12, 12]);
+    await page.locator(".react-flow__node-root").click();
+    await page.keyboard.press("/");
+    const drawer = await box(".drawer");
+    expect([
+      Math.round(vw - drawer.x - drawer.width),
+      drawer.y,
+      Math.round(vh - drawer.y - drawer.height),
+    ]).toEqual([12, 12, 12]);
+  });

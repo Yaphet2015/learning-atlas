@@ -75,6 +75,6 @@ test("ghost hints stay silent without an AI provider", async ({ page }) => {
   await expect(page.locator(".ghost-hint")).toHaveCount(0);
   // The '+' handles still work as before.
   await expect(
-    card(page, "c-how").getByRole("button", { name: "加子概念" }),
+    card(page, "c-how").getByRole("button", { name: "加子概念", exact: true }),
   ).toBeVisible();
 });
