@@ -437,6 +437,79 @@ kbd,
 .react-flow__node.selected .plus {
   opacity: 1;
 }
+/* AI ghost hints: faded suggestions beside the '+' handles; a click grows that card. */
+.ghost-hint {
+  position: absolute;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in srgb, var(--ink) 24%, transparent);
+  /* Opaque so a hint over a neighbouring card reads cleanly; low emphasis comes from the
+     dashed outline and the faint ink, not from transparency. */
+  background: var(--paper);
+  color: color-mix(in srgb, var(--ink-3) 85%, var(--paper));
+  font: 400 13px/1 var(--kai);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 160ms,
+    color 120ms,
+    border-color 120ms;
+}
+.ghost-hint span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ghost-hint .ico {
+  flex: none;
+  color: var(--accent);
+  opacity: 0.7;
+}
+.ghost-hint.below {
+  left: calc(50% + 22px);
+  bottom: -39px;
+}
+.ghost-hint.above {
+  left: calc(50% + 22px);
+  top: -39px;
+}
+.ghost-hint.right {
+  left: calc(100% + 14px);
+  top: calc(50% + 20px);
+}
+.react-flow__node:hover .ghost-hint,
+.react-flow__node:focus-within .ghost-hint {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ghost-hint:hover,
+.ghost-hint:focus-visible {
+  color: var(--ink);
+  border-style: solid;
+  box-shadow: var(--shadow-1);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: var(--card);
+}
+/* The hovered card lifts so its hints can overlap a neighbour like a popover. */
+.react-flow__node:hover,
+.react-flow__node:focus-within {
+  z-index: 1000 !important;
+}
+.is-dragging .ghost-hint,
+.react-flow__node.is-picked .ghost-hint {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ghost-hint {
+    transition: none;
+  }
+}
 .is-dragging .plus {
   display: none;
 }

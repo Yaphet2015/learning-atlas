@@ -59,6 +59,15 @@ export const conceptNodeSchema = z
     expanded: z.boolean().optional(),
     visual: visualDiagramSchema.optional(),
     question: z.boolean().optional(),
+    hints: z
+      .object({
+        sig: z.string().max(600),
+        below: z.string().max(40).optional(),
+        right: z.string().max(40).optional(),
+        above: z.string().max(40).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 /** v1 node shape, accepted only as migration input. */
@@ -302,7 +311,7 @@ export const aiRequestSchema = z
     requestId: idSchema,
     prompt: nonemptyText(LIMITS.prompt),
     context: contextBundleSchema,
-    mode: z.enum(["answer", "map", "expand"]),
+    mode: z.enum(["answer", "map", "expand", "hint"]),
   })
   .strict();
 export const baseUrlSchema = z

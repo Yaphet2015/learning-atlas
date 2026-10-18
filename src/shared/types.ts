@@ -7,6 +7,14 @@ export interface VisualDiagram {
   caption?: string;
   basis: "literal" | "analogy";
 }
+/** AI ghost hints cached on a card, one short suggestion per direction it can grow. */
+export interface CardHints {
+  /** hintSignature() when they were made; stale hints are asked for again. */
+  sig: string;
+  below?: string;
+  right?: string;
+  above?: string;
+}
 export interface ConceptNode {
   id: string;
   kind: "concept" | "scene";
@@ -19,6 +27,8 @@ export interface ConceptNode {
    * older boards: the leftmost root is the question then.
    */
   question?: boolean;
+  /** Cached ghost hints for the '+' handles (optional; older boards have none). */
+  hints?: CardHints;
   /** Position among siblings (0-based, contiguous); also reads as 先→后. */
   order: number;
   /** Derived from the parentId chain; never persisted. */
@@ -141,7 +151,7 @@ export interface AIRequest {
   requestId: string;
   prompt: string;
   context: ContextBundle;
-  mode: "answer" | "map" | "expand";
+  mode: "answer" | "map" | "expand" | "hint";
 }
 export interface AIUpdate {
   boardId: string;

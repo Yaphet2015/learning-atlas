@@ -30,7 +30,18 @@ export async function installFakeAtlas(
       const listeners = new Set<(update: any) => void>();
       const asks: any[] = [];
       (window as any).__atlasAsks = asks;
+      // Ghost-hint requests are recorded apart so flows that count asks stay exact.
+      const hints: any[] = [];
+      (window as any).__atlasHints = hints;
       const answer = (request: any) => {
+        if (request.mode === "hint") {
+          const i = hints.indexOf(request);
+          return JSON.stringify({
+            below: "提示·子" + i,
+            right: "提示·并列" + i,
+            above: "提示·更大" + i,
+          });
+        }
         if (request.mode === "map")
           return JSON.stringify({
             nodes: [
@@ -122,7 +133,7 @@ export async function installFakeAtlas(
               }
             : { ok: true, model: s.model, latencyMs: 842 },
         ask: async (request: any) => {
-          asks.push(request);
+          (request.mode === "hint" ? hints : asks).push(request);
           setTimeout(() => {
             const update = {
               boardId: request.boardId,

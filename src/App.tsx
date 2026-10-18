@@ -29,6 +29,15 @@ import {
   buildMapFromAI,
 } from "./model/boards";
 import { contextForNote } from "./model/context";
+import {
+  HINT_DELAY,
+  cachedHints,
+  hintPrompt,
+  hintSignature,
+  parseHints,
+  withHints,
+  type HintSide,
+} from "./model/hints";
 import { plain } from "./model/answer";
 import {
   boxPick,
@@ -182,6 +191,11 @@ export default function App() {
     requestMeta = useRef(
       new Map<string, { request: AIRequest; anchor?: string }>(),
     );
+  // Ghost hints: in flight (by card), failed (by card|signature), and hover debounce timers.
+  const hintBusy = useRef(new Set<string>());
+  const hintFailed = useRef(new Set<string>());
+  const hintTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const configured = useRef(false);
   const flow = useReactFlow<CanvasNode>();
   const showToast = useCallback((text: string) => {
     setToast(text);
@@ -333,6 +347,21 @@ export default function App() {
   useEffect(
     () =>
       api.onAIUpdate((update: AIUpdate) => {
+        // Ghost hints are a quiet cache: no thread, no toast, no busy state.
+        const hintMeta = requestMeta.current.get(update.requestId);
+        if (hintMeta?.request.mode === "hint") {
+          if (update.status === "streaming") return;
+          requestMeta.current.delete(update.requestId);
+          const id = hintMeta.anchor!;
+          hintBusy.current.delete(id);
+          const b = boardRef.current;
+          if (update.status !== "done" || b?.id !== update.boardId) return;
+          const hints = parseHints(update.text, b, id);
+          if (!hints) hintFailed.current.add(`${id}|${hintSignature(b, id)}`);
+          else if (!editingLocked.current)
+            putBoard(withHints(b, id, hints), false);
+          return;
+        }
         const key = `${update.boardId}/${update.stickyId}`;
         setPending((p) => ({
           ...p,
@@ -1023,6 +1052,87 @@ export default function App() {
     [shown, board, baseLayout, layoutOptions],
   );
   const slotRef = useRef<{ id: string; slot: Slot } | null>(null);
+  configured.current = settings.configured;
+  /**
+   * One batched hint request per card (all its directions at once), only with a provider,
+   * never while another hint is in flight, never twice for a card that has not changed, and
+   * never again after a failure for the same card state.
+   */
+  const requestHints = useCallback((id: string) => {
+    const b = boardRef.current;
+    if (!b || !configured.current || editingLocked.current) return;
+    if (!b.nodes.some((n) => n.id === id) || cachedHints(b, id)) return;
+    const key = `${id}|${hintSignature(b, id)}`;
+    if (hintFailed.current.has(key) || hintBusy.current.size) return;
+    const virtual = newNote(b, { x: 0, y: 0 }, { kind: "node", id });
+    const request: AIRequest = {
+      boardId: b.id,
+      stickyId: "hint-" + id,
+      requestId: uid(),
+      mode: "hint",
+      prompt: hintPrompt(b, id),
+      context: contextForNote(
+        { ...b, notes: [...b.notes, virtual] },
+        virtual.id,
+      ),
+    };
+    hintBusy.current.add(id);
+    requestMeta.current.set(request.requestId, { request, anchor: id });
+    api.ask(request).catch(() => {
+      requestMeta.current.delete(request.requestId);
+      hintBusy.current.delete(id);
+      hintFailed.current.add(key);
+    });
+  }, []);
+  /** Hover / selection: ask for a card's hints after it has had attention for a moment. */
+  const wantHints = useCallback(
+    (id: string, on: boolean) => {
+      const timers = hintTimers.current;
+      clearTimeout(timers.get(id));
+      timers.delete(id);
+      if (on && configured.current)
+        timers.set(
+          id,
+          setTimeout(() => {
+            timers.delete(id);
+            requestHints(id);
+          }, HINT_DELAY),
+        );
+    },
+    [requestHints],
+  );
+  useEffect(() => {
+    const timers = hintTimers.current;
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, []);
+  /** Clicking a ghost hint grows that card with the suggested title. */
+  const growFromHint = useCallback(
+    (from: string, side: HintSide, title: string) => {
+      const b = boardRef.current;
+      const node = b?.nodes.find((n) => n.id === from);
+      if (!b || !node) return;
+      const id = newId(
+        node.parentId === null && side !== "below" ? "root" : "concept",
+      );
+      setPreview(null);
+      edit((current) => {
+        const grown =
+          side === "below"
+            ? addChild(current, from, id)
+            : side === "above"
+              ? addParent(current, from, id)
+              : node.parentId === null
+                ? addRoot(current, from, id)
+                : addSibling(current, from, id);
+        return {
+          ...grown,
+          nodes: grown.nodes.map((n) => (n.id === id ? { ...n, title } : n)),
+        };
+      });
+      setSelection({ kind: "node", id });
+    },
+    [edit],
+  );
   const hoverAdd = useCallback((id: string | null) => {
     const b = boardRef.current;
     setPreview(id && b ? addChild(b, id, GHOST) : null);
@@ -1170,6 +1280,13 @@ export default function App() {
             ? { onAddParent: addParentOf, onAddRoot: addRootBeside }
             : {}),
           onPreviewAdd: hoverAdd,
+          ...(settings.configured && tool === "select"
+            ? {
+                hints: cachedHints(board, n.id),
+                onWantHints: wantHints,
+                onHint: growFromHint,
+              }
+            : {}),
           onStatus: setStatus,
           onStartEdit: setEditingId,
           onAsk: (id: string) => addNote({ kind: "node", id }),
@@ -1216,6 +1333,11 @@ export default function App() {
     drawerAnchor,
     numbers,
     picked,
+    addParentOf,
+    addRootBeside,
+    settings.configured,
+    wantHints,
+    growFromHint,
   ]);
   const edges = useMemo<Edge[]>(() => {
     if (!shown) return [];
