@@ -6,6 +6,7 @@ import type {
   Selection,
 } from "../shared/types";
 import { contextBundleSchema } from "../shared/validation";
+import { serializeStructure } from "./structure";
 
 /** How a reference is named in note.excludedRefs. */
 export const refKey = (r: Pick<ContextReference, "kind" | "id">) =>
@@ -152,5 +153,19 @@ export function contextForNote(
   const summary = references
     .map((item) => `[${item.kind}:${item.id}] ${item.title}\n${item.text}`)
     .join("\n\n");
-  return contextBundleSchema.parse({ topic, references, summary });
+  // The whole map, compactly: the tutor can answer questions about levels,
+  // order and links without the learner pasting them.
+  const anchor =
+    note.attachedTo?.kind === "node"
+      ? note.attachedTo.id
+      : selected?.kind === "node"
+        ? selected.id
+        : null;
+  const structure = serializeStructure(board, { anchor });
+  return contextBundleSchema.parse({
+    topic,
+    references,
+    summary,
+    ...(structure ? { structure } : {}),
+  });
 }

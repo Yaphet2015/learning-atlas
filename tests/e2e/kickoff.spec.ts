@@ -45,6 +45,9 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
   expect(asks.map((a: any) => a.mode)).toEqual(["answer", "answer", "map"]);
   expect(asks[2].prompt).toContain("知道折射，但不懂为什么是弯的");
+  // Every answer request carries the board outline.
+  expect(asks[1].context.structure).toContain("L0 起点 彩虹是怎么形成的？");
+  expect(asks[1].context.structure).toContain("◀ 当前卡片");
   await expect(page.getByRole("button", { name: /AI 带我开始/ })).toHaveCount(
     0,
   );

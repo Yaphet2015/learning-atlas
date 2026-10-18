@@ -91,6 +91,8 @@ export interface ContextBundle {
   topic: string;
   references: ContextReference[];
   summary: string;
+  /** Outline of the whole board (model/structure.ts); optional for older saved contexts. */
+  structure?: string;
 }
 export interface AISettings {
   model: string;

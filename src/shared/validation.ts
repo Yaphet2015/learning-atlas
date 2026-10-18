@@ -10,6 +10,7 @@ export const LIMITS = {
   messagesPerNote: 200,
   contextReferences: 20,
   contextCharacters: 20_000,
+  structureCharacters: 4_000,
   prompt: 8_000,
 } as const;
 
@@ -278,6 +279,7 @@ export const contextBundleSchema = z
     topic: z.string().max(2_000),
     references: z.array(contextReferenceSchema).max(LIMITS.contextReferences),
     summary: z.string().max(LIMITS.contextCharacters),
+    structure: z.string().max(LIMITS.structureCharacters).optional(),
   })
   .strict()
   .refine(
