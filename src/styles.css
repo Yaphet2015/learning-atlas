@@ -637,6 +637,8 @@ kbd,
 .react-flow__minimap svg {
   width: 194px;
   height: 120px;
+  /* Clip the mask's outer sub-path so only the single viewport frame shows. */
+  overflow: hidden;
 }
 .mini-node {
   fill: var(--card);
