@@ -616,6 +616,7 @@ export function Drawer({
   sessions,
   onOpenSession,
   onNewSession,
+  onHistory,
 }: {
   note: StickyNote;
   /** Reading a selected card keeps focus on the canvas for shortcuts. */
@@ -647,6 +648,7 @@ export function Drawer({
   sessions: SessionEntry[];
   onOpenSession: (id: string) => void;
   onNewSession: () => void;
+  onHistory: () => void;
 }) {
   const [prompt, setPrompt] = useState("");
   const [sessionsOpen, setSessionsOpen] = useState(false);
@@ -838,6 +840,9 @@ export function Drawer({
               <button className="it" role="menuitem" onClick={onNewSession}>
                 <SquarePen size={16} className="ico" />
                 在这张卡上新开对话
+              </button>
+              <button className="it" role="menuitem" onClick={onHistory}>
+                查看完整对话
               </button>
               <button
                 className="it"

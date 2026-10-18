@@ -29,6 +29,9 @@ const api: AtlasAPI = {
   loadBoard: (id) => ipcRenderer.invoke("studyboard:load", id),
   saveBoard: (board) => ipcRenderer.invoke("studyboard:save", board),
   deleteBoard: (id) => ipcRenderer.invoke("studyboard:delete", id),
+  exportBoard: (board, format, image) =>
+    ipcRenderer.invoke("studyboard:export", board, format, image),
+  importBoard: (text) => ipcRenderer.invoke("studyboard:import", text),
   getAISettings: () => ipcRenderer.invoke("studyboard:ai-settings"),
   setAISettings: (settings) =>
     ipcRenderer.invoke("studyboard:configure-ai", settings),

@@ -3,12 +3,14 @@ import {
   BookOpen,
   Check,
   Compass,
+  Download,
   HardDrive,
   LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   Search,
+  Upload,
   Waypoints,
 } from "lucide-react";
 import type { BoardSummary } from "../shared/types";
@@ -26,6 +28,9 @@ type WorkspaceSidebarProps = {
   onPick: (id: string) => void;
   onNew: () => void;
   onSearch: () => void;
+  onImport: () => void;
+  onExport: () => void;
+  transferBusy: boolean;
 };
 
 /** Each entry selects the whole knowledge canvas and its conversations. */
@@ -40,6 +45,9 @@ export function WorkspaceSidebar({
   onPick,
   onNew,
   onSearch,
+  onImport,
+  onExport,
+  transferBusy,
 }: WorkspaceSidebarProps): ReactElement {
   const [query, setQuery] = useState("");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -180,6 +188,26 @@ export function WorkspaceSidebar({
           <p className="workspace-empty">没有找到画布，换个词试试。</p>
         )}
       </nav>
+      <div className="workspace-transfer">
+        <button
+          className="workspace-action"
+          {...tip("导入画板")}
+          disabled={transferBusy || switchingId !== null}
+          onClick={onImport}
+        >
+          <Upload size={17} className="ico" />
+          <span className="workspace-copy">导入画板</span>
+        </button>
+        <button
+          className="workspace-action"
+          {...tip("导出当前画板")}
+          disabled={transferBusy || switchingId !== null}
+          onClick={onExport}
+        >
+          <Download size={17} className="ico" />
+          <span className="workspace-copy">导出当前画板</span>
+        </button>
+      </div>
       <footer className="workspace-footer" data-tip={savedLabel}>
         <StatusIcon
           size={16}

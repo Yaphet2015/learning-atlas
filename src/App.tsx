@@ -100,6 +100,10 @@ import { Drawer } from "./components/Drawer";
 import { StudyMode } from "./components/StudyMode";
 import { Outline } from "./components/Outline";
 import { Settings } from "./components/Settings";
+import { BoardExport } from "./components/BoardExport";
+import { ConversationHistory } from "./components/ConversationHistory";
+import { canvasImage } from "./canvas-image";
+import { TRANSFER_BYTES, type ExportFormat } from "./shared/transfer";
 
 const nodeTypes = { concept: ConceptCard, root: RootCard, ghost: GhostCard };
 const edgeTypes = { tree: TreeEdge, seq: SeqEdge, cross: CrossEdge };
@@ -194,6 +198,10 @@ export default function App() {
     ),
     mobile = useMedia("(max-width: 720px)");
   const [closing, setClosing] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [historyNoteId, setHistoryNoteId] = useState<string | null>(null);
+  const [transferBusy, setTransferBusy] = useState(false);
+  const importInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -788,6 +796,57 @@ export default function App() {
     // A new question starts the guided kickoff (or leads to AI settings) instead of a silent map.
     if (kickoff) startKickoff();
   }
+  async function importBoardFile(file: File) {
+    if (editingLocked.current) return;
+    editingLocked.current = true;
+    setTransferBusy(true);
+    try {
+      if (file.size > TRANSFER_BYTES)
+        throw new Error("文件超过 64 MB，无法导入。");
+      await flush();
+      const next = await api.importBoard(await file.text());
+      boardRef.current = next;
+      boardCache.current.set(next.id, next);
+      setBoard(next);
+      resetBoardView();
+      await refreshList();
+      setSaveStatus("saved");
+      setTimeout(() => flow.fitView({ padding: 0.16, duration: 400 }), 60);
+      showToast("画板已导入，学习记录和对话已恢复。");
+    } catch (error) {
+      showToast(errorText(error));
+    } finally {
+      editingLocked.current = false;
+      setTransferBusy(false);
+    }
+  }
+  async function exportCurrentBoard(format: ExportFormat) {
+    if (editingLocked.current || !boardRef.current) return;
+    editingLocked.current = true;
+    setTransferBusy(true);
+    try {
+      const id = boardRef.current.id;
+      if (
+        Object.entries(pending).some(
+          ([key, state]) => key.startsWith(`${id}/`) && state.busy,
+        )
+      )
+        throw new Error("对话尚未结束，请等待回答完成或停止回答后再导出。");
+      await flush();
+      const current = boardRef.current;
+      const image =
+        format === "png" ? await canvasImage(flow.getNodes()) : undefined;
+      if (await api.exportBoard(current, format, image)) {
+        setShowExport(false);
+        showToast("画板已导出。");
+      }
+    } catch (error) {
+      throw new Error(errorText(error));
+    } finally {
+      editingLocked.current = false;
+      setTransferBusy(false);
+    }
+  }
   const drawerRef = useRef(drawer);
   drawerRef.current = drawer;
   /** Close the drawer and hand focus back to the card it hung on. */
@@ -984,6 +1043,11 @@ export default function App() {
         return;
       }
       if (e.key === "Escape") {
+        if (historyNoteId) {
+          setHistoryNoteId(null);
+          return;
+        }
+        if (!transferBusy) setShowExport(false);
         setShowNew(false);
         setShowSettings(false);
         setPromote(null);
@@ -996,7 +1060,16 @@ export default function App() {
         }
       }
       // While a title is being edited (focus may still be moving), keys are text.
-      if (typing || study || palette || editingId) return;
+      if (
+        typing ||
+        study ||
+        palette ||
+        editingId ||
+        showExport ||
+        transferBusy ||
+        historyNoteId
+      )
+        return;
       const key = e.key.toLowerCase();
       if (mod && key === "n") {
         e.preventDefault();
@@ -1546,7 +1619,25 @@ export default function App() {
       className={`app tool-${tool} ${!mobile ? "with-sidebar" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${drawerNote ? "with-drawer" : ""} ${spacePan ? "space-pan" : ""} ${panning ? "is-panning" : ""}`}
     >
       <div className="grain" />
+      <input
+        ref={importInput}
+        type="file"
+        accept=".json,application/json"
+        aria-label="选择学习数据文件"
+        hidden
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          e.currentTarget.value = "";
+          if (file) void importBoardFile(file);
+        }}
+      />
       <TooltipLayer />
+      {transferBusy && !showExport && (
+        <div className="map-progress lab" role="status">
+          <LoaderCircle size={14} className="spin" />
+          正在导入画板与对话…
+        </div>
+      )}
       {chromeClasses.includes("mac-titlebar") && (
         <div className="titlebar-drag" aria-hidden="true" />
       )}
@@ -1673,6 +1764,9 @@ export default function App() {
             onPick={(id) => void switchBoard(id)}
             onNew={() => setShowNew(true)}
             onSearch={() => setPalette(true)}
+            onImport={() => importInput.current?.click()}
+            onExport={() => setShowExport(true)}
+            transferBusy={transferBusy}
           />
           <Progress
             nodes={board.nodes}
@@ -1791,6 +1885,7 @@ export default function App() {
             )
           }
           onAsk={(prompt) => askNote(drawerNote.id, prompt)}
+          onHistory={() => setHistoryNoteId(drawerNote.id)}
           kickoff={
             needsKickoff(board) && kickoffNote(board)?.id === drawerNote.id
               ? { onAccept: proposeFirstLevel, busy: mapBusy }
@@ -1887,6 +1982,14 @@ export default function App() {
             setPalette(false);
             setShowSettings(true);
           }}
+          onImport={() => {
+            setPalette(false);
+            importInput.current?.click();
+          }}
+          onExport={() => {
+            setPalette(false);
+            setShowExport(true);
+          }}
         />
       )}
       {toast && (
@@ -1907,6 +2010,21 @@ export default function App() {
             setSettings(await api.setAISettings(input));
           }}
           onTest={(input) => api.testAIConnection(input)}
+        />
+      )}
+      {showExport && board && (
+        <BoardExport
+          title={board.title}
+          busy={transferBusy}
+          onExport={exportCurrentBoard}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+      {historyNoteId && board?.notes.some((n) => n.id === historyNoteId) && (
+        <ConversationHistory
+          boardId={board.id}
+          note={board.notes.find((n) => n.id === historyNoteId)!}
+          onClose={() => setHistoryNoteId(null)}
         />
       )}
       {showNew && (

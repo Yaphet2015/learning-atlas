@@ -177,6 +177,12 @@ export interface AtlasAPI {
   loadBoard(id: string): Promise<Board | null>;
   saveBoard(board: Board): Promise<void>;
   deleteBoard(id: string): Promise<void>;
+  exportBoard(
+    board: Board,
+    format: "data" | "markdown" | "png",
+    image?: string,
+  ): Promise<boolean>;
+  importBoard(text: string): Promise<Board>;
   getAISettings(): Promise<AISettings>;
   setAISettings(settings: AISettingsInput): Promise<AISettings>;
   testAIConnection(settings: AISettingsInput): Promise<AIConnectionResult>;

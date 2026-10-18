@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync } from "node:fs";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { maskKey, SavedKeyStore, type SecretCipher } from "./secret-store.js";
@@ -50,6 +50,11 @@ import {
   aiSettingsInputSchema,
   idSchema,
 } from "../src/shared/validation.js";
+import {
+  conversationTransferSchema,
+  transferMessageSchema,
+  type BoardTransfer,
+} from "../src/shared/transfer.js";
 
 const CTX = BACKGROUND_CONTEXT;
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -279,8 +284,11 @@ function messageText(message: Message): string {
 export function historyFromEntries(
   entries: readonly EntryRecord[],
 ): ChatMessage[] {
-  return entries.flatMap((entry) =>
-    (entry.model ?? []).flatMap((message, index): ChatMessage[] => {
+  return entries.flatMap((entry) => {
+    if (entry.kind === "atlas.imported-message") {
+      return [transferMessageSchema.parse(entry.data)];
+    }
+    return (entry.model ?? []).flatMap((message, index): ChatMessage[] => {
       if (message.role !== "user" && message.role !== "assistant") return [];
       if (entry.kind !== "pi.user" && entry.kind !== "pi.assistant") return [];
       const text = messageText(message);
@@ -295,8 +303,8 @@ export function historyFromEntries(
           ).toISOString(),
         },
       ];
-    }),
-  );
+    });
+  });
 }
 
 type ActiveRun = {
@@ -1005,6 +1013,78 @@ export class AIRuntime {
     const harness = await this.openBoard(boardId, stickyId);
     const conversation = await this.findConversation(harness, stickyId, false);
     if (conversation) await conversation.abort(CTX);
+  }
+
+  /** Restore passive transcript entries. This never resumes scheduling or calls a provider. */
+  async importHistory(
+    boardId: string,
+    input: BoardTransfer["conversations"][number],
+  ): Promise<void> {
+    idSchema.parse(boardId);
+    const { noteId, messages } = conversationTransferSchema.parse(input);
+    const harness = await this.openBoard(boardId, noteId);
+    const conversation = (await this.findConversation(harness, noteId, true))!;
+    await conversation.commit(async (tx) => {
+      const existing = await tx.scanEntries(
+        { conversationId: conversation.id },
+        1,
+      );
+      if (existing.items.some((entry) => entry.model?.length))
+        throw new Error("不能覆盖已有对话。");
+      for (const [index, message] of messages.entries()) {
+        const timestamp = Date.parse(message.createdAt);
+        const model: Message =
+          message.role === "user"
+            ? { role: "user", content: message.text, timestamp }
+            : {
+                role: "assistant",
+                content: [{ type: "text", text: message.text }],
+                api: "openai-completions",
+                provider: "openai",
+                model: "imported",
+                stopReason: "stop",
+                timestamp,
+                usage: {
+                  input: 0,
+                  output: 0,
+                  cacheRead: 0,
+                  cacheWrite: 0,
+                  totalTokens: 0,
+                  cost: {
+                    input: 0,
+                    output: 0,
+                    cacheRead: 0,
+                    cacheWrite: 0,
+                    total: 0,
+                  },
+                },
+              };
+        await tx.appendEntry(conversation.id, {
+          kind: "atlas.imported-message",
+          model: [model],
+          data: {
+            ...message,
+            // Imported ids occupy a separate namespace from this database's durable entries.
+            id: `imported-${index}`,
+          },
+        });
+      }
+    }, CTX);
+  }
+
+  /** Only used to roll back a failed import under its freshly allocated board id. */
+  async discardImportedBoard(boardId: string): Promise<void> {
+    idSchema.parse(boardId);
+    for (const [key, owner] of this.owners) {
+      if (!key.startsWith(`${boardId}:`)) continue;
+      const harness = await owner;
+      await harness.close(CTX);
+      this.owners.delete(key);
+    }
+    await rm(join(this.directory, "boards", boardId), {
+      recursive: true,
+      force: true,
+    });
   }
 
   async getHistory(boardId: string, stickyId: string): Promise<AIHistory> {

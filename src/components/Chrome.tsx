@@ -30,6 +30,8 @@ export function Palette({
   onNew,
   onWalkthrough,
   onSettings,
+  onImport,
+  onExport,
   onClose,
 }: {
   boards: BoardSummary[];
@@ -39,6 +41,8 @@ export function Palette({
   onNew: () => void;
   onWalkthrough: () => void;
   onSettings: () => void;
+  onImport: () => void;
+  onExport: () => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -69,6 +73,20 @@ export function Palette({
         current: false,
       },
       {
+        key: "+import",
+        label: "导入画板",
+        hint: "学习数据",
+        run: onImport,
+        current: false,
+      },
+      {
+        key: "+export",
+        label: "导出当前画板",
+        hint: "数据 / Markdown / 截图",
+        run: onExport,
+        current: false,
+      },
+      {
         key: "+ai",
         label: "设置",
         hint: `${MOD}.`,
@@ -76,7 +94,17 @@ export function Palette({
         current: false,
       },
     ],
-    [boards, q, currentId, onPick, onNew, onWalkthrough, onSettings],
+    [
+      boards,
+      q,
+      currentId,
+      onPick,
+      onNew,
+      onWalkthrough,
+      onSettings,
+      onImport,
+      onExport,
+    ],
   );
   useEffect(() => setCursor(0), [q]);
   return (

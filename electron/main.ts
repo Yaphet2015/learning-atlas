@@ -7,10 +7,18 @@ import {
   safeStorage,
 } from "electron";
 import path from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { BoardStore } from "./board-store.js";
+import { importTransferredBoard } from "./board-transfer.js";
+import {
+  collectBoardTransfer,
+  EXPORT_FORMATS,
+  exportFilename,
+  transferMarkdown,
+  TRANSFER_BYTES,
+} from "../src/shared/transfer.js";
 import { migrateLegacyUserData } from "./legacy-data.js";
 import { installSystemFetch } from "./system-fetch.js";
 import { AIRuntime, smokeDurableStorage } from "./ai-runtime.js";
@@ -124,6 +132,54 @@ async function bootstrap(): Promise<void> {
     handle("studyboard:load", (value) => store.load(id.parse(value)));
     handle("studyboard:save", (value) => store.save(boardSchema.parse(value)));
     handle("studyboard:delete", (value) => store.delete(id.parse(value)));
+    handle("studyboard:import", (value) => {
+      if (closePending) throw new Error("正在关闭应用，请稍后重试。");
+      return importTransferredBoard(
+        z.string().max(TRANSFER_BYTES).parse(value),
+        store,
+        runtime,
+      );
+    });
+    handle("studyboard:export", async (value, kind, image) => {
+      const board = boardSchema.parse(value);
+      const format = z.enum(["data", "markdown", "png"]).parse(kind);
+      const { name, extension } = EXPORT_FORMATS[format];
+      let data: string | Buffer;
+      if (format === "png") {
+        const png = z
+          .string()
+          .max(TRANSFER_BYTES * 1.4)
+          .regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/)
+          .parse(image);
+        data = Buffer.from(
+          png.slice("data:image/png;base64,".length),
+          "base64",
+        );
+        if (
+          data.length > TRANSFER_BYTES ||
+          !data
+            .subarray(0, 8)
+            .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+        )
+          throw new Error("截图格式无效或超过 64 MB。");
+      } else {
+        const transfer = await collectBoardTransfer(board, (b, n) =>
+          runtime.getHistory(b, n),
+        );
+        data =
+          format === "data"
+            ? JSON.stringify(transfer)
+            : transferMarkdown(transfer);
+      }
+      const result = await dialog.showSaveDialog(window!, {
+        title: "导出当前画板",
+        defaultPath: exportFilename(board.title, format),
+        filters: [{ name, extensions: [extension] }],
+      });
+      if (result.canceled || !result.filePath) return false;
+      await writeFile(result.filePath, data, { mode: 0o600 });
+      return true;
+    });
     handle("studyboard:ai-settings", () => runtime.getSettings());
     handle("studyboard:configure-ai", (value) =>
       runtime.setSettings(settingsSchema.parse(value)),

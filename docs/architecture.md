@@ -22,6 +22,12 @@ Runtime snapshots restore messages; streaming deltas update the visible answer, 
 
 The interface shows context references before submission. Free notes can be associated with a node or relation through the inspector. AI responses remain in notes; adding a response to the map opens an editing dialog and requires an explicit user action. Viewing/expanding a concept never marks it understood; self-assessment is a separate user control. Prediction, manipulation and explanation are optional, without forced tests or gates.
 
+## Portable learning records
+
+The versioned `.studyboard.json` transfer format contains one validated board and complete per-note text transcripts. Export reads durable history rather than the bounded renderer cache, carries cached exercise metadata, and refuses running conversations or failed history reads. It contains no provider settings, credentials, executable content or pending tasks. The same snapshot can be exported as Markdown. PNG captures all rendered knowledge cards and edges at map coordinates, independent of the current pan and zoom; it uses system fonts and limits raster size.
+
+Import validates the complete file (up to 64 MB), allocates a new board ID, restores each transcript as passive model-context entries in that board's isolated SQLite databases, then publishes the board. A failed import removes its new board and databases. Imported entries use separate message IDs to avoid collisions with newly generated durable messages. Restoring and viewing transcripts never resumes scheduling; the recipient's explicit next question uses their own model configuration. Board JSON still caches only the most recent 200 messages. The drawer offers a separate complete-transcript reader. Browser preview retains imported full histories separately in localStorage and restores the previous history storage if saving the new board fails.
+
 ## Generated visuals
 
 AI graph responses are data-only JSON, limited to a small number of nodes and edges. Optional process/parts/comparison visuals use bounded labels and a literal/analogy marker, rendered by trusted components. No model-authored HTML, SVG scripts, JavaScript, tools or arbitrary network resources are executed. React escapes plain text. AI claims are not automatically verified.

@@ -9,7 +9,7 @@ import type {
   EntryId,
   ConversationId,
 } from "@earendil-works/pi-durable";
-import type { AIRequest, AIUpdate } from "../src/shared/types";
+import type { AIRequest, AIUpdate, ChatMessage } from "../src/shared/types";
 
 // Only the provider transport is simulated. Harness, SQLite, documents, scheduling and watches are real SDK 1.3.0.
 const transport = vi.hoisted(() => ({
@@ -177,6 +177,49 @@ const configureRuntime = (runtime: AIRuntime) =>
     baseUrl: "https://api.openai.com/v1",
     apiKey: "SECRET_TEST_KEY",
   });
+
+describe("imported conversation continuation", () => {
+  it("restores over 200 messages without provider calls and includes old history in the next question after reopening", async () => {
+    const runtime = createRuntime();
+    const messages: ChatMessage[] = Array.from({ length: 242 }, (_, i) => ({
+      id: `shared-${i}`,
+      role: i % 2 ? "assistant" : "user",
+      text: `共享学习记录 ${i}`,
+      createdAt: new Date(1_700_000_000_000 + i).toISOString(),
+      ...(i === 1 ? { meta: { checked: [1], laid: true } } : {}),
+    }));
+    messages[241].text = "最后的长回答".repeat(7000);
+    const restored = messages.map((m, index) => ({
+      ...m,
+      id: `imported-${index}`,
+    }));
+    await runtime.importHistory("board-one", { noteId: "note-one", messages });
+    expect(transport.calls).toHaveLength(0);
+    expect(await runtime.getHistory("board-one", "note-one")).toEqual({
+      messages: restored,
+      running: false,
+    });
+    await runtime.close();
+    const reopened = createRuntime();
+    expect(
+      (await reopened.getHistory("board-one", "note-one")).messages,
+    ).toEqual(restored);
+    expect(transport.calls).toHaveLength(0);
+    await configureRuntime(reopened);
+    await reopened.ask(request({ prompt: "继续刚才的学习" }));
+    await vi.waitFor(() => expect(transport.calls).toHaveLength(1));
+    expect(transport.calls[0]).toContain("共享学习记录 0");
+    expect(transport.calls[0]).toContain(messages[241].text);
+    await vi.waitFor(async () =>
+      expect(
+        (await reopened.getHistory("board-one", "note-one")).messages,
+      ).toHaveLength(244),
+    );
+    await expect(
+      reopened.importHistory("board-one", { noteId: "note-one", messages }),
+    ).rejects.toThrow("不能覆盖");
+  });
+});
 
 describe("session-only settings and request boundaries", () => {
   it("fails clearly without credentials and does not start a provider call", async () => {
