@@ -119,6 +119,8 @@ export const stickyNoteSchema = z
     attachedTo: attachmentSchema.optional(),
     messages: z.array(chatMessageSchema).max(LIMITS.messagesPerNote),
     excludedRefs: z.array(z.string().max(200)).max(100).optional(),
+    contextCards: z.array(idSchema).max(LIMITS.contextReferences).optional(),
+    createdAt: timestampSchema.optional(),
   })
   .strict();
 export const sceneSchema = z

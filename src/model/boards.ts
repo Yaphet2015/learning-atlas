@@ -148,6 +148,7 @@ export function newNote(
     position: { ...position },
     ...(attachment ? { attachedTo: { ...attachment } } : {}),
     messages: [],
+    createdAt: now(),
   };
 }
 

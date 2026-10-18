@@ -15,6 +15,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   Square,
   SquarePlus,
   X,
@@ -30,6 +31,9 @@ import { displayMessage } from "../model/kickoff";
 import { outlineOf, type OutlineItem } from "../model/answer";
 import { AnswerBlocks } from "./AnswerBlocks";
 import { refKey } from "../model/context";
+import { toggleContextCard } from "../model/selection";
+import { sectionNumbers } from "../model/layout";
+import { LIMITS } from "../shared/validation";
 
 const LEVEL = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const STATUS: Record<string, string> = {
@@ -78,21 +82,101 @@ function refSummary(
 }
 
 /** 参考: one line normally; opens in place into a checklist. */
+/** Every card on the board, searchable; ticking one adds it to this conversation. */
+function CardPicker({
+  nodes,
+  included,
+  full,
+  onToggle,
+  onDone,
+}: {
+  nodes: ConceptNode[];
+  included: (id: string) => boolean;
+  full: boolean;
+  onToggle: (id: string) => void;
+  onDone: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const numbers = sectionNumbers(nodes);
+  const q = query.trim().toLowerCase();
+  const cards = nodes
+    .filter((n) => n.parentId !== null)
+    .map((n) => ({ n, no: numbers.get(n.id) ?? "" }))
+    .sort((a, b) => a.no.localeCompare(b.no, undefined, { numeric: true }))
+    .filter(
+      ({ n, no }) =>
+        !q || n.title.toLowerCase().includes(q) || no.toLowerCase().includes(q),
+    );
+  return (
+    <div className="ctx-picker" role="group" aria-label="添加卡片">
+      <div className="ctx-search">
+        <Search size={14} className="ico" />
+        <input
+          autoFocus
+          aria-label="搜索卡片"
+          placeholder="搜索这张白板的卡片…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              onDone();
+            }
+          }}
+        />
+        <button className="btn sm" onClick={onDone}>
+          完成
+        </button>
+      </div>
+      <ul className="ctx-list">
+        {cards.map(({ n, no }) => {
+          const on = included(n.id);
+          return (
+            <li key={n.id}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={!on && full}
+                  onChange={() => onToggle(n.id)}
+                />
+                <span className="no">{no}</span>
+                <span className="tt" title={n.title}>
+                  {n.title}
+                </span>
+                <span className="lv">
+                  L{depth(nodes, n.id)} · {STATUS[n.status] ?? ""}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+        {!cards.length && <li className="add-hint">没有匹配的卡片</li>}
+      </ul>
+    </div>
+  );
+}
+
 function Refs({
   refs,
   excluded,
+  contextCards,
   nodes,
   open,
   onToggleOpen,
   onExclude,
+  onCards,
 }: {
   refs: ContextReference[];
   excluded: string[];
+  contextCards: string[];
   nodes: ConceptNode[];
   open: boolean;
   onToggleOpen: () => void;
   onExclude: (next: string[]) => void;
+  onCards: (patch: { contextCards: string[]; excludedRefs: string[] }) => void;
 }) {
+  const [adding, setAdding] = useState(false);
   // The root card is the 起点问题 itself; list it once.
   const list = refs.filter(
     (r) =>
@@ -160,11 +244,37 @@ function Refs({
               </li>
             );
           })}
-          <li className="add-hint">
-            <Plus size={14} className="ico" />
-            添加卡片：在画布上点选一张卡，它就会被带上
-          </li>
+          {!adding && (
+            <li>
+              <button className="add-card" onClick={() => setAdding(true)}>
+                <Plus size={14} className="ico" />
+                添加卡片
+              </button>
+            </li>
+          )}
         </ul>
+      )}
+      {open && adding && (
+        <CardPicker
+          nodes={nodes}
+          full={contextCards.length >= LIMITS.contextReferences - 2}
+          included={(id) =>
+            contextCards.includes(id) ||
+            (refs.some((r) => r.kind === "node" && r.id === id) &&
+              !excluded.includes(`node:${id}`))
+          }
+          onToggle={(id) =>
+            onCards(
+              toggleContextCard(
+                { contextCards, excludedRefs: excluded },
+                id,
+                !contextCards.includes(id) &&
+                  refs.some((r) => r.kind === "node" && r.id === id),
+              ),
+            )
+          }
+          onDone={() => setAdding(false)}
+        />
       )}
     </div>
   );
@@ -560,6 +670,12 @@ export function Drawer({
                 {anchor && anchor.parentId !== null ? anchorTitle : "起点问题"}
               </button>
             </span>
+            {!!note.contextCards?.length && (
+              <>
+                <span className="dot" />
+                <span>另带 {note.contextCards.length} 张卡</span>
+              </>
+            )}
             <span className="dot" />
             <span>{note.messages.length} 条消息</span>
           </div>
@@ -619,10 +735,12 @@ export function Drawer({
       <Refs
         refs={refs}
         excluded={note.excludedRefs ?? []}
+        contextCards={note.contextCards ?? []}
         nodes={nodes}
         open={refsOpen}
         onToggleOpen={() => setRefsOpen(!refsOpen)}
         onExclude={(excludedRefs) => onChange({ excludedRefs })}
+        onCards={(patch) => onChange(patch)}
       />
       <div className="rule-h" />
       <div className="thread" ref={thread} onScroll={onScroll}>

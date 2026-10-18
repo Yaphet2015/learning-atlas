@@ -841,6 +841,13 @@ kbd,
   padding: 6px 8px 6px 14px;
   box-shadow: var(--shadow-2);
 }
+.multi-bar {
+  padding: 6px 6px 6px 16px;
+  gap: 6px;
+}
+.multi-bar .lab {
+  margin-right: 6px;
+}
 .relation-bar input {
   border: 0;
   border-bottom: 1px dashed var(--dash);
@@ -1229,6 +1236,60 @@ kbd,
   padding: 5px 6px;
   font-size: 13px;
   color: var(--ink-3);
+}
+.ctx-list .add-card {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+  font: 700 13.5px var(--kai);
+  color: var(--ink-2);
+  text-align: left;
+}
+.ctx-list .add-card:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink);
+}
+.ctx-list .no {
+  flex: none;
+  min-width: 30px;
+  font: 400 11.5px var(--kai-mono);
+  color: var(--ink-3);
+}
+.ctx-picker {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+.ctx-picker .ctx-list {
+  max-height: 220px;
+  margin: 4px 0 0;
+}
+.ctx-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 8px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.ctx-search .ico {
+  color: var(--ink-3);
+  flex: none;
+}
+.ctx-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: 400 14px var(--kai);
+  color: var(--ink);
 }
 .rule-h {
   height: 1px;
@@ -2605,4 +2666,15 @@ kbd,
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* ---- marquee multi-select: a quiet ink outline, not the library's blue */
+.react-flow__selection {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--ink) 45%, transparent);
+  border-radius: var(--r-sm);
+}
+/* Picked cards show their own selected state; no group rectangle over them. */
+.react-flow__nodesselection-rect {
+  display: none;
 }

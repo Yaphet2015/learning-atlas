@@ -8,13 +8,25 @@ export async function installFakeAtlas(
   page: Page,
   configured = true,
   platform = "web",
+  /** Boards on "disk": kept in localStorage so they survive a reload, like the Electron files. */
+  seed?: unknown[],
 ) {
   await page.addInitScript(
-    ([isConfigured, os]: [boolean, string]) => {
+    ([isConfigured, os, seeded]: [boolean, string, string | null]) => {
       const fullscreen = new Set<(value: boolean) => void>();
       (window as any).__setFullscreen = (value: boolean) =>
         fullscreen.forEach((l) => l(value));
-      const boards = new Map<string, any>();
+      const DISK = "fake-atlas-disk";
+      if (seeded && localStorage.getItem(DISK) === null)
+        localStorage.setItem(DISK, seeded);
+      const boards = new Map<string, any>(
+        (JSON.parse(localStorage.getItem(DISK) ?? "[]") as any[]).map((b) => [
+          b.id,
+          b,
+        ]),
+      );
+      const persist = () =>
+        localStorage.setItem(DISK, JSON.stringify([...boards.values()]));
       const listeners = new Set<(update: any) => void>();
       const asks: any[] = [];
       (window as any).__atlasAsks = asks;
@@ -61,8 +73,14 @@ export async function installFakeAtlas(
             updatedAt,
           })),
         loadBoard: async (id: string) => boards.get(id) ?? null,
-        saveBoard: async (board: any) => void boards.set(board.id, board),
-        deleteBoard: async (id: string) => void boards.delete(id),
+        saveBoard: async (board: any) => {
+          boards.set(board.id, board);
+          persist();
+        },
+        deleteBoard: async (id: string) => {
+          boards.delete(id);
+          persist();
+        },
         getAISettings: async () => ({
           model: "gpt-4o-mini",
           baseUrl: "https://api.openai.com/v1",
@@ -104,6 +122,10 @@ export async function installFakeAtlas(
         },
       };
     },
-    [configured, platform] as [boolean, string],
+    [configured, platform, seed ? JSON.stringify(seed) : null] as [
+      boolean,
+      string,
+      string | null,
+    ],
   );
 }

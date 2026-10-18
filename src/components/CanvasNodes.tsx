@@ -28,6 +28,8 @@ export type CardData = {
   createdAt?: string;
   scene?: SceneState;
   editing?: boolean;
+  /** Part of a multi-select: the per-card toolbar steps aside for the multi bar. */
+  multi?: boolean;
   linkMode?: boolean;
   dimmed?: boolean;
   /** The drawer is open on this card's note. */
@@ -272,7 +274,10 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
         </div>
       )}
       {!data.linkMode && <AddHandles data={data} />}
-      <SelectToolbar data={data} visible={!!selected && !data.editing} />
+      <SelectToolbar
+        data={data}
+        visible={!!selected && !data.editing && !data.multi}
+      />
     </article>
   );
 }

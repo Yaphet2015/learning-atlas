@@ -49,6 +49,10 @@ export interface StickyNote {
   messages: ChatMessage[];
   /** References the learner unticked: they are not sent to the AI. */
   excludedRefs?: string[];
+  /** Extra cards the learner chose as context (multi-select or the picker). */
+  contextCards?: string[];
+  /** When the conversation started; older notes have none. */
+  createdAt?: string;
 }
 export interface SceneState {
   width: number;

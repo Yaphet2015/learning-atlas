@@ -102,6 +102,8 @@ export function contextForNote(
     title: note.title || "当前便签",
     text: note.text,
   });
+  // Cards the learner picked come before the neighbourhood, so they are never cut.
+  for (const id of note.contextCards ?? []) addNode(id);
   const selected =
     selection?.kind === "node" || selection?.kind === "relation"
       ? selection
@@ -161,7 +163,10 @@ export function contextForNote(
       : selected?.kind === "node"
         ? selected.id
         : null;
-  const structure = serializeStructure(board, { anchor });
+  const structure = serializeStructure(board, {
+    anchor,
+    cards: note.contextCards,
+  });
   return contextBundleSchema.parse({
     topic,
     references,
