@@ -327,6 +327,9 @@ export function MapUnit() {
         zoomable
         position="top-left"
         className="atlas-minimap"
+        // Match the CSS box so the viewBox has the same aspect ratio; otherwise the
+        // mask's outer sub-path shows in the letterbox as a second frame.
+        style={{ width: 194, height: 120 }}
         nodeComponent={MiniNode}
         nodeClassName={(n) =>
           n.type === "ghost"
