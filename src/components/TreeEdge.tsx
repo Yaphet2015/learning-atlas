@@ -54,7 +54,7 @@ export function TreeEdge({ source, target, data }: EdgeProps<TreeEdgeType>) {
 
 export type SeqEdgeType = Edge<{ [key: string]: unknown }, "seq">;
 
-/** 先→后 tick between adjacent siblings: at most 28px, always ending at the later card. */
+/** 先→后 between adjacent siblings: a small shaftless chevron, centred in the gap. */
 export function SeqEdge({ source, target }: EdgeProps<SeqEdgeType>) {
   const a = useBox(source),
     b = useBox(target);
@@ -62,18 +62,17 @@ export function SeqEdge({ source, target }: EdgeProps<SeqEdgeType>) {
   const gap = b.x - (a.x + a.w);
   if (gap < 18) return null;
   const y = a.y + 28,
-    x2 = b.x - 6,
-    x1 = Math.max(a.x + a.w + 6, x2 - 28);
+    x2 = a.x + a.w + gap / 2 + 2.5;
+  // Quiet: --rule at half strength, a short open chevron, no shaft.
   return (
-    <g className="seq-edge">
-      <path
-        d={`M${x1} ${y} H${x2 - 6}`}
-        fill="none"
-        stroke="var(--ink-3)"
-        strokeWidth={1.25}
-        strokeLinecap="round"
-      />
-      <path d={arrowHead(x2, y, 0)} fill="var(--ink-3)" />
-    </g>
+    <path
+      className="seq-edge"
+      d={`M${x2 - 5} ${y - 4.5} L${x2} ${y} L${x2 - 5} ${y + 4.5}`}
+      fill="none"
+      stroke="color-mix(in srgb, var(--rule) 50%, transparent)"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   );
 }

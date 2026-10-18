@@ -132,3 +132,73 @@ test("the drawer is a labelled region; Esc closes it and returns focus to the ca
     "（教会我 12 条及以上）",
   );
 });
+
+test("once the first level exists, 「铺成第一层」 turns into a locate, never a duplicate", async ({
+  page,
+}) => {
+  // insuranceBoard(true): the root already has its 4 L1 cards.
+  const drawer = await open(page, insuranceBoard(true));
+  const cards = page.locator(".react-flow__node-concept");
+  await expect(cards).toHaveCount(6);
+  await expect(drawer.getByRole("button", { name: "铺成第一层" })).toHaveCount(
+    0,
+  );
+  const done = drawer.locator(".ans-outline .lay.done");
+  await expect(done).toHaveText("已铺成第一层 · 在画布上定位");
+  await done.getByRole("button", { name: "在画布上定位" }).click();
+  await expect(page.locator(".react-flow__node-root")).toHaveClass(/selected/);
+  // The primary button falls back to 整段作为一张卡; the menu offers locate only.
+  await drawer.getByRole("button", { name: "更多加入方式" }).click();
+  await expect(
+    drawer.getByRole("menuitem", { name: /已铺成第一层 · 在画布上定位/ }),
+  ).toBeVisible();
+  await drawer.getByRole("menuitem", { name: /已铺成第一层/ }).click();
+  await expect(cards).toHaveCount(6);
+});
+
+test("laying the outline flips it to the done state right away", async ({
+  page,
+}) => {
+  const drawer = await open(page, insuranceBoard(false));
+  await drawer.getByRole("button", { name: "铺成第一层" }).first().click();
+  await expect(page.locator(".react-flow__node-concept")).toHaveCount(4);
+  await expect(drawer.getByRole("button", { name: "铺成第一层" })).toHaveCount(
+    0,
+  );
+  await expect(drawer.locator(".lay.done")).toContainText("在画布上定位");
+});
+
+test("参考 keeps a trailing +N, and 我的笔记 is one quiet row when empty", async ({
+  page,
+}) => {
+  const drawer = await open(page, insuranceBoard(true));
+  const ctx = drawer.locator(".ctx");
+  await expect(ctx.locator(".more")).toHaveText(/^\+\d+$/);
+  const [items, more, box] = await Promise.all([
+    ctx.locator(".items").boundingBox(),
+    ctx.locator(".more").boundingBox(),
+    ctx.boundingBox(),
+  ]);
+  // The count sits after the names and inside the row.
+  expect(more!.x).toBeGreaterThanOrEqual(items!.x + items!.width - 1);
+  expect(more!.x + more!.width).toBeLessThanOrEqual(box!.x + box!.width);
+  const note = drawer.locator(".my-note");
+  await expect(note).toContainText("我的笔记");
+  const h = (await note.boundingBox())!.height;
+  expect(h).toBeLessThan(36);
+  const border = await note.evaluate(
+    (e) => getComputedStyle(e).borderLeftWidth,
+  );
+  expect(border).toBe("0px");
+});
+
+test("the root's + stays off the connector origin unless hovered", async ({
+  page,
+}) => {
+  await open(page, insuranceBoard(true));
+  const plus = page.locator(".react-flow__node-root .plus.below");
+  await page.mouse.move(5, 500);
+  await expect(plus).toHaveCSS("opacity", "0");
+  await page.locator(".react-flow__node-root").hover();
+  await expect(plus).toHaveCSS("opacity", "1");
+});

@@ -102,7 +102,8 @@ function Refs({
       ),
   );
   const on = list.filter((r) => !excluded.includes(refKey(r)));
-  const shown = on.slice(0, 4);
+  // A few names, ellipsized; the +N count after them never gets cut off.
+  const shown = on.slice(0, 3);
   return (
     <div className={`ctx-wrap ${open ? "open" : ""}`}>
       <button
@@ -112,7 +113,7 @@ function Refs({
         onClick={onToggleOpen}
       >
         <span className="k">参考</span>
-        <span className="items">
+        <span className="items" title={on.map(refTitle).join(" · ")}>
           {open
             ? `${on.length} 项 · AI 只看到勾选的内容`
             : shown.map(refTitle).join(" · ")}
@@ -241,11 +242,16 @@ function AnswerActs({
   kickoff,
   selected,
   onLay,
+  onLocate,
+  placed,
   onPromote,
   onRedo,
 }: {
   message: ChatMessage;
   outline: OutlineItem[];
+  /** The first level is already on the canvas: locate it, never lay duplicates. */
+  placed: boolean;
+  onLocate: () => void;
   /** The answer has an outline and the anchor has no children yet. */
   recommendLay: boolean;
   kickoff?: { onAccept: () => void; busy: boolean };
@@ -257,7 +263,7 @@ function AnswerActs({
   const [open, setOpen] = useState(false);
   // Kickoff without an outline in the answer: AI drafts the first level.
   const lay =
-    outline.length > 1 && !message.meta?.laid
+    outline.length > 1 && !placed
       ? onLay
       : kickoff
         ? kickoff.onAccept
@@ -300,24 +306,34 @@ function AnswerActs({
         </button>
         {open && (
           <Menu className="acts-menu" onClose={() => setOpen(false)}>
-            <button
-              className="it"
-              role="menuitem"
-              disabled={!lay}
-              onClick={() => lay?.()}
-            >
-              <Layers3 size={16} className="ico" />
-              <span>
-                铺成第一层{recommendLay || kickoff ? "（推荐）" : ""}
-                <span className="sub">
-                  {outline.length > 1
-                    ? `骨架里的 ${outline.length} 块，各成一张卡`
-                    : kickoff
-                      ? "让 AI 按你的回答拆出来"
-                      : "这条回答里没有骨架"}
+            {placed && outline.length > 1 ? (
+              <button className="it" role="menuitem" onClick={onLocate}>
+                <Locate size={16} className="ico" />
+                <span>
+                  已铺成第一层 · 在画布上定位
+                  <span className="sub">第一层已经在画布上，不会重复添加</span>
                 </span>
-              </span>
-            </button>
+              </button>
+            ) : (
+              <button
+                className="it"
+                role="menuitem"
+                disabled={!lay}
+                onClick={() => lay?.()}
+              >
+                <Layers3 size={16} className="ico" />
+                <span>
+                  铺成第一层{recommendLay || kickoff ? "（推荐）" : ""}
+                  <span className="sub">
+                    {outline.length > 1
+                      ? `骨架里的 ${outline.length} 块，各成一张卡`
+                      : kickoff
+                        ? "让 AI 按你的回答拆出来"
+                        : "这条回答里没有骨架"}
+                  </span>
+                </span>
+              </button>
+            )}
             <button
               className="it"
               role="menuitem"
@@ -617,14 +633,21 @@ export function Drawer({
             <StructuredVisual visual={anchor.visual} />
           </section>
         )}
-        <textarea
-          className="note-text"
-          aria-label="批注内容"
-          placeholder="写下你的理解，或一个没想通的地方……"
-          rows={1}
-          value={note.text}
-          onChange={(e) => onChange({ text: e.target.value })}
-        />
+        <label className={`my-note ${note.text ? "has" : ""}`}>
+          <span className="my-note-k">
+            <Pencil size={14} className="ico" />
+            我的笔记
+          </span>
+          <textarea
+            className="note-text"
+            aria-label="批注内容"
+            placeholder="写下你的理解，或一个没想通的地方……"
+            rows={1}
+            value={note.text}
+            onChange={(e) => onChange({ text: e.target.value })}
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+        </label>
         {note.messages.map((m) => {
           if (m.role === "user")
             return (
@@ -633,6 +656,8 @@ export function Drawer({
               </div>
             );
           const outline = outlineOf(m.text);
+          // Laid from this answer, or the anchor already has its first level.
+          const placed = !!m.meta?.laid || anchorHasChildren;
           const layItems = () => onLay(outline, m.id);
           return (
             <div key={m.id} className="msg assistant ans">
@@ -643,7 +668,7 @@ export function Drawer({
               <AnswerBlocks
                 text={m.text}
                 actions={{
-                  laid: m.meta?.laid,
+                  laid: placed,
                   onLocate,
                   onLay: outline.length > 1 ? layItems : undefined,
                   // “+” on one row: just that item, without marking the answer laid.
@@ -657,7 +682,9 @@ export function Drawer({
                 <AnswerActs
                   message={m}
                   outline={outline}
-                  recommendLay={outline.length > 1 && !anchorHasChildren}
+                  recommendLay={outline.length > 1 && !placed}
+                  placed={placed}
+                  onLocate={onLocate}
                   kickoff={m === lastAnswer ? kickoff : undefined}
                   selected={selectedText}
                   onLay={layItems}
