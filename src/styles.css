@@ -917,18 +917,189 @@ kbd,
   padding: 16px 18px 12px;
   gap: 10px;
 }
-.drawer header {
+.dhead {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 4px;
+  margin-right: -6px;
+}
+.dhead .t {
+  flex: 1;
+  min-width: 0;
 }
 .drawer-title {
+  width: 100%;
   min-width: 0;
-  flex: 1;
   border: 0;
+  padding: 0;
   background: transparent;
   outline: none;
-  font: 700 18px var(--kai);
+  font: 700 19px/1.3 var(--kai);
+  color: var(--ink);
+  text-overflow: ellipsis;
+  border-radius: var(--r-xs);
+}
+.drawer-title::placeholder {
+  color: var(--ink);
+}
+.drawer-title:focus {
+  box-shadow: 0 2px 0 var(--border-strong);
+}
+.dhead .m {
+  margin-top: 3px;
+  font: 400 12.5px var(--kai);
+  color: var(--ink-3);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dhead .m > span:nth-child(3) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dhead .m .dot {
+  width: 3px;
+  height: 3px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+.dhead .m .link {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.ib {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+  border-radius: var(--r-sm);
+  flex: none;
+}
+.ib:hover,
+.ib.on {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.menu-anchor,
+.split {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  width: 220px;
+  padding: 6px;
+  z-index: 30;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+  display: flex;
+  flex-direction: column;
+}
+.menu.acts-menu {
+  /* The last answer sits at the bottom of the thread: open upwards. */
+  left: 0;
+  right: auto;
+  top: auto;
+  bottom: calc(100% + 4px);
+  width: 250px;
+}
+.menu .it {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 6px 10px;
+  font: 400 14.5px/1.45 var(--kai);
+  color: var(--ink);
+  border-radius: var(--r-sm);
+  text-align: left;
+}
+.menu .it .ico {
+  margin-top: 2px;
+  flex: none;
+}
+.menu .it .kbd {
+  margin-left: auto;
+}
+.menu .it:hover:enabled,
+.menu .it:focus-visible {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  outline: none;
+}
+.menu .it:disabled {
+  color: var(--ink-3);
+}
+.menu .it.danger {
+  color: var(--accent-ink);
+}
+.menu .sepm {
+  height: 1px;
+  background: var(--border);
+  margin: 5px 6px;
+}
+.menu .sub {
+  font: 400 12px var(--kai);
+  color: var(--ink-3);
+  display: block;
+}
+.acts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 2px;
+}
+.split {
+  display: inline-flex;
+  gap: 1px;
+}
+.split .btn.primary:first-child {
+  border-radius: var(--r-sm) 3px 3px var(--r-sm);
+}
+.split .btn.primary.caret {
+  padding: 0 8px;
+  border-radius: 3px var(--r-sm) var(--r-sm) 3px;
+}
+.seltb {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  z-index: 30;
+  white-space: nowrap;
+  background: var(--ink);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+}
+.seltb button {
+  font: 700 13.5px var(--kai);
+  color: var(--paper);
+  padding: 3px 9px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--r-sm);
+}
+.seltb button + button {
+  border-left: 1px solid color-mix(in srgb, var(--paper) 22%, transparent);
+  border-radius: 0;
+}
+.kickoff-tip {
+  display: block;
 }
 .refs > div {
   display: flex;
@@ -958,13 +1129,16 @@ kbd,
 .note-text {
   border: 0;
   background: transparent;
-  resize: vertical;
-  min-height: 52px;
+  resize: none;
+  field-sizing: content;
+  min-height: 24px;
+  max-height: 160px;
   outline: none;
   color: var(--ink-2);
-  font-size: 14px;
+  font: 14px/1.6 var(--kai);
   border-left: 2px solid var(--accent);
-  padding-left: 10px;
+  padding: 0 0 0 10px;
+  flex: none;
 }
 /* ---- answers, rendered as blocks (never raw markdown) */
 .bubble {

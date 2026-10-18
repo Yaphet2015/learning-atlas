@@ -28,6 +28,7 @@ import {
   buildMapFromAI,
 } from "./model/boards";
 import { contextForNote } from "./model/context";
+import { plain } from "./model/answer";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import {
   firstLevelPrompt,
@@ -41,6 +42,7 @@ import {
   addChild,
   addSibling,
   cacheMessages,
+  layOutline,
   mergeHistory,
   removeSelection,
   reorder,
@@ -841,33 +843,36 @@ export default function App() {
   )?.attachedTo;
   const drawerAnchor =
     drawerNoteAttachment?.kind === "node" ? drawerNoteAttachment.id : null;
-  // The drawer squeezes the canvas (CSS). Once the container has resized, bring
-  // the anchor and its children into view, but only if the anchor is not
-  // already visible: never move the viewport needlessly.
-  useEffect(() => {
-    if (!drawerAnchor) return;
-    const t = setTimeout(() => {
+  /** Where 「铺成第一层」 lays cards: the anchor card, or the root for a free note. */
+  const drawerAnchorOrRoot =
+    drawerAnchor ?? board?.nodes.find((n) => n.parentId === null)?.id ?? "";
+  /** Bring a card and its children into the visible canvas; with onlyIfHidden, leave a visible card alone. */
+  const frameFamily = useCallback(
+    (anchorId: string, onlyIfHidden = false) => {
       const pane = document
         .querySelector(".react-flow")
         ?.getBoundingClientRect();
-      const anchor = flow.getInternalNode(drawerAnchor);
+      const anchor = flow.getInternalNode(anchorId);
       if (!pane || !anchor?.measured.width) return;
-      const a = anchor.internals.positionAbsolute;
-      const tl = flow.flowToScreenPosition(a);
-      const br = flow.flowToScreenPosition({
-        x: a.x + anchor.measured.width,
-        y: a.y + (anchor.measured.height ?? 0),
-      });
-      const visible =
-        tl.x >= pane.left &&
-        br.x <= pane.right - 36 &&
-        tl.y >= pane.top &&
-        br.y <= pane.bottom;
-      if (visible) return;
+      if (onlyIfHidden) {
+        const a = anchor.internals.positionAbsolute;
+        const tl = flow.flowToScreenPosition(a);
+        const br = flow.flowToScreenPosition({
+          x: a.x + anchor.measured.width,
+          y: a.y + (anchor.measured.height ?? 0),
+        });
+        if (
+          tl.x >= pane.left &&
+          br.x <= pane.right - 36 &&
+          tl.y >= pane.top &&
+          br.y <= pane.bottom
+        )
+          return;
+      }
       const ids = [
-        drawerAnchor,
+        anchorId,
         ...(boardRef.current?.nodes ?? [])
-          .filter((n) => n.parentId === drawerAnchor)
+          .filter((n) => n.parentId === anchorId)
           .map((n) => n.id),
       ];
       const boxes = ids.flatMap((id) => {
@@ -894,9 +899,17 @@ export default function App() {
         },
         { padding: 0.18, duration: 320 },
       );
-    }, 300);
+    },
+    [flow],
+  );
+  // The drawer squeezes the canvas (CSS). Once the container has resized, bring
+  // the anchor and its children into view, but only if the anchor is not
+  // already visible: never move the viewport needlessly.
+  useEffect(() => {
+    if (!drawerAnchor) return;
+    const t = setTimeout(() => frameFamily(drawerAnchor, true), 300);
     return () => clearTimeout(t);
-  }, [drawerAnchor, flow]);
+  }, [drawerAnchor, frameFamily]);
   const nodes = useMemo<CanvasNode[]>(() => {
     if (!shown || !board) return [];
     const out: CanvasNode[] = [];
@@ -1321,11 +1334,37 @@ export default function App() {
           onPromote={(text) =>
             setPromote({ noteId: drawerNote.id, title: "新的发现", text })
           }
+          anchorHasChildren={board.nodes.some(
+            (n) => n.parentId === drawerAnchorOrRoot,
+          )}
+          onLay={(items, messageId) => {
+            const ids = items.map(() => newId("concept"));
+            edit((b) =>
+              layOutline(
+                b,
+                drawerAnchorOrRoot,
+                items.map((i) => ({ head: i.head, body: plain(i.rest) })),
+                ids,
+                messageId ? { noteId: drawerNote.id, messageId } : undefined,
+              ),
+            );
+            showToast(
+              ids.length > 1
+                ? `已铺成 ${ids.length} 张卡，⌘Z 可以撤销。`
+                : `已加成一张卡：${items[0].head}。⌘Z 可以撤销。`,
+            );
+            setTimeout(() => frameFamily(drawerAnchorOrRoot), 120);
+          }}
+          onLocate={() => {
+            setSelection({ kind: "node", id: drawerAnchorOrRoot });
+            frameFamily(drawerAnchorOrRoot);
+          }}
           onRemove={() => {
             edit((b) =>
               removeSelection(b, { kind: "note", id: drawerNote.id }),
             );
             setDrawer(null);
+            showToast("已删除这张批注。⌘Z 可以撤销。");
           }}
           onClose={() => setDrawer(null)}
         />

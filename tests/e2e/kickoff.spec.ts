@@ -23,7 +23,8 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   await drawer.getByLabel("向 AI 提问").fill("知道折射，但不懂为什么是弯的");
   await drawer.getByLabel("发送提问").click();
   await expect(drawer.locator(".msg.assistant")).toHaveCount(2);
-  await drawer.getByRole("button", { name: "把第一层问题放上画布" }).click();
+  // No outline in the kickoff answer: the primary action asks AI for the first level.
+  await drawer.getByRole("button", { name: "铺成第一层", exact: true }).click();
   await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
   // Side by side on the first level, not a vertical chain.
   const ys = await page
@@ -43,7 +44,7 @@ test("a new question starts the guided kickoff and accepts the first level onto 
     0,
   );
   await expect(
-    drawer.getByRole("button", { name: "把第一层问题放上画布" }),
+    drawer.getByRole("button", { name: "铺成第一层", exact: true }),
   ).toHaveCount(0);
 });
 
