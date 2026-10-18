@@ -1,0 +1,84 @@
+import { test, expect, type Page } from "@playwright/test";
+import { installFakeAtlas } from "./fake-atlas";
+
+async function newQuestion(page: Page, topic: string) {
+  await page.goto("/");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.getByRole("button", { name: /新的问题/ }).click();
+  await page.getByLabel("新白板问题").fill(topic);
+  await page.getByRole("button", { name: "开始探索", exact: true }).click();
+}
+
+test("a new question starts the guided kickoff and accepts the first level onto the canvas", async ({
+  page,
+}) => {
+  await installFakeAtlas(page);
+  await newQuestion(page, "彩虹是怎么形成的？");
+  const drawer = page.locator(".drawer");
+  // The AI asks what the learner already knows; the long instructions stay out of the thread.
+  await expect(drawer.locator(".msg.user")).toHaveText(
+    "我想从这里开始学，带我起步吧。",
+  );
+  await expect(drawer.locator(".msg.assistant")).toContainText("你听说过光的");
+  await drawer.getByLabel("向 AI 提问").fill("知道折射，但不懂为什么是弯的");
+  await drawer.getByLabel("发送提问").click();
+  await expect(drawer.locator(".msg.assistant")).toHaveCount(2);
+  await drawer.getByRole("button", { name: "把第一层问题放上画布" }).click();
+  await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
+  await expect(page.locator(".react-flow__node-concept").first()).toContainText(
+    "阳光里有哪些颜色？",
+  );
+  // The map request carries what the learner said; the kickoff entry is gone once the level exists.
+  const asks = await page.evaluate(() => (window as any).__atlasAsks);
+  expect(asks.map((a: any) => a.mode)).toEqual(["answer", "answer", "map"]);
+  expect(asks[2].prompt).toContain("知道折射，但不懂为什么是弯的");
+  await expect(page.getByRole("button", { name: /AI 带我开始/ })).toHaveCount(
+    0,
+  );
+  await expect(
+    drawer.getByRole("button", { name: "把第一层问题放上画布" }),
+  ).toHaveCount(0);
+});
+
+test("the lone root offers 「让 AI 带我开始」 and resumes the same conversation", async ({
+  page,
+}) => {
+  await installFakeAtlas(page);
+  await newQuestion(page, "彩虹是怎么形成的？");
+  await expect(page.locator(".drawer .msg.assistant")).toHaveCount(1);
+  await page.locator(".drawer").getByLabel("关闭").click();
+  const kickoff = page.getByRole("button", { name: "继续：AI 带我开始" });
+  await expect(kickoff).toBeVisible();
+  await kickoff.click();
+  await expect(page.locator(".drawer .msg.assistant")).toHaveCount(1);
+  expect(await page.evaluate(() => (window as any).__atlasAsks.length)).toBe(1);
+});
+
+test("without an AI provider the kickoff leads to settings", async ({
+  page,
+}) => {
+  await newQuestion(page, "How does a rainbow form?");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByLabel("关闭设置").click();
+  await page.getByRole("button", { name: "让 AI 带我开始" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator("#settings-title")).toHaveText("为你的问题连接 AI");
+});
+
+test("「测试连接」 shows success with model and latency, then a readable failure", async ({
+  page,
+}) => {
+  await installFakeAtlas(page, false);
+  await page.goto("/");
+  await page.getByRole("button", { name: "AI 设置", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(/API 密钥/).fill("good");
+  await dialog.getByRole("button", { name: "测试连接" }).click();
+  await expect(dialog.getByRole("status")).toHaveText(
+    "连接成功 · 已连到 gpt-4o-mini · 用时 0.8 秒",
+  );
+  await dialog.getByLabel(/API 密钥/).fill("bad");
+  await expect(dialog.getByRole("status")).toHaveText("");
+  await dialog.getByRole("button", { name: "测试连接" }).click();
+  await expect(dialog.getByRole("status")).toContainText("鉴权失败");
+});

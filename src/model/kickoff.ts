@@ -1,0 +1,56 @@
+import type { Board, StickyNote } from "../shared/types";
+
+/** The root question of a board. */
+export const rootOf = (board: Board) =>
+  board.nodes.find((n) => n.parentId === null);
+
+/** An AI board whose root question has no children yet: the user needs an obvious next step. */
+export function needsKickoff(board: Board | null | undefined): boolean {
+  if (!board || board.kind !== "ai") return false;
+  const root = rootOf(board);
+  return Boolean(root) && !board.nodes.some((n) => n.parentId === root!.id);
+}
+
+/** The drawer conversation attached to the root question, if any. */
+export function kickoffNote(board: Board): StickyNote | undefined {
+  const root = rootOf(board);
+  return root
+    ? board.notes.find(
+        (n) => n.attachedTo?.kind === "node" && n.attachedTo.id === root.id,
+      )
+    : undefined;
+}
+
+export const KICKOFF_MESSAGE = "我想从这里开始学，带我起步吧。";
+
+/**
+ * Sent in answer mode. Shown in the thread as the learner's own short line; the
+ * instructions after it ask the tutor to probe prior knowledge first.
+ */
+export function kickoffPrompt(topic: string): string {
+  return `${KICKOFF_MESSAGE}
+我的起点问题是：「${topic}」。
+请先别讲解。用 1–2 个简短、具体的问题问我对它已经知道些什么、想弄懂到什么程度；再用一句话说明我们接下来会先把它拆成哪几个按先后顺序的子问题。`;
+}
+
+/** What the learner said in the kickoff conversation (their own replies, not the kickoff line). */
+export function learnerAnswers(note: StickyNote | undefined): string[] {
+  return (note?.messages ?? [])
+    .filter((m) => m.role === "user" && !m.text.startsWith(KICKOFF_MESSAGE))
+    .map((m) => m.text.trim())
+    .filter(Boolean)
+    .slice(-3);
+}
+
+/** Map-mode prompt for the first level of child questions, informed by the learner's answers. */
+export function firstLevelPrompt(topic: string, answers: string[]): string {
+  const known = answers.length
+    ? `学习者说自己已经知道 / 想弄懂的是：${answers.map((a) => `「${a.slice(0, 300)}」`).join("；")}。据此跳过他已掌握的部分，从他的起点往下拆。`
+    : "学习者还没说自己知道什么，按初学者处理。";
+  return `为这个问题创建学习地图的第一层：「${topic}」。${known}
+只给 3 个按先后顺序（先→后）排列的子问题，每个标题写成一个具体的小问题，正文一两句说明为什么先问它。具体、直观、少文字。`;
+}
+
+/** The thread shows only the learner-facing line of the kickoff request. */
+export const displayMessage = (role: "user" | "assistant", text: string) =>
+  role === "user" && text.startsWith(KICKOFF_MESSAGE) ? KICKOFF_MESSAGE : text;

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ArrowUp, Plus, Square, X } from "lucide-react";
+import { ArrowUp, LoaderCircle, Plus, Square, X } from "lucide-react";
 import type { ContextReference, StickyNote } from "../shared/types";
 import { RoughBox } from "./sketch/RoughBox";
+import { displayMessage } from "../model/kickoff";
 
 /** AI conversations live in a right-hand drawer, attached to a card or free. */
 export function Drawer({
@@ -13,6 +14,7 @@ export function Drawer({
   error,
   onChange,
   onAsk,
+  kickoff,
   onStop,
   onPromote,
   onRemove,
@@ -26,6 +28,8 @@ export function Drawer({
   error?: string;
   onChange: (patch: Partial<StickyNote>) => void;
   onAsk: (prompt: string) => boolean;
+  /** Present while this is the root's kickoff conversation and the root has no children yet. */
+  kickoff?: { onAccept: () => void; busy: boolean };
   onStop: () => void;
   onPromote: (text: string) => void;
   onRemove: () => void;
@@ -80,7 +84,7 @@ export function Drawer({
         />
         {note.messages.map((m) => (
           <div key={m.id} className={`msg ${m.role}`}>
-            <p>{m.text}</p>
+            <p>{displayMessage(m.role, m.text)}</p>
           </div>
         ))}
         {pending && (
@@ -92,10 +96,34 @@ export function Drawer({
           <div className="lab thinking">正在看这片上下文…</div>
         )}
         {error && <div className="inline-error">{error}</div>}
-        {last && !busy && (
-          <button className="btn chip-btn" onClick={() => onPromote(last.text)}>
-            <Plus size={14} className="ico" /> 把回答加进地图
-          </button>
+        {kickoff && last && !busy ? (
+          <div className="kickoff-accept">
+            <button
+              className="btn kickoff-btn"
+              disabled={kickoff.busy}
+              onClick={kickoff.onAccept}
+            >
+              {kickoff.busy ? (
+                <LoaderCircle size={15} className="ico spin" />
+              ) : (
+                <Plus size={15} className="ico" />
+              )}
+              {kickoff.busy ? "正在拆出第一层…" : "把第一层问题放上画布"}
+            </button>
+            <span className="lab">
+              先在下面回答它的问题，拆得会更贴合你；也可以直接放上去，之后再调整。
+            </span>
+          </div>
+        ) : (
+          last &&
+          !busy && (
+            <button
+              className="btn chip-btn"
+              onClick={() => onPromote(last.text)}
+            >
+              <Plus size={14} className="ico" /> 把回答加进地图
+            </button>
+          )
         )}
       </div>
       <footer>

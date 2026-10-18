@@ -41,6 +41,9 @@ export type CardData = {
   onAsk?: (id: string) => void;
   onExpand?: (id: string) => void;
   canExpand?: boolean;
+  /** Root only, while an AI board has no first level yet: the obvious next step. */
+  onKickoff?: () => void;
+  kickoffStarted?: boolean;
 };
 export type GhostData = { [key: string]: unknown; w: number };
 export type CardNode = Node<CardData, "concept" | "root">;
@@ -334,6 +337,23 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
             </div>
           )}
         </>
+      )}
+      {data.onKickoff && (
+        <div className="kickoff nodrag nopan">
+          <button
+            className="btn kickoff-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              data.onKickoff?.();
+            }}
+          >
+            <Sparkles size={15} className="ico" />
+            {data.kickoffStarted ? "继续：AI 带我开始" : "让 AI 带我开始"}
+          </button>
+          <span className="lab">
+            AI 先问你知道些什么，再提出第一层子问题，由你决定放上画布。
+          </span>
+        </div>
       )}
       {!data.linkMode && <AddHandles data={data} />}
     </article>

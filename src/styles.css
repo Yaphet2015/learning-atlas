@@ -1679,3 +1679,40 @@ kbd,
 .connection-status[data-state="failure"] {
   color: var(--accent-ink);
 }
+
+/* 「让 AI 带我开始」: the one obvious next step on a lone root question. Vermilion is the only accent. */
+.kickoff,
+.kickoff-accept {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.kickoff {
+  margin-top: 14px;
+}
+.kickoff .lab,
+.kickoff-accept .lab {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+.btn.kickoff-btn {
+  background: var(--accent);
+  color: var(--card);
+  box-shadow: 1px 2px 0 color-mix(in srgb, var(--accent-ink) 70%, transparent);
+  cursor: pointer;
+}
+.btn.kickoff-btn:hover:not(:disabled) {
+  background: var(--accent-ink);
+}
+.btn.kickoff-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+.dark .btn.kickoff-btn {
+  color: var(--paper);
+}
+.kickoff-accept .spin {
+  animation: spin 2s linear infinite;
+}
