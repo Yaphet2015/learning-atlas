@@ -335,7 +335,7 @@ export function MapUnit() {
         }
         maskColor="transparent"
         maskStrokeColor="var(--accent)"
-        maskStrokeWidth={2}
+        maskStrokeWidth={1.25}
         bgColor="transparent"
       />
       <div className="zoom">
