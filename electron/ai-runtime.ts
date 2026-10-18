@@ -115,11 +115,11 @@ export function tutorInstructions(mode: AIRequest["mode"]): string {
   if (mode === "answer")
     return `${base}\n通常回答不超过 250 个汉字；先直接回答问题，再给一个具体类比、可尝试的操作或一个检查理解的问题。`;
   return `${base}\n本次只输出一个有效 JSON 对象，不要 Markdown 代码围栏或额外说明。
-格式为 {"nodes":[{"id":"concept-1","title":"短标题","body":"一两句具体解释或贴切类比"}],"relations":[{"source":"concept-1","target":"concept-2","label":"明确的关系"}]}。
-nodes 为 1–6 个节点；${mode === "map" ? "优先给出 3 个大图景节点，帮助快速建立整体轮廓。" : '围绕选中的概念给出 2–3 个更具体的子概念。连接原概念时 source 可以用 "anchor"，或上下文里该节点的准确 id。'}
+格式为 {"nodes":[{"id":"c1","title":"短标题","body":"一两句具体解释或贴切类比","parent":"anchor"}],"relations":[{"source":"c2","target":"c4","label":"对照"}]}。
+${mode === "map" ? "第一层给 3–5 个大图景节点，按“互不重叠、合起来覆盖整个问题”来拆。" : "围绕选中的概念（anchor）给出 2–4 个更具体的子问题。"}
+nodes 全部是 anchor 的直接子问题（parent 一律写 "anchor"），按先后顺序排列，彼此并列、不重叠；只往下长一层，不要给子问题再挂子问题。
 每个节点 id 仅用 ASCII 字母、数字、短横线，不得重复；title 最多 20 字，body 最多 100 字。
-nodes 的先后顺序就是从左到右的阅读顺序（先→后）；每个节点的第一条入边决定它挂在哪个父概念下，其余关系作为跨分支链接。
-relations 最多 8 条，source/target 必须是本次节点 id 或明确的已有锚点，label 最多 20 字，写出因果、包含、对照或作用关系。
+relations 只写跨节点的对照或因果关系，可以为空，不要用 relations 表示先后或层级；最多 8 条，source/target 必须是本次节点 id，label 最多 20 字。
 每个节点可选 visual 对象：{"kind":"process"或"parts"或"comparison","title":"可选短标题","labels":["短标签1","短标签2"],"caption":"可选的一句话图解","basis":"literal"或"analogy"}。
 优先在 3 个节点中至少给 1 个真正有帮助的 visual：process 用于步骤或因果，parts 用于组成，comparison 用于并列对照；labels 必须 2–4 个、每个最多 12 字，title 最多 20 字、caption 最多 50 字。
 visual 只描述受控绘图的数据，不包含 HTML、SVG、CSS 或代码。忠实示意实际关系用 basis:"literal"；为了帮助理解而作的类比必须用 basis:"analogy"，并在 caption 点明类比。不可捏造数字、比例、测量值或因果事实。宁可少画，不要用长段文字充当图解。`;

@@ -632,7 +632,12 @@ describe("event reconciliation and prompt safety", () => {
     expect(rendered).not.toContain("</atlas-selected-data>");
     expect(rendered).toContain("\\u003c");
     expect(tutorInstructions("answer")).toContain("绝不根据点击声称已掌握");
-    expect(tutorInstructions("map")).toContain("3 个大图景节点");
+    expect(tutorInstructions("map")).toContain("3–5 个大图景节点");
+    expect(tutorInstructions("map")).toContain(
+      "不要用 relations 表示先后或层级",
+    );
+    expect(tutorInstructions("map")).not.toContain("第一条入边");
+    expect(tutorInstructions("expand")).toContain("2–4 个");
     expect(tutorInstructions("expand")).toContain('"anchor"');
     expect(tutorInstructions("map")).toContain("不要输出或执行 HTML");
     expect(tutorInstructions("map")).toContain('basis:"analogy"');

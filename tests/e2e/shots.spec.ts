@@ -15,7 +15,12 @@ async function seed(page: Page, boards: unknown[]) {
   }, JSON.stringify(boards));
 }
 async function theme(page: Page, dark: boolean) {
-  if (dark !== (await page.evaluate(() => document.documentElement.classList.contains("dark"))))
+  if (
+    dark !==
+    (await page.evaluate(() =>
+      document.documentElement.classList.contains("dark"),
+    ))
+  )
     await page.keyboard.press("d");
 }
 
@@ -43,9 +48,9 @@ for (const mode of ["light", "dark"] as const) {
     await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
     await theme(page, mode === "dark");
     await page.waitForTimeout(700);
-    const boxes = await page.locator(".react-flow__node-concept").evaluateAll((els) =>
-      els.map((e) => e.getBoundingClientRect().toJSON()),
-    );
+    const boxes = await page
+      .locator(".react-flow__node-concept")
+      .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
     const x = Math.min(...boxes.map((b) => b.x)) - 30,
       y = Math.min(...boxes.map((b) => b.y)) - 30,
       r = Math.max(...boxes.map((b) => b.right)) + 30,

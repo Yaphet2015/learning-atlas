@@ -3,9 +3,7 @@ const card = (page: Page, title: string) =>
   page.locator(".react-flow__node", { hasText: title }).first();
 const stored = (page: Page) =>
   page.evaluate(() =>
-    JSON.parse(
-      localStorage.getItem("studyboard-preview-boards-v1") ?? "[]",
-    ),
+    JSON.parse(localStorage.getItem("studyboard-preview-boards-v1") ?? "[]"),
   );
 test.beforeEach(async ({ page }) => {
   await page.goto("/");

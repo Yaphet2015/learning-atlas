@@ -5,12 +5,7 @@ import type {
   Relation,
   StickyNote,
 } from "../shared/types";
-import {
-  aiMapSchema,
-  boardSchema,
-  pointSchema,
-  treeify,
-} from "../shared/validation";
+import { aiMapSchema, boardSchema, pointSchema } from "../shared/validation";
 
 export function newId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -225,6 +220,9 @@ export function expandWalkthrough(board: Board, nodeId: string): Board {
   };
 }
 
+/** Labels that only say "comes next"; the sibling arrows already show that. */
+const SEQUENCE_LABEL = /先|后|然后|接着|下一步|next/i;
+
 /** Parse data only: generated JavaScript/HTML is never compiled, rendered, or evaluated. */
 export function buildMapFromAI(
   text: string,
@@ -261,49 +259,41 @@ export function buildMapFromAI(
   const ids = new Map(map.nodes.map((item) => [item.id, newId("concept")]));
   const resolve = (id: string) =>
     id === "anchor" || id === anchor.id ? anchor.id : ids.get(id);
-  const generatedRelations: Relation[] = [];
+  // One level at a time: every generated node is a direct child of the
+  // anchor, in the model's listing order (先→后), after existing children.
+  // Relations never decide the tree; they only become cross-links.
+  const existing = board.nodes.filter((n) => n.parentId === anchor.id).length;
+  const placed = map.nodes.map((item, index) => ({
+    ...node(
+      ids.get(item.id)!,
+      item.title,
+      item.body,
+      anchor.id,
+      existing + index,
+    ),
+    ...(item.visual
+      ? { visual: { ...item.visual, labels: [...item.visual.labels] } }
+      : {}),
+  }));
+  const order = new Map(map.nodes.map((item, index) => [item.id, index]));
+  const cross: Relation[] = [];
   const pairs = new Set<string>();
   for (const edge of map.relations) {
     const source = resolve(edge.source);
     const target = resolve(edge.target);
     if (!source || !target || source === target)
       throw new Error("AI 返回了无效的关系，画布没有改变。");
-    const key = `${source}:${target}`;
-    if (!pairs.has(key))
-      generatedRelations.push(
-        relation(newId("relation"), source, target, edge.label),
-      );
+    // anchor → child is already the tree edge.
+    if (source === anchor.id || target === anchor.id) continue;
+    // 先→后 between neighbours is already the sibling arrow.
+    const a = order.get(edge.source)!,
+      b = order.get(edge.target)!;
+    if (Math.abs(a - b) === 1 && SEQUENCE_LABEL.test(edge.label)) continue;
+    const key = [source, target].sort().join(":");
+    if (pairs.has(key)) continue;
     pairs.add(key);
+    cross.push(relation(newId("relation"), source, target, edge.label));
   }
-  const children = map.nodes.map((item) => ({
-    ...node(ids.get(item.id)!, item.title, item.body, anchor.id, 0),
-    ...(item.visual
-      ? { visual: { ...item.visual, labels: [...item.visual.labels] } }
-      : {}),
-  }));
-  // First incoming edge becomes the tree parent (nodes without one hang under
-  // the anchor); remaining edges are kept as cross-links. Order follows the
-  // model's listing, appended after existing children.
-  const index = new Map(children.map((c, i) => [c.id, i]));
-  const tree = treeify(
-    [anchor.id, ...children.map((c) => c.id)],
-    generatedRelations,
-    anchor.id,
-    (id) => index.get(id) ?? -1,
-  );
-  const existing = board.nodes.filter((n) => n.parentId === anchor.id).length;
-  const placed = children.map((c) => {
-    const parentId = tree.parent.get(c.id) ?? anchor.id;
-    return {
-      ...c,
-      parentId,
-      order:
-        (tree.order.get(c.id) ?? 0) + (parentId === anchor.id ? existing : 0),
-    };
-  });
-  const cross = tree.cross.map((r) =>
-    relation(r.id, r.source, r.target, r.label),
-  );
   return boardSchema.parse({
     ...board,
     updatedAt: now(),

@@ -338,6 +338,8 @@ export const aiMapSchema = z
             id: idSchema,
             title: plainText(100),
             body: plainText(1_200),
+            /** Always "anchor" this round: one level per expansion. */
+            parent: idSchema.optional(),
             emoji: z.string().max(16).optional(),
             color: colorSchema.optional(),
             visual: visualDiagramSchema.optional(),

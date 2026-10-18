@@ -25,6 +25,13 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   await expect(drawer.locator(".msg.assistant")).toHaveCount(2);
   await drawer.getByRole("button", { name: "把第一层问题放上画布" }).click();
   await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
+  // Side by side on the first level, not a vertical chain.
+  const ys = await page
+    .locator(".react-flow__node-concept")
+    .evaluateAll((els) =>
+      els.map((e) => Math.round(e.getBoundingClientRect().y)),
+    );
+  expect(new Set(ys).size).toBe(1);
   await expect(page.locator(".react-flow__node-concept").first()).toContainText(
     "阳光里有哪些颜色？",
   );

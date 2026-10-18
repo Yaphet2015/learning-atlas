@@ -50,7 +50,6 @@ export type CardNode = Node<CardData, "concept" | "root">;
 export type GhostNode = Node<GhostData, "ghost">;
 export type CanvasNode = CardNode | GhostNode;
 
-
 function StructuredVisual({ visual }: { visual: VisualDiagram }) {
   return (
     <figure className={`structured-visual visual-${visual.kind}`}>
@@ -145,9 +144,7 @@ function Title({ data, as: Tag }: { data: CardData; as: "h2" | "h3" }) {
         }}
       />
     );
-  return (
-    <Tag>{Tag === "h2" ? (data.topic ?? n.title) : n.title}</Tag>
-  );
+  return <Tag>{Tag === "h2" ? (data.topic ?? n.title) : n.title}</Tag>;
 }
 
 function AddHandles({ data }: { data: CardData }) {
@@ -338,9 +335,7 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
 
 /** Insertion preview: a vermilion dashed slot. */
 export function GhostCard({ data }: NodeProps<GhostNode>) {
-  return (
-    <div className="ghost" style={{ width: data.w }} />
-  );
+  return <div className="ghost" style={{ width: data.w }} />;
 }
 
 export function SceneExperiment({

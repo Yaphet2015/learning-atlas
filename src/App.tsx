@@ -514,7 +514,7 @@ export default function App() {
           stickyId: "expand-" + id,
           requestId: uid(),
           mode: "expand",
-          prompt: `围绕「${node.title}」展开下一层，最多 3 个概念。先解释它如何工作或用一个例子拆开，不要一次铺开整个领域。`,
+          prompt: `围绕「${node.title}」展开下一层，给 2–4 个并列的子问题。先解释它如何工作或用一个例子拆开，不要一次铺开整个领域。`,
           context,
         },
         id,
@@ -543,7 +543,7 @@ export default function App() {
           mode: "map",
           prompt:
             prompt ??
-            `为这个问题创建学习地图的第一小步：「${target.topic}」。只给 3 个大图景概念，具体、直观、少文字，适合初学者。`,
+            `为这个问题创建学习地图的第一层：「${target.topic}」。给 3–5 个并列的大图景子问题，具体、直观、少文字，适合初学者。`,
           context,
         },
         target.nodes[0]?.id,

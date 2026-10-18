@@ -38,10 +38,10 @@ export async function installFakeAtlas(
                 body: "只有特定角度的光会进到眼里。",
               },
             ],
+            // A chain the old “first incoming edge” rule turned into a vertical stack.
             relations: [
-              { source: "anchor", target: "light", label: "先看" },
-              { source: "anchor", target: "bend", label: "再看" },
-              { source: "anchor", target: "arc", label: "最后" },
+              { source: "light", target: "bend", label: "先看" },
+              { source: "bend", target: "arc", label: "然后" },
             ],
           });
         return "在开始之前想先了解你：你听说过光的“折射”吗？你更想弄懂颜色从哪来，还是彩虹为什么是弯的？接下来我们会先拆成三个子问题：阳光的颜色、水滴里的折射、弧形的角度。";

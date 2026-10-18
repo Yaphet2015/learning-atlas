@@ -27,6 +27,11 @@ export const Seal = ({ size = 26 }: { size?: number }) => (
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    <path d="M-24 9 H24" stroke="#FFF8F0" strokeWidth="7.5" strokeLinecap="round" />
+    <path
+      d="M-24 9 H24"
+      stroke="#FFF8F0"
+      strokeWidth="7.5"
+      strokeLinecap="round"
+    />
   </svg>
 );
