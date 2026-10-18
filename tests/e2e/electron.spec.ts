@@ -23,10 +23,10 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
         (entry): entry is [string, string] => typeof entry[1] === "string",
       ),
     ),
-    ATLAS_E2E: "1",
-    ATLAS_TEST_USERDATA: directory,
+    STUDYBOARD_E2E: "1",
+    STUDYBOARD_TEST_USERDATA: directory,
   };
-  delete environment.ATLAS_DEV_SERVER;
+  delete environment.STUDYBOARD_DEV_SERVER;
   delete environment.OPENAI_API_KEY;
   const diagnostics: string[] = [];
   const applications: { app: ElectronApplication; child: ChildProcess }[] = [];
