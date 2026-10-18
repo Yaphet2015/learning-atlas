@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { BoardStore } from "./board-store.js";
 import { migrateLegacyUserData } from "./legacy-data.js";
+import { installSystemFetch } from "./system-fetch.js";
 import { AIRuntime, smokeDurableStorage } from "./ai-runtime.js";
 import { z } from "zod";
 import {
@@ -25,6 +26,9 @@ function traceClose(stage: string): void {
   if (process.env.STUDYBOARD_E2E === "1") console.info(`[close] ${stage}`);
 }
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
+// Do this before any code path can issue a request: main-process fetch must
+// follow the OS proxy in dev and packaged builds.
+installSystemFetch();
 app.setName("Studyboard");
 if (process.env.STUDYBOARD_E2E === "1" && process.env.STUDYBOARD_TEST_USERDATA)
   app.setPath("userData", path.resolve(process.env.STUDYBOARD_TEST_USERDATA));
