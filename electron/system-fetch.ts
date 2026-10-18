@@ -1,5 +1,11 @@
 import { net } from "electron";
 
+function requestUrl(input: string | URL | Request): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
 /**
  * Route every main-process `fetch` through Chromium's network stack.
  *
@@ -12,21 +18,12 @@ import { net } from "electron";
  */
 export function installSystemFetch(): void {
   const nodeFetch = globalThis.fetch;
-  const chromiumFetch: typeof fetch = (input, init) => {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.href
-          : input.url;
-    // net.fetch only speaks http(s); keep Node fetch for anything else.
-    if (!/^https?:/i.test(url)) return nodeFetch(input, init);
-    return net.fetch(
-      typeof input === "string" || input instanceof Request
-        ? input
-        : url,
-      init,
-    );
+  const systemFetch: typeof fetch = function (input, init) {
+    // net.fetch only speaks http(s); anything else stays on Node fetch.
+    if (!/^https?:/i.test(requestUrl(input))) return nodeFetch(input, init);
+    // net.fetch accepts string | Request; only URL needs converting.
+    const request = input instanceof URL ? input.href : input;
+    return net.fetch(request, init);
   };
-  globalThis.fetch = chromiumFetch;
+  globalThis.fetch = systemFetch;
 }
