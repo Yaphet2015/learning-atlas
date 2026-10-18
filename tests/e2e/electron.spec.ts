@@ -96,6 +96,8 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     );
 
     const { app: reopened, page: nextPage } = await launch();
+    // Wait for the reopened board to render so the ⌘K listener is attached.
+    await expect(nextPage.locator(".react-flow__node-root h2")).toBeVisible();
     await nextPage.keyboard.press("ControlOrMeta+k");
     await nextPage.getByRole("button", { name: /^批注 · / }).click();
     await expect(nextPage.getByLabel("批注内容")).toHaveValue(

@@ -84,9 +84,24 @@ npm run dist:mac
 
 UI 测试需要 Playwright Chromium：`npx playwright install chromium`。可以通过 `PLAYWRIGHT_CHROMIUM_PATH` 指定已安装的 Chromium。
 
-GitHub Actions 工作流会在 macOS 上执行检查、实际 Electron + SQLite + durable reopen smoke、浏览器交互测试，然后构建 Apple Silicon `.dmg` / `.zip` 预览产物。工作流成功后，在对应 Actions run 的 Artifacts 下载。成功构建不等于已完成真机试用。
+GitHub Actions 工作流会在 macOS 上执行检查、实际 Electron + SQLite + durable reopen smoke、浏览器交互测试，然后构建 Apple Silicon `.dmg` / `.zip` 预览产物。PR 的产物在对应 Actions run 的 Artifacts 下载。成功构建不等于已完成真机试用。
 
-预览产物仅使用 ad-hoc 签名以满足 Apple Silicon 的本地代码完整性要求，尚未配置 Developer ID 签名或 Apple 公证，因此不是正式分发版。没有提供绕过 Gatekeeper 的操作。发布前需由项目所有者配置合法签名/公证流程。
+预览产物仅使用 ad-hoc 签名以满足 Apple Silicon 的本地代码完整性要求，尚未配置 Developer ID 签名或 Apple 公证，因此不是正式分发版。正式发布前需由项目所有者配置合法签名/公证流程。
+
+## 下载最新版本
+
+每次合并到 `main`（或在 Actions 页手动运行 “macOS preview”）且全部检查通过后，工作流会把新构建替换到滚动发布 [`latest`](https://github.com/Yaphet2015/learning-atlas/releases/tag/latest) 上，下载链接保持不变：
+
+- DMG（Apple Silicon）：<https://github.com/Yaphet2015/learning-atlas/releases/latest/download/Learning-Atlas-arm64.dmg>
+- ZIP（Apple Silicon）：<https://github.com/Yaphet2015/learning-atlas/releases/latest/download/Learning-Atlas-arm64.zip>
+
+构建未经公证，首次打开时 macOS 会拦截。拖到“应用程序”后，在 Finder 中右键点 Learning Atlas →“打开”，再确认一次即可；或者在终端执行：
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Learning Atlas.app"
+```
+
+只对你信任的、来自本仓库 Releases 的构建这样做。
 
 ## 范围与已知限制
 
