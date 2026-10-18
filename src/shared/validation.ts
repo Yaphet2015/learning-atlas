@@ -97,6 +97,13 @@ export const chatMessageSchema = z
     role: z.enum(["user", "assistant"]),
     text: z.string().max(32_000),
     createdAt: timestampSchema,
+    meta: z
+      .object({
+        checked: z.array(z.number().int().min(0).max(50)).max(50).optional(),
+        laid: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export const attachmentSchema = z
@@ -110,6 +117,7 @@ export const stickyNoteSchema = z
     position: pointSchema,
     attachedTo: attachmentSchema.optional(),
     messages: z.array(chatMessageSchema).max(LIMITS.messagesPerNote),
+    excludedRefs: z.array(z.string().max(200)).max(100).optional(),
   })
   .strict();
 export const sceneSchema = z

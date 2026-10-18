@@ -191,3 +191,23 @@ export function cacheMessages(messages: ChatMessage[]): ChatMessage[] {
   }
   return recent.reverse();
 }
+
+/**
+ * The durable runtime's history replaces the renderer cache on load, under its
+ * own message ids. Carry renderer-only meta (ticked steps, laid outline) over
+ * from the cached copy of the same message (same id, or same role and text).
+ */
+export function mergeHistory(
+  cached: ChatMessage[],
+  history: ChatMessage[],
+): ChatMessage[] {
+  const byId = new Map(cached.map((m) => [m.id, m]));
+  const byText = new Map(cached.map((m) => [`${m.role}\u0000${m.text}`, m]));
+  return cacheMessages(
+    history.map((m) => {
+      const meta = (byId.get(m.id) ?? byText.get(`${m.role}\u0000${m.text}`))
+        ?.meta;
+      return meta && !m.meta ? { ...m, meta } : m;
+    }),
+  );
+}

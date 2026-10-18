@@ -41,6 +41,7 @@ import {
   addChild,
   addSibling,
   cacheMessages,
+  mergeHistory,
   removeSelection,
   reorder,
   reparent,
@@ -279,7 +280,13 @@ export default function App() {
                       ...current,
                       notes: current.notes.map((n) =>
                         n.id === note.id
-                          ? { ...n, messages: cacheMessages(history.messages) }
+                          ? {
+                              ...n,
+                              messages: mergeHistory(
+                                n.messages,
+                                history.messages,
+                              ),
+                            }
                           : n,
                       ),
                     }

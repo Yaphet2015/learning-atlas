@@ -37,6 +37,8 @@ export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   createdAt: string;
+  /** Renderer-only state for an answer, e.g. ticked 小练习 steps. Optional: older boards have none. */
+  meta?: { checked?: number[]; laid?: boolean };
 }
 export interface StickyNote {
   id: string;
@@ -45,6 +47,8 @@ export interface StickyNote {
   position: Point;
   attachedTo?: { kind: "node" | "relation"; id: string };
   messages: ChatMessage[];
+  /** References the learner unticked: they are not sent to the AI. */
+  excludedRefs?: string[];
 }
 export interface SceneState {
   width: number;

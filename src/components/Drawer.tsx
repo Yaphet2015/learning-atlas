@@ -7,6 +7,14 @@ import type {
 } from "../shared/types";
 import { StructuredVisual } from "./StructuredVisual";
 import { displayMessage } from "../model/kickoff";
+import { AnswerBlocks } from "./AnswerBlocks";
+
+const clock = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
 
 /** AI conversations live in a right-hand drawer, attached to a card or free. */
 export function Drawer({
@@ -43,6 +51,23 @@ export function Drawer({
   onClose: () => void;
 }) {
   const [prompt, setPrompt] = useState("");
+  /** Tick a 小练习 step; stored on the message so it survives reloads. */
+  const toggleStep = (messageId: string, index: number) =>
+    onChange({
+      messages: note.messages.map((m) => {
+        if (m.id !== messageId) return m;
+        const checked = m.meta?.checked ?? [];
+        return {
+          ...m,
+          meta: {
+            ...m.meta,
+            checked: checked.includes(index)
+              ? checked.filter((c) => c !== index)
+              : [...checked, index].sort((a, b) => a - b),
+          },
+        };
+      }),
+    });
   const last = note.messages.filter((m) => m.role === "assistant").at(-1);
   const send = () => {
     if (!prompt.trim() || busy) return;
@@ -93,14 +118,35 @@ export function Drawer({
           value={note.text}
           onChange={(e) => onChange({ text: e.target.value })}
         />
-        {note.messages.map((m) => (
-          <div key={m.id} className={`msg ${m.role}`}>
-            <p>{displayMessage(m.role, m.text)}</p>
-          </div>
-        ))}
+        {note.messages.map((m) =>
+          m.role === "user" ? (
+            <div key={m.id} className="msg user bubble">
+              {displayMessage(m.role, m.text)}
+            </div>
+          ) : (
+            <div key={m.id} className="msg assistant ans">
+              <div className="who">
+                <span>AI</span>
+                <span>{clock(m.createdAt)}</span>
+              </div>
+              <AnswerBlocks
+                text={m.text}
+                actions={{
+                  checked: m.meta?.checked,
+                  onToggleStep: (i) => toggleStep(m.id, i),
+                  onAnswerCheck: (text) => onAsk(text),
+                }}
+              />
+            </div>
+          ),
+        )}
         {pending && (
-          <div className="msg assistant streaming">
-            <p>{pending}</p>
+          <div className="msg assistant ans streaming" aria-live="polite">
+            <div className="who">
+              <span>AI</span>
+            </div>
+            <AnswerBlocks text={pending} streaming />
+            <span className="streaming-caret" aria-hidden="true" />
           </div>
         )}
         {busy && !pending && (

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createWalkthroughBoard, newNote } from "../src/model/boards";
-import { cacheMessages, removeSelection } from "../src/model/editor";
+import {
+  cacheMessages,
+  mergeHistory,
+  removeSelection,
+} from "../src/model/editor";
 import { boardSchema } from "../src/shared/validation";
 import type { ChatMessage } from "../src/shared/types";
 
@@ -138,5 +142,55 @@ describe("renderer message cache", () => {
   });
   it("accepts an empty history", () => {
     expect(cacheMessages([])).toEqual([]);
+  });
+});
+
+describe("message meta", () => {
+  const at = "2026-10-18T10:00:00.000Z";
+  it("boards saved before message meta existed still validate", () => {
+    const board = fixture().board;
+    expect(boardSchema.parse(board)).toEqual(board);
+    board.notes[0].messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        text: "好",
+        createdAt: at,
+        meta: { checked: [0, 2] },
+      },
+    ];
+    board.notes[0].excludedRefs = ["concept-dom"];
+    expect(boardSchema.parse(board)).toEqual(board);
+  });
+
+  it("carries ticked steps over when durable history replaces the cache", () => {
+    const cached: ChatMessage[] = [
+      { id: "r1", role: "user", text: "带我起步", createdAt: at },
+      {
+        id: "r1-answer",
+        role: "assistant",
+        text: "小练习：a、b",
+        createdAt: at,
+        meta: { checked: [1] },
+      },
+    ];
+    const history: ChatMessage[] = [
+      { id: "durable-7-0", role: "user", text: "带我起步", createdAt: at },
+      {
+        id: "durable-7-1",
+        role: "assistant",
+        text: "小练习：a、b",
+        createdAt: at,
+      },
+      { id: "durable-8-0", role: "user", text: "然后呢", createdAt: at },
+    ];
+    const merged = mergeHistory(cached, history);
+    expect(merged.map((m) => m.id)).toEqual([
+      "durable-7-0",
+      "durable-7-1",
+      "durable-8-0",
+    ]);
+    expect(merged[1].meta).toEqual({ checked: [1] });
+    expect(merged[2].meta).toBeUndefined();
   });
 });
