@@ -37,7 +37,11 @@ import { tip } from "./Tooltip";
 import { toggleContextCard } from "../model/selection";
 import { sectionNumbers } from "../model/layout";
 import { LIMITS } from "../shared/validation";
-import { sessionClock, type SessionEntry } from "../model/sessions";
+import {
+  sessionClock,
+  stripOrder,
+  type SessionEntry,
+} from "../model/sessions";
 
 const LEVEL = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const STATUS: Record<string, string> = {
@@ -242,7 +246,7 @@ function SessionStrip({
         <History size={16} />
       </button>
       <div className="tabs" ref={row} role="group" aria-label="对话标签">
-        {sessions.map((s) => (
+        {stripOrder(sessions).map((s) => (
           <button
             key={s.id}
             className={`stab ${s.id === current && !listOpen ? "on" : ""}`}

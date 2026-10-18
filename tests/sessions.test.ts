@@ -4,6 +4,7 @@ import {
   latestNoteOn,
   listSessions,
   sessionClock,
+  stripOrder,
 } from "../src/model/sessions";
 import { KICKOFF_MESSAGE } from "../src/model/kickoff";
 
@@ -116,5 +117,39 @@ describe("session list", () => {
       "2025年1月2日",
     );
     expect(sessionClock("nope", now)).toBe("");
+  });
+});
+
+describe("drawer session strip", () => {
+  it("orders tabs by creation, newest first, so talking in one never reshuffles them", () => {
+    const board = createWalkthroughBoard();
+    const old = newNote(
+      board,
+      { x: 0, y: 0 },
+      { kind: "node", id: "concept-dom" },
+    );
+    old.createdAt = "2026-10-18T01:00:00.000Z";
+    old.messages = [msg("user", "later reply", "2026-10-18T05:00:00.000Z")];
+    const fresh = newNote(
+      board,
+      { x: 0, y: 0 },
+      { kind: "node", id: "concept-dom" },
+    );
+    fresh.createdAt = "2026-10-18T02:00:00.000Z";
+    const legacy = newNote(board, { x: 0, y: 0 });
+    delete legacy.createdAt;
+    legacy.messages = [msg("user", "old", "2026-10-17T01:00:00.000Z")];
+    board.notes = [old, fresh, legacy];
+    // The full list follows last activity; the strip follows creation.
+    expect(listSessions(board).map((s) => s.id)).toEqual([
+      old.id,
+      fresh.id,
+      legacy.id,
+    ]);
+    expect(stripOrder(listSessions(board)).map((s) => s.id)).toEqual([
+      fresh.id,
+      old.id,
+      legacy.id,
+    ]);
   });
 });

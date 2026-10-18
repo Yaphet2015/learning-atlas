@@ -1,5 +1,5 @@
 import type { Board, StickyNote } from "../shared/types";
-import { displayMessage } from "./kickoff";
+import { displayMessage, rootOf } from "./kickoff";
 
 /** One conversation on this board, as the drawer's session list shows it. */
 export interface SessionEntry {
@@ -13,6 +13,8 @@ export interface SessionEntry {
   count: number;
   /** Cards brought in besides the anchor. */
   extra: number;
+  /** ISO creation time (older notes without one fall back to `time`). */
+  created: string;
 }
 
 const DEFAULT_TITLES = new Set(["我的问题", ""]);
@@ -22,7 +24,7 @@ export function sessionTime(board: Board, note: StickyNote): string {
 }
 
 export function listSessions(board: Board): SessionEntry[] {
-  const root = board.nodes.find((n) => n.parentId === null);
+  const root = rootOf(board);
   return board.notes
     .map((note): SessionEntry => {
       const at = note.attachedTo;
@@ -63,6 +65,7 @@ export function listSessions(board: Board): SessionEntry[] {
         time: sessionTime(board, note),
         count: note.messages.length,
         extra: note.contextCards?.length ?? 0,
+        created: note.createdAt ?? sessionTime(board, note),
       };
     })
     .sort((a, b) => b.time.localeCompare(a.time));
@@ -82,6 +85,14 @@ export function latestNoteOn(
     .sort((a, b) =>
       sessionTime(board, b).localeCompare(sessionTime(board, a)),
     )[0];
+}
+
+/**
+ * The drawer's tab strip: newest conversation first by creation, so tabs keep their places
+ * while you talk in one (the full list stays ordered by last activity).
+ */
+export function stripOrder(sessions: SessionEntry[]): SessionEntry[] {
+  return [...sessions].sort((a, b) => b.created.localeCompare(a.created));
 }
 
 /** "14:05" today, "昨天 14:05", else "10月3日". */
