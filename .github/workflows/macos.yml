@@ -6,6 +6,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: macos-${{ github.ref }}
+  # Cancel superseded PR runs, but never interrupt a main build mid-release.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   build:
     runs-on: macos-15
@@ -64,3 +68,56 @@ jobs:
             test-results/
             playwright-report/
           if-no-files-found: ignore
+
+  # Every merge to main replaces the assets on one rolling "latest" release,
+  # so the download URLs in README.md always point at the newest build.
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Learning-Atlas-macOS-arm64-preview
+          path: artifact
+      - name: Give the build stable file names
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(artifact/*-arm64.dmg)
+          zips=(artifact/*-arm64.zip)
+          test "${#dmgs[@]}" -eq 1 && test "${#zips[@]}" -eq 1
+          mkdir -p upload
+          cp "${dmgs[0]}" upload/Learning-Atlas-arm64.dmg
+          cp "${zips[0]}" upload/Learning-Atlas-arm64.zip
+          ls -l upload
+      - name: Publish rolling "latest" release
+        run: |
+          set -euo pipefail
+          tag=latest
+          notes="Automatic build of ${GITHUB_SHA::7} from main ($(date -u +%Y-%m-%dT%H:%MZ)).
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          Unsigned Apple Silicon preview (ad-hoc signature, not notarized). See README for opening it."
+          # Move (or create) the tag to the commit that was just built.
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" \
+              -f sha="${GITHUB_SHA}" -F force=true >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${tag}" -f sha="${GITHUB_SHA}" >/dev/null
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "Learning Atlas (latest main)" \
+              --notes "$notes" --draft=false --prerelease=false --latest
+            gh release upload "$tag" upload/* --clobber
+          else
+            gh release create "$tag" upload/* --verify-tag \
+              --title "Learning Atlas (latest main)" --notes "$notes" --latest
+          fi
