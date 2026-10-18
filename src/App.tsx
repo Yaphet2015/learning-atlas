@@ -90,12 +90,12 @@ import { CrossEdge } from "./components/CrossEdge";
 import { LevelGuides } from "./components/LevelGuides";
 import {
   Dock,
-  MapSwitcher,
   MapUnit,
   Palette,
   Progress,
   type Tool,
 } from "./components/Chrome";
+import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
 import { Drawer } from "./components/Drawer";
 import { StudyMode } from "./components/StudyMode";
 import { Outline } from "./components/Outline";
@@ -164,8 +164,19 @@ export default function App() {
       text: string;
       title: string;
     } | null>(null),
-    [drawer, setDrawer] = useState<string | null>(null),
+    [drawer, setDrawer] = useState<{
+      id: string;
+      autoFocus: boolean;
+    } | null>(null),
     [palette, setPalette] = useState(false),
+    [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+      try {
+        return localStorage.getItem("studyboard-sidebar-collapsed") === "true";
+      } catch {
+        return false;
+      }
+    }),
+    [switchingBoardId, setSwitchingBoardId] = useState<string | null>(null),
     [study, setStudy] = useState<{ startId?: string } | null>(null),
     [tool, setTool] = useState<Tool>("select"),
     [editingId, setEditingId] = useState<string | null>(null),
@@ -183,6 +194,16 @@ export default function App() {
     ),
     mobile = useMedia("(max-width: 720px)");
   const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "studyboard-sidebar-collapsed",
+        String(sidebarCollapsed),
+      );
+    } catch {
+      // The sidebar still works if browser preference storage is unavailable.
+    }
+  }, [sidebarCollapsed]);
   const editingLocked = useRef(false);
   const boardCache = useRef(new Map<string, Board>()),
     completionQueues = useRef(new Map<string, Promise<void>>());
@@ -449,9 +470,11 @@ export default function App() {
       }),
     [flow],
   );
-  /** Open the drawer on the card's latest note (creating one if needed), or a free note; fresh always starts a new one. */
   // What is selected right now, for chatContext (read inside stable callbacks).
   const chatSelection = useRef<string[]>([]);
+  const openDrawer = useCallback((id: string, autoFocus = true) => {
+    setDrawer({ id, autoFocus });
+  }, []);
   /**
    * Open (or start) a conversation. Unless `cards: false`, the selected cards come along as
    * context via chatContext; a conversation with extra cards is always a fresh one.
@@ -459,7 +482,12 @@ export default function App() {
   const addNote = useCallback(
     (
       attachment?: StickyNote["attachedTo"],
-      opts: { text?: string; fresh?: boolean; cards?: boolean } = {},
+      opts: {
+        text?: string;
+        fresh?: boolean;
+        cards?: boolean;
+        autoFocus?: boolean;
+      } = {},
     ) => {
       const b = boardRef.current;
       if (!b) return;
@@ -481,7 +509,7 @@ export default function App() {
           ? latestNoteOn(b, attachment)
           : undefined;
       if (existing && !opts.text) {
-        setDrawer(existing.id);
+        openDrawer(existing.id, opts.autoFocus);
         return existing.id;
       }
       const note = newNote(b, { x: 0, y: 0 }, attachment);
@@ -496,10 +524,10 @@ export default function App() {
           note.title = manyCardsTitle(note.title, extra.length);
       }
       edit((current) => ({ ...current, notes: [...current.notes, note] }));
-      setDrawer(note.id);
+      openDrawer(note.id, opts.autoFocus);
       return note.id;
     },
-    [edit],
+    [edit, openDrawer],
   );
   const sendAI = useCallback(
     async (request: AIRequest, anchor?: string) => {
@@ -665,7 +693,7 @@ export default function App() {
     ).contextCards;
     const existing = kickoffNote(b);
     if (existing?.messages.length && !extra.length) {
-      setDrawer(existing.id);
+      openDrawer(existing.id);
       return;
     }
     let noteId =
@@ -685,18 +713,32 @@ export default function App() {
         ),
       }));
     }
-    setDrawer(noteId);
+    openDrawer(noteId);
     askNote(noteId, kickoffPrompt(b.topic));
-  }, [settings.configured, showToast, edit, askNote]);
+  }, [settings.configured, showToast, edit, askNote, openDrawer]);
   /** Accept: turn the kickoff conversation into the first level of child questions on the canvas. */
   const proposeFirstLevel = useCallback(() => {
     const b = boardRef.current;
     if (!b || editingLocked.current) return;
     generateMap(b, firstLevelPrompt(b.topic, learnerAnswers(kickoffNote(b))));
   }, [generateMap]);
+  const resetBoardView = useCallback(() => {
+    setPast([]);
+    setSelection(null);
+    setPicked([]);
+    setDrawer(null);
+    setEditingId(null);
+    setPreview(null);
+    setDragPos(null);
+    setMeasured({});
+    setTool("select");
+    setStudy(null);
+    setPromote(null);
+  }, []);
   async function switchBoard(id: string) {
     if (boardRef.current?.id === id || editingLocked.current) return;
     editingLocked.current = true;
+    setSwitchingBoardId(id);
     try {
       await flush();
       await completionQueues.current.get(id);
@@ -710,14 +752,13 @@ export default function App() {
       boardRef.current = b;
       boardCache.current.set(b.id, b);
       setBoard(b);
-      setPast([]);
-      setSelection(null);
-      setDrawer(null);
+      resetBoardView();
       setTimeout(() => flow.fitView({ padding: 0.16, duration: 400 }), 60);
     } catch (e) {
       showToast(errorText(e));
     } finally {
       editingLocked.current = false;
+      setSwitchingBoardId(null);
     }
   }
   async function createBoard(walkthrough = false) {
@@ -733,9 +774,7 @@ export default function App() {
       boardRef.current = next;
       boardCache.current.set(next.id, next);
       setBoard(next);
-      setPast([]);
-      setSelection(null);
-      setDrawer(null);
+      resetBoardView();
       setShowNew(false);
       setTopic("");
       await refreshList();
@@ -753,8 +792,9 @@ export default function App() {
   drawerRef.current = drawer;
   /** Close the drawer and hand focus back to the card it hung on. */
   const closeDrawer = useCallback(() => {
-    const id = boardRef.current?.notes.find((n) => n.id === drawerRef.current)
-      ?.attachedTo?.id;
+    const id = boardRef.current?.notes.find(
+      (n) => n.id === drawerRef.current?.id,
+    )?.attachedTo?.id;
     setDrawer(null);
     if (id)
       setTimeout(
@@ -849,9 +889,9 @@ export default function App() {
     if (!b) return;
     if (selectedNodeId) return addNote({ kind: "node", id: selectedNodeId });
     const latest = listSessions(b)[0];
-    if (latest) setDrawer(latest.id);
+    if (latest) openDrawer(latest.id);
     else addNote(undefined);
-  }, [selectedNodeId, addNote]);
+  }, [selectedNodeId, addNote, openDrawer]);
   const rootId = (board && rootOf(board)?.id) ?? null;
   function removeSelected() {
     if (!selection) return;
@@ -929,6 +969,11 @@ export default function App() {
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette((p) => !p);
+        return;
+      }
+      if (mod && e.key === "\\" && !mobile) {
+        e.preventDefault();
+        setSidebarCollapsed((value) => !value);
         return;
       }
       // ⌘. as asked, plus the macOS-standard ⌘, (Ctrl+. / Ctrl+, elsewhere).
@@ -1144,9 +1189,8 @@ export default function App() {
     setPreview(id && b ? addChild(b, id, GHOST) : null);
   }, []);
   const kickoffReady = needsKickoff(board) && !mapBusy && !study;
-  const drawerNoteAttachment = board?.notes.find(
-    (n) => n.id === drawer,
-  )?.attachedTo;
+  const drawerNote = board?.notes.find((n) => n.id === drawer?.id);
+  const drawerNoteAttachment = drawerNote?.attachedTo;
   const drawerAnchor =
     drawerNoteAttachment?.kind === "node" ? drawerNoteAttachment.id : null;
   /** Where 「铺成第一层」 lays cards: the anchor card, or the root for a free note. */
@@ -1491,7 +1535,6 @@ export default function App() {
   const selectedRelation = board?.relations.find(
     (r) => selection?.kind === "relation" && r.id === selection.id,
   );
-  const drawerNote = board?.notes.find((n) => n.id === drawer);
   if (!loaded)
     return (
       <div className="loading-screen">
@@ -1500,7 +1543,7 @@ export default function App() {
     );
   return (
     <main
-      className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""} ${spacePan ? "space-pan" : ""} ${panning ? "is-panning" : ""}`}
+      className={`app tool-${tool} ${!mobile ? "with-sidebar" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${drawerNote ? "with-drawer" : ""} ${spacePan ? "space-pan" : ""} ${panning ? "is-panning" : ""}`}
     >
       <div className="grain" />
       <TooltipLayer />
@@ -1550,6 +1593,10 @@ export default function App() {
               }
               setPicked([]);
               setSelection({ kind: "node", id: n.id });
+              addNote(
+                { kind: "node", id: n.id },
+                { cards: false, autoFocus: false },
+              );
             }}
             onNodeDoubleClick={(_, n) =>
               n.type !== "ghost" && setEditingId(n.id)
@@ -1615,10 +1662,17 @@ export default function App() {
             <LevelGuides {...bounds} />
             <MapUnit showMap={panning || tool === "hand"} />
           </ReactFlow>
-          <MapSwitcher
-            title={board.title}
-            nodes={board.nodes}
-            onOpen={() => setPalette(true)}
+          <WorkspaceSidebar
+            boards={boards}
+            currentId={board.id}
+            collapsed={sidebarCollapsed}
+            switchingId={switchingBoardId}
+            saveStatus={saveStatus}
+            desktop={isDesktop}
+            onToggle={() => setSidebarCollapsed((value) => !value)}
+            onPick={(id) => void switchBoard(id)}
+            onNew={() => setShowNew(true)}
+            onSearch={() => setPalette(true)}
           />
           <Progress
             nodes={board.nodes}
@@ -1698,10 +1752,11 @@ export default function App() {
           )}
         </>
       )}
-      {board && drawerNote && (
+      {board && drawer && drawerNote && (
         <Drawer
           key={drawerNote.id}
           note={drawerNote}
+          opening={drawer}
           anchor={board.nodes.find((n) => n.id === drawerNote.attachedTo?.id)}
           anchorTitle={
             board.nodes.find((n) => n.id === drawerNote.attachedTo?.id)?.title
@@ -1786,7 +1841,7 @@ export default function App() {
           onOpenSession={(id) => {
             const target = board.notes.find((n) => n.id === id);
             if (!target) return;
-            setDrawer(id);
+            openDrawer(id);
             const at = target.attachedTo;
             if (at?.kind === "node") {
               setSelection({ kind: "node", id: at.id });

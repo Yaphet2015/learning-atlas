@@ -3,14 +3,20 @@ import { installFakeAtlas } from "./fake-atlas";
 import { gotoApp } from "./ready";
 
 // Chromium on Linux cannot draw real traffic lights; this checks the inset logic and drag strip.
-test("macOS insets the map switcher past the traffic lights and drops it in fullscreen", async ({
+test("macOS keeps the sidebar below the traffic lights and drops the inset in fullscreen", async ({
   page,
 }) => {
   await installFakeAtlas(page, true, "darwin");
   await gotoApp(page);
-  const switcher = page.locator(".switcher");
-  await expect(switcher).toBeVisible();
-  expect((await switcher.boundingBox())!.x).toBe(80);
+  const sidebar = page.getByRole("complementary", {
+    name: "学习空间",
+    exact: true,
+  });
+  await expect(sidebar).toBeVisible();
+  expect((await sidebar.boundingBox())!.y).toBe(56);
+  await sidebar.getByRole("button", { name: "收起左侧边栏" }).click();
+  await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(56);
+  expect((await sidebar.boundingBox())!.y).toBe(56);
   const strip = page.locator(".titlebar-drag");
   await expect(strip).toHaveCount(1);
   expect(
@@ -19,28 +25,29 @@ test("macOS insets the map switcher past the traffic lights and drops it in full
     ),
   ).toBe("drag");
   expect(
-    await switcher.evaluate((el) =>
+    await sidebar.evaluate((el) =>
       getComputedStyle(el).getPropertyValue("-webkit-app-region"),
     ),
   ).toBe("no-drag");
   await page.evaluate(() => (window as any).__setFullscreen(true));
   await expect(strip).toHaveCount(0);
-  await expect.poll(async () => (await switcher.boundingBox())!.x).toBe(12);
+  await expect.poll(async () => (await sidebar.boundingBox())!.y).toBe(12);
   await page.evaluate(() => (window as any).__setFullscreen(false));
-  await expect.poll(async () => (await switcher.boundingBox())!.x).toBe(80);
+  await expect.poll(async () => (await sidebar.boundingBox())!.y).toBe(56);
 });
 
-test("web preview and other platforms keep the original top-left layout", async ({
+test("web preview and other platforms keep the sidebar at the window gutter", async ({
   page,
 }) => {
   await gotoApp(page);
-  await expect(page.locator(".switcher")).toBeVisible();
-  expect((await page.locator(".switcher").boundingBox())!.x).toBe(12);
+  const sidebar = page.locator(".workspace-sidebar");
+  await expect(sidebar).toBeVisible();
+  expect((await sidebar.boundingBox())!.y).toBe(12);
   await expect(page.locator(".titlebar-drag")).toHaveCount(0);
   await installFakeAtlas(page, true, "win32");
   await gotoApp(page);
-  await expect(page.locator(".switcher")).toBeVisible();
-  expect((await page.locator(".switcher").boundingBox())!.x).toBe(12);
+  await expect(sidebar).toBeVisible();
+  expect((await sidebar.boundingBox())!.y).toBe(12);
   await expect(page.locator(".titlebar-drag")).toHaveCount(0);
 });
 
@@ -67,7 +74,7 @@ for (const scheme of ["light", "dark"] as const)
     const vw = page.viewportSize()!.width,
       vh = page.viewportSize()!.height;
     const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
-    const sw = await box(".switcher");
+    const sw = await box(".workspace-sidebar");
     expect([sw.x, sw.y]).toEqual([12, 12]);
     const pr = await box(".progress");
     expect([Math.round(vw - pr.x - pr.width), pr.y]).toEqual([12, 12]);

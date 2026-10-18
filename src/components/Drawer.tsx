@@ -594,6 +594,7 @@ function AnswerActs({
 /** AI conversations live in a right-hand drawer, attached to a card or free. */
 export function Drawer({
   note,
+  opening,
   anchor,
   anchorTitle,
   anchorHasChildren,
@@ -617,6 +618,8 @@ export function Drawer({
   onNewSession,
 }: {
   note: StickyNote;
+  /** Reading a selected card keeps focus on the canvas for shortcuts. */
+  opening: { autoFocus: boolean };
   /** The card this conversation hangs on; its full content renders here. */
   anchor?: ConceptNode;
   anchorTitle?: string;
@@ -647,8 +650,6 @@ export function Drawer({
 }) {
   const [prompt, setPrompt] = useState("");
   const [sessionsOpen, setSessionsOpen] = useState(false);
-  // Reopening or starting a conversation goes back to its thread.
-  useEffect(() => setSessionsOpen(false), [note.id]);
   const [menu, setMenu] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
   // Screen readers hear the streaming answer at most every 600ms.
@@ -665,10 +666,6 @@ export function Drawer({
     const t = setInterval(() => setSpoken(latest.current ?? ""), 600);
     return () => clearInterval(t);
   }, [busy]);
-  // Opening the drawer puts focus in the composer.
-  useEffect(() => {
-    composer.current?.focus({ preventScroll: true });
-  }, []);
   const [scrolled, setScrolled] = useState(false);
   const thread = useRef<HTMLDivElement>(null);
   const onScroll = () => setScrolled((thread.current?.scrollTop ?? 0) > 4);
@@ -676,6 +673,15 @@ export function Drawer({
   const root = useRef<HTMLElement>(null);
   const title = useRef<HTMLInputElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
+  // Every opening returns to the thread; reading a card starts at its full text.
+  useEffect(() => {
+    setSessionsOpen(false);
+    if (opening.autoFocus) composer.current?.focus({ preventScroll: true });
+    else {
+      thread.current?.scrollTo({ top: 0 });
+      setScrolled(false);
+    }
+  }, [opening]);
   /** Tick a 小练习 step; stored on the message so it survives reloads. */
   const toggleStep = (messageId: string, index: number) =>
     onChange({

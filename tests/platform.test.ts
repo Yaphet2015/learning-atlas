@@ -18,13 +18,13 @@ describe("macOS window chrome inset", () => {
     const light = /trafficLightPosition: \{ x: (\d+), y: (\d+) \}/.exec(main);
     expect(main).toContain('titleBarStyle: "hiddenInset"');
     expect(light).not.toBeNull();
-    const inset = Number(
-      /\.mac-titlebar \{\s*--chrome-inset-left: (\d+)px;/.exec(css)?.[1],
+    const top = Number(
+      /\.mac-titlebar \{\s*--sidebar-top: (\d+)px;/.exec(css)?.[1],
     );
-    // Three 14px lights with 6px gaps start at x; keep at least 12px of air after them.
-    expect(inset).toBeGreaterThanOrEqual(
-      Number(light![1]) + 3 * 14 + 2 * 6 + 12,
+    // Leave 12px below the traffic lights even when the sidebar is collapsed.
+    expect(top).toBeGreaterThanOrEqual(Number(light![2]) + 14 + 12);
+    expect(css).toMatch(
+      /\.workspace-sidebar \{[\s\S]*?top: var\(--sidebar-top\)/,
     );
-    expect(css).toMatch(/\.switcher \{\s*left: var\(--chrome-inset-left\)/);
   });
 });

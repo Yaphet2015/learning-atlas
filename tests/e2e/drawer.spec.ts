@@ -39,7 +39,6 @@ for (const withVisual of [false, true]) {
     await gotoApp(page);
     const card = page.locator(`.react-flow__node[data-id="${concept.id}"]`);
     await card.click();
-    await page.keyboard.press("/");
     const content = page.getByRole("region", { name: "这张卡", exact: true });
     await expect(content.getByRole("heading")).toHaveText(concept.title);
     await expect(content.locator(".card-body")).toHaveText(concept.body);
@@ -61,6 +60,8 @@ for (const withVisual of [false, true]) {
       el.scrollTop = el.scrollHeight;
     });
     await expect(page.locator(".drawer .my-note")).toBeInViewport();
+    await card.click();
+    await expect.poll(() => thread.evaluate((el) => el.scrollTop)).toBe(0);
     // The card also exposes a visible reading entry, without a keyboard shortcut.
     await page.getByRole("button", { name: "关闭", exact: true }).click();
     await card.getByRole("button", { name: "查看全文", exact: true }).click();
@@ -68,6 +69,44 @@ for (const withVisual of [false, true]) {
     await expect.poll(() => thread.evaluate((el) => el.scrollTop)).toBe(0);
   });
 }
+
+test("single clicks follow the selected card and keep canvas shortcuts usable", async ({
+  page,
+}) => {
+  await open(page, insuranceBoard(true));
+  const drawer = page.locator(".drawer");
+  const content = drawer.getByRole("region", { name: "这张卡", exact: true });
+  const card = (id: string) =>
+    page.locator(`.react-flow__node[data-id="${id}"]`);
+
+  await card("c-what").click();
+  await expect(content.getByRole("heading")).toHaveText("保什么");
+  await expect(card("c-what")).toBeFocused();
+  await page.keyboard.press("3");
+  await expect(card("c-what").locator("article")).toHaveClass(/s-explained/);
+
+  // The drawer narrows the canvas; fit the other cards before selecting them.
+  await page.getByRole("button", { name: "查看全图" }).click();
+  await card("c-how").click({ modifiers: ["Shift"] });
+  await expect(page.getByRole("toolbar", { name: "多选" })).toBeVisible();
+  await expect(content.getByRole("heading")).toHaveText("保什么");
+  await card("c-money").click();
+  await expect(content.getByRole("heading")).toHaveText("钱和手续");
+  await expect(drawer.locator(".dhead .extra")).toHaveCount(0);
+  await expect(card("c-money")).toBeFocused();
+
+  await card("c-what").click();
+  await expect(content.getByRole("heading")).toHaveText("保什么");
+  await page.keyboard.press("/");
+  await expect(drawer.getByLabel("向 AI 提问")).toBeFocused();
+  await drawer.getByRole("button", { name: "对话列表" }).click();
+  await expect(
+    page.getByLabel("这张白板的对话").locator(".session"),
+  ).toHaveCount(3);
+  await card("c-what").click();
+  await expect(content.getByRole("heading")).toHaveText("保什么");
+  await expect(page.getByLabel("这张白板的对话")).toHaveCount(0);
+});
 
 test("an answer renders as blocks, never as raw markdown", async ({ page }) => {
   const drawer = await open(page, insuranceBoard(false));
@@ -161,10 +200,9 @@ test("progress reads 「N / M 讲清楚」 and the long title keeps a tooltip", 
   await open(page, insuranceBoard(true));
   await expect(page.locator(".progress .count")).toHaveText("1 / 6 讲清楚");
   await expect(page.locator(".progress .bar i")).toHaveCount(6);
-  await expect(page.locator(".switcher-text strong")).toHaveAttribute(
-    "title",
-    /教会我 12 条及以上/,
-  );
+  await expect(
+    page.locator('.workspace-board[aria-current="page"]'),
+  ).toHaveAttribute("title", /教会我 12 条及以上/);
 });
 
 test("the drawer is a labelled region; Esc closes it and returns focus to the card", async ({

@@ -6,7 +6,6 @@ import {
   type MiniMapNodeProps,
 } from "@xyflow/react";
 import {
-  ChevronDown,
   Crosshair,
   Hand,
   Link2,
@@ -22,66 +21,6 @@ import {
 import type { BoardSummary, ConceptNode } from "../shared/types";
 import { MOD } from "../model/shortcuts";
 import { tip } from "./Tooltip";
-
-function Compass() {
-  return (
-    <svg
-      viewBox="0 0 26 26"
-      width="22"
-      height="22"
-      className="compass"
-      aria-hidden="true"
-    >
-      <g>
-        <circle
-          cx="13"
-          cy="13"
-          r="11.3"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M13 2.8l2.2 10.2L13 23.2l-2.2-10.2z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1"
-        />
-        <path d="M13 2.8l2.2 10.2h-4.4z" fill="var(--accent)" />
-      </g>
-    </svg>
-  );
-}
-
-export function MapSwitcher({
-  title,
-  nodes,
-  onOpen,
-}: {
-  title: string;
-  nodes: ConceptNode[];
-  onOpen: () => void;
-}) {
-  const concepts = nodes.filter((n) => n.parentId !== null);
-  const explained = concepts.filter((n) => n.status === "explained").length;
-  return (
-    <button
-      className="chrome switcher"
-      onClick={onOpen}
-      data-tip="切换地图"
-      data-keys={`${MOD}K`}
-    >
-      <Compass />
-      <span className="switcher-text">
-        <strong title={title}>{title}</strong>
-        <small>
-          {concepts.length} 概念 · {explained} 能解释
-        </small>
-      </span>
-      <ChevronDown size={15} className="ico" />
-    </button>
-  );
-}
 
 export function Palette({
   boards,

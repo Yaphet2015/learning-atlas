@@ -37,6 +37,7 @@ export const SHORTCUTS: Shortcut[] = [
   { group: "AI 与批注", keys: "N", label: "批注" },
   { group: "AI 与批注", keys: `${MOD}Enter`, label: "发送提问" },
   { group: "应用", keys: `${MOD}K`, label: "切换地图" },
+  { group: "应用", keys: `${MOD}\\`, label: "展开 / 收起左侧边栏" },
   { group: "应用", keys: `${MOD}N`, label: "新白板" },
   { group: "应用", keys: `${MOD}Z`, label: "撤销" },
   { group: "应用", keys: `${MOD}S`, label: "立即保存" },

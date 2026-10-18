@@ -41,6 +41,8 @@
     -1px 0 0 rgba(42, 49, 51, 0.06), 0 24px 60px -30px rgba(40, 35, 25, 0.45);
   --ring: 0 0 0 1.5px var(--accent), 0 0 0 6px var(--accent-wash);
   --drawer-w: 420px;
+  --sidebar-w: 244px;
+  --sidebar-top: var(--gutter);
   /* Gap between floating chrome and the window edge. */
   --gutter: 12px;
   color-scheme: light;
@@ -138,6 +140,17 @@ kbd,
 .app {
   position: fixed;
   inset: 0;
+  --canvas-left: 0px;
+  --canvas-right: 0px;
+}
+.with-sidebar {
+  --canvas-left: calc(var(--sidebar-w) + 2 * var(--gutter));
+}
+.sidebar-collapsed {
+  --sidebar-w: 56px;
+}
+.with-drawer {
+  --canvas-right: calc(var(--drawer-w) + 2 * var(--gutter));
 }
 .grain {
   position: fixed;
@@ -168,15 +181,16 @@ kbd,
   background: transparent;
   position: absolute !important;
   inset: 0;
+  left: var(--canvas-left);
+  right: var(--canvas-right);
   width: auto !important;
   height: auto !important;
-  transition: right 280ms var(--ease-out);
+  transition:
+    left 280ms var(--ease-out),
+    right 280ms var(--ease-out);
 }
 /* The drawer squeezes the canvas instead of covering it; the right edge fades
    out so level rules stop before the drawer. */
-.with-drawer .react-flow {
-  right: calc(var(--drawer-w) + 2 * var(--gutter));
-}
 .with-drawer .react-flow__renderer {
   -webkit-mask-image: linear-gradient(
     90deg,
@@ -641,33 +655,234 @@ kbd,
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-1);
 }
-.switcher {
-  left: var(--chrome-inset-left);
-  top: var(--gutter);
+.workspace-sidebar {
+  left: var(--gutter);
+  top: var(--sidebar-top);
+  bottom: var(--gutter);
+  width: var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--paper) 55%, var(--card));
+  transition:
+    width 280ms var(--ease-out),
+    top 280ms var(--ease-out);
+}
+.workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 2px 6px 8px;
+}
+.workspace-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+.workspace-brand > .ico {
+  color: var(--accent-ink);
+}
+.workspace-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--ink-3);
+  border-radius: var(--r-sm);
+}
+.workspace-toggle:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.workspace-actions {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+.workspace-action,
+.workspace-board {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
   text-align: left;
+  color: var(--ink-2);
+  font-size: 14px;
+  transition:
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
 }
-.switcher-text {
+.workspace-action:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+}
+.workspace-new {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+}
+.workspace-action kbd {
+  margin-left: auto;
+}
+.workspace-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  color: var(--ink-3);
+  border-radius: var(--r-sm);
+}
+.workspace-search:focus-within {
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.workspace-search input {
   min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 13px;
 }
-.switcher-text strong {
-  display: block;
-  font: 700 16px/1.25 var(--kai);
-  max-width: min(460px, 38vw);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.switcher-text small {
-  font: 400 11.5px var(--kai-mono);
-  letter-spacing: 0.04em;
+.workspace-search input::placeholder {
   color: var(--ink-3);
 }
-.compass {
+.workspace-copy {
+  min-width: 0;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 180ms var(--ease-out);
+}
+.workspace-section {
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 10px 8px;
+  color: var(--ink-3);
+  font: 400 11px var(--kai-mono);
+}
+.workspace-navigation {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.workspace-board-list {
+  position: relative;
+}
+.workspace-board-list ul {
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+}
+.workspace-hover {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  pointer-events: none;
+  transition: transform 180ms var(--ease-out);
+}
+.workspace-board-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-board[aria-current="page"] {
   color: var(--ink);
+  background: var(--accent-wash);
+}
+.workspace-board[aria-current="page"] > .ico {
+  color: var(--accent-ink);
+}
+.workspace-current {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-left: auto;
+  background: var(--accent);
+  border-radius: var(--r-pill);
+}
+.workspace-empty {
+  padding: 8px 10px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.workspace-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px 10px 6px;
+  border-top: 1px solid var(--border);
+  color: var(--ink-3);
+  font: 400 11px var(--kai-mono);
+}
+.workspace-sidebar .spin {
+  animation: spin 1s linear infinite;
+}
+.sidebar-collapsed .workspace-header {
+  justify-content: center;
+  padding: 0 0 6px;
+}
+.sidebar-collapsed .workspace-brand {
+  display: none;
+}
+.sidebar-collapsed .workspace-action kbd {
+  display: none;
+}
+.sidebar-collapsed .workspace-copy {
+  width: 0;
+  flex: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+.sidebar-collapsed .workspace-section {
+  padding: 12px 0 0;
+}
+.sidebar-collapsed .workspace-action,
+.sidebar-collapsed .workspace-board,
+.sidebar-collapsed .workspace-footer {
+  gap: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.sidebar-collapsed .workspace-current {
+  position: absolute;
+  top: 8px;
+  right: 5px;
+  width: 4px;
+  height: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-sidebar,
+  .workspace-copy,
+  .workspace-hover,
+  .workspace-action,
+  .workspace-board,
+  .react-flow {
+    transition: none;
+  }
+  .workspace-sidebar .spin {
+    animation: none;
+  }
 }
 .progress {
   right: var(--gutter);
@@ -843,22 +1058,44 @@ kbd,
 .map-unit,
 .toast,
 .hint,
-.map-progress {
+.map-progress,
+.relation-bar {
   transition:
     left 280ms var(--ease-out),
     right 280ms var(--ease-out);
 }
-.with-drawer .dock,
-.with-drawer .toast,
-.with-drawer .hint,
-.with-drawer .map-progress {
-  left: calc((100% - var(--drawer-w) - 2 * var(--gutter)) / 2);
+.app .dock,
+.app .toast,
+.app .hint,
+.app .map-progress,
+.app .relation-bar {
+  left: calc((100% + var(--canvas-left) - var(--canvas-right)) / 2);
 }
 .with-drawer .progress,
 .with-drawer .map-unit {
   right: calc(var(--drawer-w) + 2 * var(--gutter));
 }
 @media (max-width: 1180px) {
+  .with-sidebar.with-drawer .dock .b {
+    max-width: 32px;
+  }
+  .with-sidebar.with-drawer .dock .sep {
+    margin: 0 2px;
+  }
+  .with-sidebar.with-drawer .dock .ask {
+    gap: 4px;
+    padding: 0 8px;
+    font-size: 14px;
+  }
+  .with-sidebar.with-drawer .map-unit {
+    bottom: calc(var(--gutter) + 64px);
+  }
+  .with-sidebar.with-drawer:not(.sidebar-collapsed) .progress .bar {
+    display: none;
+  }
+  .with-sidebar.with-drawer .relation-bar {
+    top: calc(var(--gutter) + 56px);
+  }
   .with-drawer .map-unit {
     width: auto;
   }
@@ -2877,13 +3114,9 @@ kbd,
   animation: spin 2s linear infinite;
 }
 
-/* macOS hidden-inset title bar: the traffic lights sit at x = 16 (main.ts), are 52px wide
-   and vertically centred on the switcher; the switcher starts one --gutter after them. */
-:root {
-  --chrome-inset-left: var(--gutter);
-}
+/* Keep the sidebar below the macOS traffic lights, including when collapsed. */
 .mac-titlebar {
-  --chrome-inset-left: 80px;
+  --sidebar-top: 56px;
 }
 .titlebar-drag {
   position: fixed;

@@ -11,11 +11,12 @@ test("the minimap shows only while panning or with the hand tool; zoom stays", a
   await expect(map).toBeHidden();
   await expect(zoom).toBeVisible();
   // Space-drag pans: visible while held, fades after release.
-  await page.mouse.move(120, 880);
+  const canvas = (await page.locator(".react-flow").boundingBox())!;
+  await page.mouse.move(canvas.x + 40, 880);
   await page.keyboard.down("Space");
   await expect(page.locator("main.space-pan")).toHaveCount(1);
   await page.mouse.down();
-  await page.mouse.move(200, 820, { steps: 6 });
+  await page.mouse.move(canvas.x + 120, 820, { steps: 6 });
   await expect(map).toHaveAttribute("data-visible", "true");
   await expect(map).toBeVisible();
   await page.mouse.up();
