@@ -63,13 +63,13 @@ export function SeqEdge({ source, target }: EdgeProps<SeqEdgeType>) {
   if (gap < 18) return null;
   const y = a.y + 28,
     x2 = a.x + a.w + gap / 2 + 2.5;
-  // Quiet: --rule at half strength, a short open chevron, no shaft.
+  // Quiet: --rule, a short open chevron, no shaft.
   return (
     <path
       className="seq-edge"
       d={`M${x2 - 5} ${y - 4.5} L${x2} ${y} L${x2 - 5} ${y + 4.5}`}
       fill="none"
-      stroke="color-mix(in srgb, var(--rule) 50%, transparent)"
+      stroke="var(--rule)"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
