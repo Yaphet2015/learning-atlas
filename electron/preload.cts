@@ -18,6 +18,7 @@ const api: AtlasAPI = {
   getAISettings: () => ipcRenderer.invoke("atlas:ai-settings"),
   setAISettings: (settings) =>
     ipcRenderer.invoke("atlas:configure-ai", settings),
+  testAIConnection: (settings) => ipcRenderer.invoke("atlas:test-ai", settings),
   ask: (request) => ipcRenderer.invoke("atlas:ask", request),
   stop: (board, sticky) => ipcRenderer.invoke("atlas:stop", board, sticky),
   getHistory: (board, sticky) =>

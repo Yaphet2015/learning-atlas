@@ -1237,6 +1237,7 @@ export default function App() {
             setSettings(await api.setAISettings(input));
             showToast("AI 设置已更新。发出提问时才会调用模型。");
           }}
+          onTest={(input) => api.testAIConnection(input)}
         />
       )}
       {showNew && (

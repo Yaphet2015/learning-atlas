@@ -99,6 +99,22 @@ export interface AISettingsInput {
   baseUrl: string;
   apiKey?: string;
 }
+/** Outcome of the settings 「测试连接」 probe. Never carries the key or raw provider text. */
+export type AIConnectionResult =
+  | { ok: true; model: string; latencyMs: number }
+  | {
+      ok: false;
+      kind:
+        | "config"
+        | "auth"
+        | "model"
+        | "network"
+        | "timeout"
+        | "rate"
+        | "unknown";
+      message: string;
+      status?: number;
+    };
 export interface AIRequest {
   boardId: string;
   stickyId: string;
@@ -127,6 +143,7 @@ export interface AtlasAPI {
   deleteBoard(id: string): Promise<void>;
   getAISettings(): Promise<AISettings>;
   setAISettings(settings: AISettingsInput): Promise<AISettings>;
+  testAIConnection(settings: AISettingsInput): Promise<AIConnectionResult>;
   ask(request: AIRequest): Promise<void>;
   stop(boardId: string, stickyId: string): Promise<void>;
   getHistory(boardId: string, stickyId: string): Promise<AIHistory>;

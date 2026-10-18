@@ -1,22 +1,64 @@
 import ofl from "lxgw-wenkai-webfont/OFL.txt?raw";
 import { useState } from "react";
-import { Check, KeyRound, LockKeyhole, X } from "lucide-react";
-import type { AISettings, AISettingsInput } from "../shared/types";
+import { KeyRound, LockKeyhole, X } from "lucide-react";
+import type {
+  AIConnectionResult,
+  AISettings,
+  AISettingsInput,
+} from "../shared/types";
 import { isDesktop } from "../api";
+import {
+  connectionStatusText,
+  type ConnectionTestState,
+} from "../model/connection";
+
 export function Settings({
   settings,
   onClose,
   onSave,
+  onTest,
 }: {
   settings: AISettings;
   onClose: () => void;
   onSave: (s: AISettingsInput) => Promise<void>;
+  onTest: (s: AISettingsInput) => Promise<AIConnectionResult>;
 }) {
   const [model, setModel] = useState(settings.model),
     [endpoint, setEndpoint] = useState(settings.baseUrl),
     [key, setKey] = useState(""),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [test, setTest] = useState<ConnectionTestState>({ phase: "idle" });
+  const draft = (): AISettingsInput => ({
+    model,
+    baseUrl: endpoint,
+    ...(key ? { apiKey: key } : {}),
+  });
+  // Edits invalidate an earlier result so it never describes different settings.
+  const edited =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      set(value);
+      setTest({ phase: "idle" });
+    };
+  const runTest = async () => {
+    setTest({ phase: "testing" });
+    try {
+      setTest({ phase: "done", result: await onTest(draft()) });
+    } catch (error) {
+      const message = String(error instanceof Error ? error.message : error);
+      setTest({
+        phase: "done",
+        result: {
+          ok: false,
+          kind: "unknown",
+          message: /Invalid|url|URL/.test(message)
+            ? "设置格式不对：请检查 API 地址（远程地址需 https）和模型 ID。"
+            : "测试没有完成，请检查设置后重试。",
+        },
+      });
+    }
+  };
   return (
     <div
       className="modal-backdrop"
@@ -58,11 +100,7 @@ export function Settings({
             setBusy(true);
             setError("");
             try {
-              await onSave({
-                model,
-                baseUrl: endpoint,
-                ...(key ? { apiKey: key } : {}),
-              });
+              await onSave(draft());
               setKey("");
               onClose();
             } catch (error) {
@@ -78,7 +116,7 @@ export function Settings({
               type="url"
               required
               value={endpoint}
-              onChange={(e) => setEndpoint(e.target.value)}
+              onChange={(e) => edited(setEndpoint)(e.target.value)}
               disabled={!isDesktop}
             />
           </label>
@@ -88,7 +126,7 @@ export function Settings({
               value={model}
               required
               placeholder="gpt-4o-mini"
-              onChange={(e) => setModel(e.target.value)}
+              onChange={(e) => edited(setModel)(e.target.value)}
               disabled={!isDesktop}
             />
           </label>
@@ -105,7 +143,7 @@ export function Settings({
               spellCheck={false}
               value={key}
               placeholder="输入你的 API key"
-              onChange={(e) => setKey(e.target.value)}
+              onChange={(e) => edited(setKey)(e.target.value)}
               disabled={!isDesktop}
             />
           </label>
@@ -117,6 +155,30 @@ export function Settings({
             </span>
           </div>
           {error && <div className="inline-error">{error}</div>}
+          <div className="connection-test">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!isDesktop || busy || test.phase === "testing"}
+              onClick={() => void runTest()}
+            >
+              {test.phase === "testing" ? "测试中…" : "测试连接"}
+            </button>
+            <span
+              className="connection-status"
+              data-state={
+                test.phase === "done"
+                  ? test.result.ok
+                    ? "success"
+                    : "failure"
+                  : test.phase
+              }
+              role="status"
+              aria-live="polite"
+            >
+              {connectionStatusText(test)}
+            </span>
+          </div>
           <button
             className="primary-button"
             type="submit"
@@ -130,7 +192,7 @@ export function Settings({
           </button>
         </form>
         <p className="settings-foot">
-          配置不代表已验证连通；只有你发出提问时才调用模型。
+          保存不会调用模型；「测试连接」会用上面填写的设置发一次极短的请求（可能产生极少费用），不会保存。
         </p>
         <details className="licenses">
           <summary>关于 · 开源许可</summary>

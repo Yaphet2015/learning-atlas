@@ -102,6 +102,9 @@ async function bootstrap(): Promise<void> {
     handle("atlas:configure-ai", (value) =>
       runtime.setSettings(settingsSchema.parse(value)),
     );
+    handle("atlas:test-ai", (value) =>
+      runtime.testConnection(settingsSchema.parse(value)),
+    );
     handle("atlas:ask", (value) => {
       if (closePending) throw new Error("App is preparing to close");
       return runtime.ask(aiRequestSchema.parse(value));

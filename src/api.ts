@@ -52,6 +52,13 @@ const preview: AtlasAPI = {
       "AI 连接需要桌面客户端。浏览器预览只在本机保存白板，不接收 API 密钥。",
     );
   },
+  async testAIConnection() {
+    return {
+      ok: false,
+      kind: "config",
+      message: "浏览器预览不能测试连接：请在桌面客户端中配置 AI。",
+    };
+  },
   async ask() {
     throw new Error("AI_NOT_CONFIGURED: 请在桌面客户端的 AI 设置中连接模型。");
   },
