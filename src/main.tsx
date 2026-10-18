@@ -9,7 +9,7 @@ import "@xyflow/react/dist/style.css";
 import "./styles.css";
 
 async function boot() {
-  // Measure with the real face, never a fallback: Rough.js frames depend on text size.
+  // Measure with the real face, never a fallback: card widths are measured from the title.
   try {
     await Promise.all([
       document.fonts.load('700 22px "LXGW WenKai"', "学习地图"),
@@ -17,7 +17,7 @@ async function boot() {
       document.fonts.load('400 11px "LXGW WenKai Mono"', "L0"),
     ]);
   } catch {
-    /* Render anyway; layout positions do not depend on font metrics. */
+    /* Render anyway; card widths fall back to a character estimate. */
   }
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <ReactFlowProvider>

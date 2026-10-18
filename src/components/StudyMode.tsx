@@ -3,8 +3,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import type { Board, ConceptNode, Understanding } from "../shared/types";
 import { layoutTree } from "../model/layout";
 import { levelName } from "./LevelGuides";
-import { RoughBox } from "./sketch/RoughBox";
-import { boxFor } from "./CanvasNodes";
+import { Seal } from "./Seal";
 
 const RATES: { s: Understanding; label: string }[] = [
   { s: "unseen", label: "还没懂" },
@@ -80,7 +79,6 @@ export function StudyMode({
         className={`shadow-card ${side} s-${n.status}`}
         onClick={() => go(side === "left" ? -1 : 1)}
       >
-        <RoughBox kind={boxFor(n.status)} seedKey={n.id} />
         {n.title}
       </button>
     ) : null;
@@ -104,8 +102,7 @@ export function StudyMode({
       <Shadow n={prev} side="left" />
       <Shadow n={next} side="right" />
       <article className={`chrome focus-card s-${node.status}`}>
-        <RoughBox kind="card" seedKey={node.id + ":focus"} />
-        <div className="bg" />
+        {node.status === "explained" && <Seal size={44} />}
         <span className="eyebrow">
           {levelName(level)} · 第 {row.indexOf(node) + 1} 个 ·{" "}
           {node.status === "unseen"
@@ -189,7 +186,6 @@ export function StudyMode({
                 className={`mini-card s-${k.status}`}
                 onClick={() => setIndex(steps.indexOf(k))}
               >
-                <RoughBox kind={boxFor(k.status)} seedKey={k.id} />
                 {k.title}
               </button>
             ))}

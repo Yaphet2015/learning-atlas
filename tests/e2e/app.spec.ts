@@ -72,7 +72,9 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
 }) => {
   await card(page, "样式计算").click();
   await page.getByRole("radio", { name: "我能解释" }).click();
-  await expect(card(page, "样式计算").locator(".seal")).toHaveText("懂");
+  await expect(
+    card(page, "样式计算").getByRole("img", { name: "我能解释" }),
+  ).toBeVisible();
   await page.keyboard.press("ControlOrMeta+z");
   await expect(card(page, "样式计算").locator(".seal")).toHaveCount(0);
   await card(page, "样式计算").click();

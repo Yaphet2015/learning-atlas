@@ -20,7 +20,6 @@ import {
   StickyNote,
 } from "lucide-react";
 import type { BoardSummary, ConceptNode } from "../shared/types";
-import { RoughBox } from "./sketch/RoughBox";
 
 function Compass() {
   return (
@@ -31,7 +30,7 @@ function Compass() {
       className="compass"
       aria-hidden="true"
     >
-      <g filter="url(#wobble)">
+      <g>
         <circle
           cx="13"
           cy="13"
@@ -65,8 +64,6 @@ export function MapSwitcher({
   const explained = concepts.filter((n) => n.status === "explained").length;
   return (
     <button className="chrome switcher" onClick={onOpen} title="切换地图 ⌘K">
-      <RoughBox kind="soft" seedKey="switcher" />
-      <div className="bg" />
       <Compass />
       <span className="switcher-text">
         <strong>{title}</strong>
@@ -165,8 +162,6 @@ export function Palette({
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <section className="chrome palette" role="dialog" aria-label="切换地图">
-        <RoughBox kind="soft" seedKey="palette" />
-        <div className="bg" />
         <input
           autoFocus
           placeholder="找一张地图，或输入新问题…"
@@ -214,8 +209,6 @@ export function Progress({
   const done = concepts.filter((n) => n.status === "explained").length;
   return (
     <div className="chrome progress">
-      <RoughBox kind="soft" seedKey="progress" />
-      <div className="bg" />
       <span className="lab">理解进度</span>
       <span className="bar" aria-hidden="true">
         {concepts.map((n) => (
@@ -267,8 +260,6 @@ export function Dock({
   );
   return (
     <nav className="chrome dock" aria-label="工具">
-      <RoughBox kind="soft" seedKey="dock" />
-      <div className="bg" />
       {b("select", "选择", "V", <MousePointer2 size={18} className="ico" />)}
       {b("hand", "平移", "H", <Hand size={18} className="ico" />)}
       <span className="sep" />
@@ -320,8 +311,6 @@ export function MapUnit() {
   const { zoom } = useViewport();
   return (
     <div className="chrome map-unit">
-      <RoughBox kind="soft" seedKey="minimap" />
-      <div className="bg" />
       <MiniMap
         pannable
         zoomable

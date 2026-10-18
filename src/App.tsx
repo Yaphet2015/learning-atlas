@@ -45,7 +45,7 @@ import {
   reorder,
   reparent,
 } from "./model/editor";
-import { insertSlot, layoutTree, type Slot } from "./model/layout";
+import { insertSlot, layoutTree, rowY, type Slot } from "./model/layout";
 import { flushBoardCache, loadBoardForNavigation } from "./model/persistence";
 import {
   ConceptCard,
@@ -67,7 +67,6 @@ import {
 import { Drawer } from "./components/Drawer";
 import { StudyMode } from "./components/StudyMode";
 import { Outline } from "./components/Outline";
-import { RoughBox, SketchDefs } from "./components/sketch/RoughBox";
 import { Settings } from "./components/Settings";
 
 const nodeTypes = { concept: ConceptCard, root: RootCard, ghost: GhostCard };
@@ -1040,8 +1039,9 @@ export default function App() {
   );
   const bounds = useMemo(() => {
     const ps = [...baseLayout.positions.values()];
+    const levels = Math.max(1, ...ps.map((p) => p.level + 1));
     return {
-      levels: Math.max(1, ...ps.map((p) => p.level + 1)),
+      rows: Array.from({ length: levels }, (_, l) => rowY(l)),
       left: Math.min(0, ...ps.map((p) => p.x)),
       right: Math.max(0, ...ps.map((p) => p.x + p.w)),
     };
@@ -1058,7 +1058,6 @@ export default function App() {
     );
   return (
     <main className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""}`}>
-      <SketchDefs />
       <div className="grain" />
       {chromeClasses.includes("mac-titlebar") && (
         <div className="titlebar-drag" aria-hidden="true" />
@@ -1157,8 +1156,6 @@ export default function App() {
           )}
           {selectedRelation && (
             <div className="chrome relation-bar">
-              <RoughBox kind="soft" seedKey="relbar" />
-              <div className="bg" />
               <span className="lab">交叉链接</span>
               <input
                 aria-label="关系标签"
@@ -1322,7 +1319,6 @@ export default function App() {
             aria-modal="true"
             aria-labelledby="new-title"
           >
-            <RoughBox kind="soft" seedKey="new-modal" />
             <button
               className="modal-close icon-button"
               onClick={() => setShowNew(false)}
@@ -1372,7 +1368,6 @@ export default function App() {
             aria-modal="true"
             aria-labelledby="promote-title"
           >
-            <RoughBox kind="soft" seedKey="promote" />
             <button
               className="modal-close icon-button"
               onClick={() => setPromote(null)}

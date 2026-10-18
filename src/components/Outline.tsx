@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Board, Understanding } from "../shared/types";
 import { layoutTree } from "../model/layout";
+import { Seal } from "./Seal";
 
 const NEXT: Record<Understanding, Understanding> = {
   unseen: "exploring",
@@ -69,6 +70,7 @@ export function Outline({
                 onClick={() => setOpen(open === n.id ? null : n.id)}
               >
                 <strong>{n.title}</strong>
+                {n.status === "explained" && <Seal size={16} />}
                 {open === n.id && n.body && <p>{n.body}</p>}
                 {open === n.id && n.hand && (
                   <span className="hand">{n.hand}</span>

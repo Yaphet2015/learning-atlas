@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { ConceptNode, SceneState, VisualDiagram } from "../shared/types";
-import { RoughBox, SelectRing, type BoxKind } from "./sketch/RoughBox";
+import { Seal } from "./Seal";
 
 export type CardData = {
   [key: string]: unknown;
@@ -50,10 +50,6 @@ export type CardNode = Node<CardData, "concept" | "root">;
 export type GhostNode = Node<GhostData, "ghost">;
 export type CanvasNode = CardNode | GhostNode;
 
-export const boxFor = (status: ConceptNode["status"]): BoxKind =>
-  status === "unseen" ? "dash" : status === "explained" ? "strong" : "card";
-const washFor = (status: ConceptNode["status"]) =>
-  status === "explained" ? 1 : status === "exploring" ? 0.5 : 0;
 
 function StructuredVisual({ visual }: { visual: VisualDiagram }) {
   return (
@@ -115,7 +111,7 @@ function Ports({ linkMode }: { linkMode?: boolean }) {
   );
 }
 
-/** Title with the mastery highlighter stroke underneath (0 / 50% / 100%). */
+/** Card title; double-click or F2 turns it into an input. */
 function Title({ data, as: Tag }: { data: CardData; as: "h2" | "h3" }) {
   const n = data.concept;
   const [draft, setDraft] = useState(n.title);
@@ -150,15 +146,7 @@ function Title({ data, as: Tag }: { data: CardData; as: "h2" | "h3" }) {
       />
     );
   return (
-    <Tag>
-      <span className="ttl">
-        <span
-          className="wash"
-          style={{ "--f": washFor(n.status) } as React.CSSProperties}
-        />
-        {Tag === "h2" ? (data.topic ?? n.title) : n.title}
-      </span>
-    </Tag>
+    <Tag>{Tag === "h2" ? (data.topic ?? n.title) : n.title}</Tag>
   );
 }
 
@@ -264,12 +252,7 @@ function SelectToolbar({
   );
 }
 
-export function ConceptCard({
-  data,
-  selected,
-  width,
-  height,
-}: NodeProps<CardNode>) {
+export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
   const n = data.concept;
   // Stamp only when the status changes while mounted, not on first paint.
   const first = useRef(n.status);
@@ -278,18 +261,13 @@ export function ConceptCard({
     <article
       className={`card s-${n.status} ${selected ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""}`}
     >
-      <RoughBox kind={boxFor(n.status)} seedKey={n.id} />
-      <div className="bg" />
       <Ports linkMode={data.linkMode} />
-      {n.status === "explained" && <span className="seal">懂</span>}
+      {n.status === "explained" && <Seal />}
       {data.no && <span className="no">{data.no}</span>}
       <Title data={data} as="h3" />
       {n.body && <p>{n.body}</p>}
       {n.visual && <StructuredVisual visual={n.visual} />}
       {n.hand && <span className="hand">{n.hand}</span>}
-      {selected && width && height ? (
-        <SelectRing w={width} h={height} seedKey={n.id + ":sel"} />
-      ) : null}
       {!data.linkMode && <AddHandles data={data} />}
       <SelectToolbar data={data} visible={!!selected && !data.editing} />
     </article>
@@ -307,8 +285,6 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
   const [open, setOpen] = useState(false);
   return (
     <article className={`origin ${selected ? "is-selected" : ""}`}>
-      <RoughBox kind="origin" seedKey={n.id} />
-      <div className="bg" />
       <Ports linkMode={data.linkMode} />
       <div className="origin-head">
         <span className="eyebrow">起点 · 问题</span>
@@ -363,9 +339,7 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
 /** Insertion preview: a vermilion dashed slot. */
 export function GhostCard({ data }: NodeProps<GhostNode>) {
   return (
-    <div className="ghost" style={{ width: data.w }}>
-      <RoughBox kind="ghost" seedKey="ghost" />
-    </div>
+    <div className="ghost" style={{ width: data.w }} />
   );
 }
 

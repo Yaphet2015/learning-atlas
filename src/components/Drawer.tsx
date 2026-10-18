@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ArrowUp, LoaderCircle, Plus, Square, X } from "lucide-react";
 import type { ContextReference, StickyNote } from "../shared/types";
-import { RoughBox } from "./sketch/RoughBox";
 import { displayMessage } from "../model/kickoff";
 
 /** AI conversations live in a right-hand drawer, attached to a card or free. */
@@ -43,8 +42,6 @@ export function Drawer({
   };
   return (
     <aside className="chrome drawer" aria-label="批注与提问">
-      <RoughBox kind="soft" seedKey={"drawer"} />
-      <div className="bg" />
       <header>
         <span className="eyebrow">批注</span>
         <input
