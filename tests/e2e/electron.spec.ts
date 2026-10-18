@@ -96,6 +96,8 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     expect(persisted.notes.at(-1).text).toBe(
       "Close immediately: this edit must survive.",
     );
+    // Conversations carry their creation time for the session list.
+    expect(persisted.notes.at(-1).createdAt).toMatch(/^\d{4}-\d\d-\d\d/);
 
     const { app: reopened, page: nextPage } = await launch();
     // Wait for the reopened board and the app's readiness signal (⌘K listener attached).
@@ -106,6 +108,13 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     await expect(nextPage.getByLabel("批注内容")).toHaveValue(
       "Close immediately: this edit must survive.",
     );
+    // The reopened board lists that conversation in the drawer's session list.
+    await nextPage.getByRole("button", { name: "对话列表" }).click();
+    const current = nextPage
+      .getByLabel("这张白板的对话")
+      .locator('.session[aria-current="true"]');
+    await expect(current).toContainText("Close immediately");
+    await expect(current).toContainText("自由批注");
     await nextPage.screenshot({
       path: "test-results/atlas-macos-sticky-reopened.png",
       fullPage: true,

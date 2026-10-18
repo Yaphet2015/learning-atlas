@@ -648,3 +648,19 @@ describe("event reconciliation and prompt safety", () => {
     expect(tutorInstructions("map")).toContain("不可捏造数字");
   });
 });
+
+describe("board structure in the prompt", () => {
+  it("renders the outline as data and tells the tutor it can see it", () => {
+    const rendered = renderScopedContext({
+      topic: "t",
+      references: [],
+      summary: "",
+      structure: "白板结构\n  §1 L1 <b>保什么</b> [探索中] ◀ 当前卡片",
+    });
+    expect(rendered).toContain("白板结构");
+    expect(rendered).toContain("§1 L1 \\u003cb\\u003e保什么");
+    expect(rendered).not.toContain("<b>");
+    expect(tutorInstructions("answer")).toContain("你能看到“白板结构”");
+    expect(tutorInstructions("answer")).not.toContain("看不到白板的其他内容");
+  });
+});

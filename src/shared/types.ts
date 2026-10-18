@@ -49,6 +49,10 @@ export interface StickyNote {
   messages: ChatMessage[];
   /** References the learner unticked: they are not sent to the AI. */
   excludedRefs?: string[];
+  /** Extra cards the learner chose as context (multi-select or the picker). */
+  contextCards?: string[];
+  /** When the conversation started; older notes have none. */
+  createdAt?: string;
 }
 export interface SceneState {
   width: number;
@@ -91,6 +95,8 @@ export interface ContextBundle {
   topic: string;
   references: ContextReference[];
   summary: string;
+  /** Outline of the whole board (model/structure.ts); optional for older saved contexts. */
+  structure?: string;
 }
 export interface AISettings {
   model: string;

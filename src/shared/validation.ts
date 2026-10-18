@@ -10,6 +10,7 @@ export const LIMITS = {
   messagesPerNote: 200,
   contextReferences: 20,
   contextCharacters: 20_000,
+  structureCharacters: 4_000,
   prompt: 8_000,
 } as const;
 
@@ -118,6 +119,8 @@ export const stickyNoteSchema = z
     attachedTo: attachmentSchema.optional(),
     messages: z.array(chatMessageSchema).max(LIMITS.messagesPerNote),
     excludedRefs: z.array(z.string().max(200)).max(100).optional(),
+    contextCards: z.array(idSchema).max(LIMITS.contextReferences).optional(),
+    createdAt: timestampSchema.optional(),
   })
   .strict();
 export const sceneSchema = z
@@ -278,6 +281,7 @@ export const contextBundleSchema = z
     topic: z.string().max(2_000),
     references: z.array(contextReferenceSchema).max(LIMITS.contextReferences),
     summary: z.string().max(LIMITS.contextCharacters),
+    structure: z.string().max(LIMITS.structureCharacters).optional(),
   })
   .strict()
   .refine(

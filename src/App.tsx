@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   ConnectionMode,
+  SelectionMode,
   useReactFlow,
   type Edge,
   type Connection,
@@ -29,6 +30,8 @@ import {
 } from "./model/boards";
 import { contextForNote } from "./model/context";
 import { plain } from "./model/answer";
+import { boxPick, toggleCard } from "./model/selection";
+import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import {
   firstLevelPrompt,
@@ -116,6 +119,10 @@ export default function App() {
   const [board, setBoard] = useState<Board | null>(null),
     [boards, setBoards] = useState<BoardSummary[]>([]),
     [selection, setSelection] = useState<Selection>(null),
+    /** Two or more cards picked together (Shift/⌘-click or a marquee). */
+    [picked, setPicked] = useState<string[]>([]),
+    /** Space held: the canvas pans on drag instead of drawing a marquee. */
+    [spacePan, setSpacePan] = useState(false),
     [settings, setSettings] = useState<AISettings>(defaults),
     [showSettings, setShowSettings] = useState(false),
     [showNew, setShowNew] = useState(false),
@@ -400,18 +407,13 @@ export default function App() {
       }),
     [flow],
   );
-  /** Open the drawer on the card's note (creating one if needed), or a free note. */
+  /** Open the drawer on the card's latest note (creating one if needed), or a free note; fresh always starts a new one. */
   const addNote = useCallback(
-    (attachment?: StickyNote["attachedTo"], text?: string) => {
+    (attachment?: StickyNote["attachedTo"], text?: string, fresh = false) => {
       const b = boardRef.current;
       if (!b) return;
-      const existing = attachment
-        ? b.notes.find(
-            (n) =>
-              n.attachedTo?.kind === attachment.kind &&
-              n.attachedTo.id === attachment.id,
-          )
-        : undefined;
+      const existing =
+        attachment && !fresh ? latestNoteOn(b, attachment) : undefined;
       if (existing && !text) {
         setDrawer(existing.id);
         return;
@@ -738,6 +740,24 @@ export default function App() {
     setSelection(null);
     showToast("已移除。⌘Z 可以撤销。");
   }
+  /** 问 AI about several cards: a new conversation with all of them as context. */
+  const askMany = useCallback(
+    (ids: string[]) => {
+      const b = boardRef.current;
+      if (!b || !ids.length) return;
+      const cards = ids.filter((id) => b.nodes.some((n) => n.id === id));
+      const first = cards[0];
+      const note = newNote(b, { x: 0, y: 0 }, { kind: "node", id: first });
+      const title = b.nodes.find((n) => n.id === first)?.title ?? "";
+      note.title = `关于「${title}」等 ${cards.length} 张卡`.slice(0, 160);
+      note.contextCards = cards.slice(1);
+      edit((current) => ({ ...current, notes: [...current.notes, note] }));
+      setPicked([]);
+      setSelection({ kind: "node", id: first });
+      setDrawer(note.id);
+    },
+    [edit],
+  );
   const ask = useCallback(() => {
     addNote(selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined);
     // A newly opened drawer focuses its composer itself. For one that was already
@@ -778,7 +798,8 @@ export default function App() {
         setPromote(null);
         setPalette(false);
         if (!typing) {
-          if (drawer) closeDrawer();
+          if (picked.length) setPicked([]);
+          else if (drawer) closeDrawer();
           else setSelection(null);
           setTool("select");
         }
@@ -821,7 +842,8 @@ export default function App() {
         );
       } else if (e.key === "/") {
         e.preventDefault();
-        ask();
+        if (picked.length >= 2) askMany(picked);
+        else ask();
       } else if (key === "0") {
         flow.fitView({ padding: 0.16, duration: 400 });
       } else if (key === "d") {
@@ -836,6 +858,29 @@ export default function App() {
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
   });
+  // Hold Space to pan with a left drag (left drag on empty canvas draws a marquee).
+  useEffect(() => {
+    const typing = (e: KeyboardEvent) =>
+      (e.target as HTMLElement)?.matches?.(
+        "input,textarea,select,button,[contenteditable=true]",
+      );
+    const down = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !typing(e) && !e.repeat) {
+        e.preventDefault();
+        setSpacePan(true);
+      }
+    };
+    const up = (e: KeyboardEvent) => e.code === "Space" && setSpacePan(false);
+    const blur = () => setSpacePan(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
   // Readiness signal for automation: set once a board is on screen, in the same
   // commit (and after) the shortcut listener above is attached.
   useEffect(() => {
@@ -993,10 +1038,15 @@ export default function App() {
         measured: measured[n.id],
         draggable:
           n.parentId !== null && tool === "select" && editingId !== n.id,
-        selected: selectedNodeId === n.id,
-        className: dragging ? "is-dragging" : undefined,
+        selected: selectedNodeId === n.id || picked.includes(n.id),
+        className: dragging
+          ? "is-dragging"
+          : picked.length >= 2 && picked.includes(n.id)
+            ? "is-picked"
+            : undefined,
         data: {
           concept: n,
+          multi: picked.length >= 2,
           noteOpen: drawerAnchor === n.id,
           no: numbers.get(n.id),
           topic: board.topic,
@@ -1053,6 +1103,7 @@ export default function App() {
     startKickoff,
     drawerAnchor,
     numbers,
+    picked,
   ]);
   const edges = useMemo<Edge[]>(() => {
     if (!shown) return [];
@@ -1107,8 +1158,22 @@ export default function App() {
   }, [shown, layout, selection]);
   // Positions are controlled by layoutTree; only drag offsets and measured
   // sizes (needed by the minimap) flow back from React Flow.
+  const boxing = useRef<{ base: string[]; inside: Set<string> } | null>(null);
   const onNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
     const sizes: Record<string, { width: number; height: number }> = {};
+    const box = boxing.current;
+    if (box && changes.some((c) => c.type === "select")) {
+      for (const c of changes)
+        if (c.type === "select" && c.id !== GHOST)
+          c.selected ? box.inside.add(c.id) : box.inside.delete(c.id);
+      const next = boxPick(
+        { single: null, picked: box.base },
+        [...box.inside],
+        box.base.length > 0,
+      );
+      setPicked(next.picked);
+      setSelection(next.single ? { kind: "node", id: next.single } : null);
+    }
     for (const c of changes) {
       if (c.type === "position" && c.dragging && c.position)
         setDragPos({ id: c.id, x: c.position.x, y: c.position.y });
@@ -1226,9 +1291,22 @@ export default function App() {
             connectionMode={ConnectionMode.Loose}
             connectionRadius={70}
             nodesConnectable={tool === "link"}
-            onNodeClick={(_, n) =>
-              n.type !== "ghost" && setSelection({ kind: "node", id: n.id })
-            }
+            onNodeClick={(e, n) => {
+              if (n.type === "ghost") return;
+              if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                const next = toggleCard(
+                  { single: selectedNodeId, picked },
+                  n.id,
+                );
+                setPicked(next.picked);
+                setSelection(
+                  next.single ? { kind: "node", id: next.single } : null,
+                );
+                return;
+              }
+              setPicked([]);
+              setSelection({ kind: "node", id: n.id });
+            }}
             onNodeDoubleClick={(_, n) =>
               n.type !== "ghost" && setEditingId(n.id)
             }
@@ -1236,6 +1314,8 @@ export default function App() {
               e.type === "cross" && setSelection({ kind: "relation", id: e.id })
             }
             onPaneClick={() => {
+              if (boxing.current) return;
+              setPicked([]);
               setSelection(null);
               setEditingId(null);
             }}
@@ -1250,8 +1330,29 @@ export default function App() {
             deleteKeyCode={null}
             selectionKeyCode={null}
             multiSelectionKeyCode={null}
+            // Left drag on empty canvas draws a marquee (select tool). Panning:
+            // two-finger scroll, Space-drag, middle/right drag, or the hand tool.
+            selectionOnDrag={tool === "select" && !spacePan}
+            selectionMode={SelectionMode.Partial}
+            onSelectionStart={(e) => {
+              boxing.current = {
+                base:
+                  e.shiftKey || e.metaKey || e.ctrlKey
+                    ? picked.length
+                      ? picked
+                      : selectedNodeId
+                        ? [selectedNodeId]
+                        : []
+                    : [],
+                inside: new Set(),
+              };
+            }}
+            onSelectionEnd={() => {
+              // Let the pane click that ends the drag see we were boxing.
+              setTimeout(() => (boxing.current = null), 0);
+            }}
             panOnScroll
-            panOnDrag={tool === "hand" ? true : [1, 2]}
+            panOnDrag={tool === "hand" || spacePan ? true : [1, 2]}
             zoomOnDoubleClick={false}
             nodeDragThreshold={4}
             proOptions={{ hideAttribution: true }}
@@ -1288,6 +1389,24 @@ export default function App() {
           {tool === "link" && (
             <div className="hint lab">
               连线：从一张卡拖到另一张卡 · Esc 取消
+            </div>
+          )}
+          {picked.length >= 2 && (
+            <div
+              className="chrome relation-bar multi-bar"
+              role="toolbar"
+              aria-label="多选"
+            >
+              <span className="lab">已选 {picked.length} 张卡</span>
+              <button
+                className="btn sm primary"
+                onClick={() => askMany(picked)}
+              >
+                问 AI <kbd>/</kbd>
+              </button>
+              <button className="btn sm" onClick={() => setPicked([])}>
+                清除
+              </button>
             </div>
           )}
           {selectedRelation && (
@@ -1414,6 +1533,29 @@ export default function App() {
             showToast("已删除这张批注。⌘Z 可以撤销。");
           }}
           onClose={closeDrawer}
+          sessions={listSessions(board)}
+          onOpenSession={(id) => {
+            const target = board.notes.find((n) => n.id === id);
+            if (!target) return;
+            setDrawer(id);
+            const at = target.attachedTo;
+            if (at?.kind === "node") {
+              setSelection({ kind: "node", id: at.id });
+              frameFamily(at.id, true);
+            } else if (at?.kind === "relation") {
+              setSelection({ kind: "relation", id: at.id });
+            }
+          }}
+          onNewSession={() =>
+            addNote(
+              drawerNote.attachedTo ?? {
+                kind: "node",
+                id: drawerAnchorOrRoot,
+              },
+              undefined,
+              true,
+            )
+          }
         />
       )}
       {board && study && (

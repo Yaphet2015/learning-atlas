@@ -4,6 +4,7 @@ import {
   ArrowUp,
   ChevronDown,
   ChevronUp,
+  History,
   Link2,
   Copy,
   Delete,
@@ -15,7 +16,9 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   Square,
+  SquarePen,
   SquarePlus,
   X,
 } from "lucide-react";
@@ -30,6 +33,10 @@ import { displayMessage } from "../model/kickoff";
 import { outlineOf, type OutlineItem } from "../model/answer";
 import { AnswerBlocks } from "./AnswerBlocks";
 import { refKey } from "../model/context";
+import { toggleContextCard } from "../model/selection";
+import { sectionNumbers } from "../model/layout";
+import { LIMITS } from "../shared/validation";
+import { sessionClock, type SessionEntry } from "../model/sessions";
 
 const LEVEL = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const STATUS: Record<string, string> = {
@@ -78,21 +85,149 @@ function refSummary(
 }
 
 /** 参考: one line normally; opens in place into a checklist. */
+/** Every card on the board, searchable; ticking one adds it to this conversation. */
+function CardPicker({
+  nodes,
+  included,
+  full,
+  onToggle,
+  onDone,
+}: {
+  nodes: ConceptNode[];
+  included: (id: string) => boolean;
+  full: boolean;
+  onToggle: (id: string) => void;
+  onDone: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const numbers = sectionNumbers(nodes);
+  const q = query.trim().toLowerCase();
+  const cards = nodes
+    .filter((n) => n.parentId !== null)
+    .map((n) => ({ n, no: numbers.get(n.id) ?? "" }))
+    .sort((a, b) => a.no.localeCompare(b.no, undefined, { numeric: true }))
+    .filter(
+      ({ n, no }) =>
+        !q || n.title.toLowerCase().includes(q) || no.toLowerCase().includes(q),
+    );
+  return (
+    <div className="ctx-picker" role="group" aria-label="添加卡片">
+      <div className="ctx-search">
+        <Search size={14} className="ico" />
+        <input
+          autoFocus
+          aria-label="搜索卡片"
+          placeholder="搜索这张白板的卡片…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              onDone();
+            }
+          }}
+        />
+        <button className="btn sm" onClick={onDone}>
+          完成
+        </button>
+      </div>
+      <ul className="ctx-list">
+        {cards.map(({ n, no }) => {
+          const on = included(n.id);
+          return (
+            <li key={n.id}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={!on && full}
+                  onChange={() => onToggle(n.id)}
+                />
+                <span className="no">{no}</span>
+                <span className="tt" title={n.title}>
+                  {n.title}
+                </span>
+                <span className="lv">
+                  L{depth(nodes, n.id)} · {STATUS[n.status] ?? ""}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+        {!cards.length && <li className="add-hint">没有匹配的卡片</li>}
+      </ul>
+    </div>
+  );
+}
+
+/** This board's conversations, newest first; picking one reopens it. */
+function SessionList({
+  sessions,
+  current,
+  onOpen,
+  onNew,
+}: {
+  sessions: SessionEntry[];
+  current: string;
+  onOpen: (id: string) => void;
+  onNew: () => void;
+}) {
+  return (
+    <section className="sessions" aria-label="这张白板的对话">
+      <div className="sessions-head">
+        <span className="lab">这张白板的对话 · {sessions.length}</span>
+        <button className="btn sm primary" onClick={onNew}>
+          <SquarePen size={14} />
+          新对话
+        </button>
+      </div>
+      <ul className="session-list">
+        {sessions.map((s) => (
+          <li key={s.id}>
+            <button
+              className={`session ${s.id === current ? "on" : ""}`}
+              aria-current={s.id === current ? "true" : undefined}
+              onClick={() => onOpen(s.id)}
+            >
+              <span className="st">{s.title}</span>
+              <span className="sm">
+                <span className="an">
+                  {s.anchorTitle}
+                  {s.extra ? ` 等 ${s.extra + 1} 张卡` : ""}
+                </span>
+                <span className="dot" />
+                <time dateTime={s.time}>{sessionClock(s.time)}</time>
+                <span className="dot" />
+                <span>{s.count} 条消息</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function Refs({
   refs,
   excluded,
+  contextCards,
   nodes,
   open,
   onToggleOpen,
   onExclude,
+  onCards,
 }: {
   refs: ContextReference[];
   excluded: string[];
+  contextCards: string[];
   nodes: ConceptNode[];
   open: boolean;
   onToggleOpen: () => void;
   onExclude: (next: string[]) => void;
+  onCards: (patch: { contextCards: string[]; excludedRefs: string[] }) => void;
 }) {
+  const [adding, setAdding] = useState(false);
   // The root card is the 起点问题 itself; list it once.
   const list = refs.filter(
     (r) =>
@@ -160,11 +295,37 @@ function Refs({
               </li>
             );
           })}
-          <li className="add-hint">
-            <Plus size={14} className="ico" />
-            添加卡片：在画布上点选一张卡，它就会被带上
-          </li>
+          {!adding && (
+            <li>
+              <button className="add-card" onClick={() => setAdding(true)}>
+                <Plus size={14} className="ico" />
+                添加卡片
+              </button>
+            </li>
+          )}
         </ul>
+      )}
+      {open && adding && (
+        <CardPicker
+          nodes={nodes}
+          full={contextCards.length >= LIMITS.contextReferences - 2}
+          included={(id) =>
+            contextCards.includes(id) ||
+            (refs.some((r) => r.kind === "node" && r.id === id) &&
+              !excluded.includes(`node:${id}`))
+          }
+          onToggle={(id) =>
+            onCards(
+              toggleContextCard(
+                { contextCards, excludedRefs: excluded },
+                id,
+                !contextCards.includes(id) &&
+                  refs.some((r) => r.kind === "node" && r.id === id),
+              ),
+            )
+          }
+          onDone={() => setAdding(false)}
+        />
       )}
     </div>
   );
@@ -400,6 +561,9 @@ export function Drawer({
   onRemove,
   onClose,
   nodes,
+  sessions,
+  onOpenSession,
+  onNewSession,
 }: {
   note: StickyNote;
   /** The card this conversation hangs on; its diagram renders here, not on the card. */
@@ -425,8 +589,15 @@ export function Drawer({
   nodes: ConceptNode[];
   onRemove: () => void;
   onClose: () => void;
+  /** Every conversation on this board, newest first. */
+  sessions: SessionEntry[];
+  onOpenSession: (id: string) => void;
+  onNewSession: () => void;
 }) {
   const [prompt, setPrompt] = useState("");
+  const [sessionsOpen, setSessionsOpen] = useState(false);
+  // Reopening or starting a conversation goes back to its thread.
+  useEffect(() => setSessionsOpen(false), [note.id]);
   const [menu, setMenu] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
   // Screen readers hear the streaming answer at most every 600ms.
@@ -560,10 +731,27 @@ export function Drawer({
                 {anchor && anchor.parentId !== null ? anchorTitle : "起点问题"}
               </button>
             </span>
+            {!!note.contextCards?.length && (
+              <>
+                <span className="dot" />
+                <span className="extra" title="这段对话另外带上的卡片">
+                  +{note.contextCards.length} 张卡
+                </span>
+              </>
+            )}
             <span className="dot" />
             <span>{note.messages.length} 条消息</span>
           </div>
         </div>
+        <button
+          className={`ib ${sessionsOpen ? "on" : ""}`}
+          title="这张白板的对话"
+          aria-label="对话列表"
+          aria-pressed={sessionsOpen}
+          onClick={() => setSessionsOpen(!sessionsOpen)}
+        >
+          <History size={18} />
+        </button>
         <span className="menu-anchor">
           <button
             className={`ib ${menu ? "on" : ""}`}
@@ -588,6 +776,10 @@ export function Drawer({
               <button className="it" role="menuitem" onClick={onLocate}>
                 <Locate size={16} className="ico" />
                 在画布上定位
+              </button>
+              <button className="it" role="menuitem" onClick={onNewSession}>
+                <SquarePen size={16} className="ico" />
+                在这张卡上新开对话
               </button>
               <button
                 className="it"
@@ -616,218 +808,236 @@ export function Drawer({
           <X size={18} />
         </button>
       </header>
-      <Refs
-        refs={refs}
-        excluded={note.excludedRefs ?? []}
-        nodes={nodes}
-        open={refsOpen}
-        onToggleOpen={() => setRefsOpen(!refsOpen)}
-        onExclude={(excludedRefs) => onChange({ excludedRefs })}
-      />
-      <div className="rule-h" />
-      <div className="thread" ref={thread} onScroll={onScroll}>
-        {scrolled && <div className="fadeTop" aria-hidden="true" />}
-        {anchor?.visual && (
-          <section className="this-card" aria-label="这张卡">
-            <span className="lab">这张卡 · {anchor.title}</span>
-            <StructuredVisual visual={anchor.visual} />
-          </section>
-        )}
-        <label className={`my-note ${note.text ? "has" : ""}`}>
-          <span className="my-note-k">
-            <Pencil size={14} className="ico" />
-            我的笔记
-          </span>
-          <textarea
-            className="note-text"
-            aria-label="批注内容"
-            placeholder="写下你的理解，或一个没想通的地方……"
-            rows={1}
-            value={note.text}
-            onChange={(e) => onChange({ text: e.target.value })}
-            onKeyDown={(e) => e.stopPropagation()}
+      {sessionsOpen ? (
+        <SessionList
+          sessions={sessions}
+          current={note.id}
+          onOpen={(id) =>
+            id === note.id ? setSessionsOpen(false) : onOpenSession(id)
+          }
+          onNew={onNewSession}
+        />
+      ) : (
+        <>
+          <Refs
+            refs={refs}
+            excluded={note.excludedRefs ?? []}
+            contextCards={note.contextCards ?? []}
+            nodes={nodes}
+            open={refsOpen}
+            onToggleOpen={() => setRefsOpen(!refsOpen)}
+            onExclude={(excludedRefs) => onChange({ excludedRefs })}
+            onCards={(patch) => onChange(patch)}
           />
-        </label>
-        {note.messages.map((m) => {
-          if (m.role === "user")
-            return (
-              <div key={m.id} className="msg user bubble">
-                {displayMessage(m.role, m.text)}
-              </div>
-            );
-          const outline = outlineOf(m.text);
-          // Laid from this answer, or the anchor already has its first level.
-          const placed = !!m.meta?.laid || anchorHasChildren;
-          const layItems = () => onLay(outline, m.id);
-          return (
-            <div key={m.id} className="msg assistant ans">
-              <div className="who">
-                <span>AI</span>
-                <span>{clock(m.createdAt)}</span>
-              </div>
-              <AnswerBlocks
-                text={m.text}
-                actions={{
-                  laid: placed,
-                  onLocate,
-                  onLay: outline.length > 1 ? layItems : undefined,
-                  // “+” on one row: just that item, without marking the answer laid.
-                  onAddItem: (item) => onLay([item]),
-                  checked: m.meta?.checked,
-                  onToggleStep: (i) => toggleStep(m.id, i),
-                  onAnswerCheck: (text) => onAsk(text),
-                }}
+          <div className="rule-h" />
+          <div className="thread" ref={thread} onScroll={onScroll}>
+            {scrolled && <div className="fadeTop" aria-hidden="true" />}
+            {anchor?.visual && (
+              <section className="this-card" aria-label="这张卡">
+                <span className="lab">这张卡 · {anchor.title}</span>
+                <StructuredVisual visual={anchor.visual} />
+              </section>
+            )}
+            <label className={`my-note ${note.text ? "has" : ""}`}>
+              <span className="my-note-k">
+                <Pencil size={14} className="ico" />
+                我的笔记
+              </span>
+              <textarea
+                className="note-text"
+                aria-label="批注内容"
+                placeholder="写下你的理解，或一个没想通的地方……"
+                rows={1}
+                value={note.text}
+                onChange={(e) => onChange({ text: e.target.value })}
+                onKeyDown={(e) => e.stopPropagation()}
               />
-              {!busy && (
-                <AnswerActs
-                  message={m}
-                  outline={outline}
-                  recommendLay={outline.length > 1 && !placed}
-                  placed={placed}
-                  onLocate={onLocate}
-                  kickoff={m === lastAnswer ? kickoff : undefined}
-                  selected={selectedText}
-                  onLay={layItems}
-                  onPromote={onPromote}
-                  onRedo={
-                    m === lastAnswer && lastQuestion
-                      ? () => onAsk(lastQuestion.text)
-                      : undefined
-                  }
-                />
+            </label>
+            {note.messages.map((m) => {
+              if (m.role === "user")
+                return (
+                  <div key={m.id} className="msg user bubble">
+                    {displayMessage(m.role, m.text)}
+                  </div>
+                );
+              const outline = outlineOf(m.text);
+              // Laid from this answer, or the anchor already has its first level.
+              const placed = !!m.meta?.laid || anchorHasChildren;
+              const layItems = () => onLay(outline, m.id);
+              return (
+                <div key={m.id} className="msg assistant ans">
+                  <div className="who">
+                    <span>AI</span>
+                    <span>{clock(m.createdAt)}</span>
+                  </div>
+                  <AnswerBlocks
+                    text={m.text}
+                    actions={{
+                      laid: placed,
+                      onLocate,
+                      onLay: outline.length > 1 ? layItems : undefined,
+                      // “+” on one row: just that item, without marking the answer laid.
+                      onAddItem: (item) => onLay([item]),
+                      checked: m.meta?.checked,
+                      onToggleStep: (i) => toggleStep(m.id, i),
+                      onAnswerCheck: (text) => onAsk(text),
+                    }}
+                  />
+                  {!busy && (
+                    <AnswerActs
+                      message={m}
+                      outline={outline}
+                      recommendLay={outline.length > 1 && !placed}
+                      placed={placed}
+                      onLocate={onLocate}
+                      kickoff={m === lastAnswer ? kickoff : undefined}
+                      selected={selectedText}
+                      onLay={layItems}
+                      onPromote={onPromote}
+                      onRedo={
+                        m === lastAnswer && lastQuestion
+                          ? () => onAsk(lastQuestion.text)
+                          : undefined
+                      }
+                    />
+                  )}
+                </div>
+              );
+            })}
+            {busy && (
+              <div
+                className="msg assistant ans streaming"
+                aria-hidden={!!pending}
+              >
+                <div className="who">
+                  <span>AI</span>
+                </div>
+                <AnswerBlocks text={pending ?? ""} streaming />
+                <span className="streaming-caret" aria-hidden="true" />
+              </div>
+            )}
+            {kickoff && lastAnswer && !busy && (
+              <span className="lab kickoff-tip">
+                先在下面回答它的问题，拆得会更贴合你；也可以直接铺成第一层，之后再调整。
+              </span>
+            )}
+            <div className="fadeBot" aria-hidden="true" />
+          </div>
+          {sel && (
+            <div
+              className="seltb"
+              role="toolbar"
+              aria-label="选中的文字"
+              style={{ left: sel.x, top: sel.y }}
+            >
+              <button
+                onClick={() => {
+                  onPromote(sel.text);
+                  setSel(undefined);
+                }}
+              >
+                <Plus size={14} /> 加成卡片
+              </button>
+              <button
+                onClick={() => {
+                  setPrompt(`> ${sel.text}\n${prompt}`);
+                  setSel(undefined);
+                  setTimeout(() => composer.current?.focus(), 0);
+                }}
+              >
+                追问这句
+              </button>
+              <button
+                onClick={() => {
+                  copy(sel.text);
+                  setSel(undefined);
+                }}
+              >
+                复制
+              </button>
+            </div>
+          )}
+          <footer
+            className={`composer ${error && !busy ? "failed" : ""}`}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) composer.current?.focus();
+            }}
+          >
+            {error && !busy && (
+              <div className="composer-error" role="alert">
+                <AlertCircle size={15} className="ico" />
+                <span>{error} 问题没有丢，可以重试。</span>
+              </div>
+            )}
+            <textarea
+              ref={composer}
+              aria-label="向 AI 提问"
+              placeholder={
+                answers.some((m) => /检查/.test(m.text))
+                  ? "继续追问，或回答上面的检查题…"
+                  : "继续追问…"
+              }
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  if (busy) onStop();
+                  else onClose();
+                }
+                if (
+                  e.key === "Enter" &&
+                  !e.shiftKey &&
+                  !e.nativeEvent.isComposing
+                ) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+            />
+            <div className="row">
+              <button
+                className="cchip"
+                title="AI 会参考这些内容，点开可以调整"
+                onClick={() => setRefsOpen(true)}
+              >
+                <Link2 size={13} className="ico" />
+                带上：{refSummary(refs, note.excludedRefs ?? [], nodes)}
+              </button>
+              <span className="grow" />
+              <span className="kbd hint-kbd">
+                {busy ? "Esc 停止" : prompt.trim() ? "⇧↵ 换行" : "↵ 发送"}
+              </span>
+              {busy ? (
+                <button
+                  className="send stop"
+                  title="停止回答"
+                  aria-label="停止回答"
+                  onClick={onStop}
+                >
+                  <Square size={11} fill="currentColor" />
+                </button>
+              ) : error && !prompt.trim() && lastQuestion ? (
+                <button className="btn sm retry" onClick={onRetry}>
+                  <RotateCcw size={14} className="ico" />
+                  重试
+                </button>
+              ) : (
+                <button
+                  className={`send ${prompt.trim() ? "ready" : ""}`}
+                  title="发送 ↵"
+                  aria-label="发送提问"
+                  disabled={!prompt.trim()}
+                  onClick={send}
+                >
+                  <ArrowUp size={16} />
+                </button>
               )}
             </div>
-          );
-        })}
-        {busy && (
-          <div className="msg assistant ans streaming" aria-hidden={!!pending}>
-            <div className="who">
-              <span>AI</span>
-            </div>
-            <AnswerBlocks text={pending ?? ""} streaming />
-            <span className="streaming-caret" aria-hidden="true" />
-          </div>
-        )}
-        {kickoff && lastAnswer && !busy && (
-          <span className="lab kickoff-tip">
-            先在下面回答它的问题，拆得会更贴合你；也可以直接铺成第一层，之后再调整。
-          </span>
-        )}
-        <div className="fadeBot" aria-hidden="true" />
-      </div>
-      {sel && (
-        <div
-          className="seltb"
-          role="toolbar"
-          aria-label="选中的文字"
-          style={{ left: sel.x, top: sel.y }}
-        >
-          <button
-            onClick={() => {
-              onPromote(sel.text);
-              setSel(undefined);
-            }}
-          >
-            <Plus size={14} /> 加成卡片
-          </button>
-          <button
-            onClick={() => {
-              setPrompt(`> ${sel.text}\n${prompt}`);
-              setSel(undefined);
-              setTimeout(() => composer.current?.focus(), 0);
-            }}
-          >
-            追问这句
-          </button>
-          <button
-            onClick={() => {
-              copy(sel.text);
-              setSel(undefined);
-            }}
-          >
-            复制
-          </button>
-        </div>
+          </footer>
+        </>
       )}
-      <footer
-        className={`composer ${error && !busy ? "failed" : ""}`}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) composer.current?.focus();
-        }}
-      >
-        {error && !busy && (
-          <div className="composer-error" role="alert">
-            <AlertCircle size={15} className="ico" />
-            <span>{error} 问题没有丢，可以重试。</span>
-          </div>
-        )}
-        <textarea
-          ref={composer}
-          aria-label="向 AI 提问"
-          placeholder={
-            answers.some((m) => /检查/.test(m.text))
-              ? "继续追问，或回答上面的检查题…"
-              : "继续追问…"
-          }
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Escape") {
-              e.preventDefault();
-              if (busy) onStop();
-              else onClose();
-            }
-            if (
-              e.key === "Enter" &&
-              !e.shiftKey &&
-              !e.nativeEvent.isComposing
-            ) {
-              e.preventDefault();
-              send();
-            }
-          }}
-        />
-        <div className="row">
-          <button
-            className="cchip"
-            title="AI 会参考这些内容，点开可以调整"
-            onClick={() => setRefsOpen(true)}
-          >
-            <Link2 size={13} className="ico" />
-            带上：{refSummary(refs, note.excludedRefs ?? [], nodes)}
-          </button>
-          <span className="grow" />
-          <span className="kbd hint-kbd">
-            {busy ? "Esc 停止" : prompt.trim() ? "⇧↵ 换行" : "↵ 发送"}
-          </span>
-          {busy ? (
-            <button
-              className="send stop"
-              title="停止回答"
-              aria-label="停止回答"
-              onClick={onStop}
-            >
-              <Square size={11} fill="currentColor" />
-            </button>
-          ) : error && !prompt.trim() && lastQuestion ? (
-            <button className="btn sm retry" onClick={onRetry}>
-              <RotateCcw size={14} className="ico" />
-              重试
-            </button>
-          ) : (
-            <button
-              className={`send ${prompt.trim() ? "ready" : ""}`}
-              title="发送 ↵"
-              aria-label="发送提问"
-              disabled={!prompt.trim()}
-              onClick={send}
-            >
-              <ArrowUp size={16} />
-            </button>
-          )}
-        </div>
-      </footer>
     </aside>
   );
 }
