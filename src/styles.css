@@ -41,6 +41,8 @@
     -1px 0 0 rgba(42, 49, 51, 0.06), 0 24px 60px -30px rgba(40, 35, 25, 0.45);
   --ring: 0 0 0 1.5px var(--accent), 0 0 0 6px var(--accent-wash);
   --drawer-w: 420px;
+  /* Gap between floating chrome and the window edge. */
+  --edge: 12px;
   color-scheme: light;
 }
 :root.dark {
@@ -173,7 +175,7 @@ kbd,
 /* The drawer squeezes the canvas instead of covering it; the right edge fades
    out so level rules stop before the drawer. */
 .with-drawer .react-flow {
-  right: calc(var(--drawer-w) + 40px);
+  right: calc(var(--drawer-w) + 2 * var(--edge));
 }
 .with-drawer .react-flow__renderer {
   -webkit-mask-image: linear-gradient(
@@ -560,7 +562,7 @@ kbd,
 }
 .switcher {
   left: var(--chrome-inset-left);
-  top: 14px;
+  top: var(--edge);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -587,8 +589,8 @@ kbd,
   color: var(--ink);
 }
 .progress {
-  right: 20px;
-  top: 14px;
+  right: var(--edge);
+  top: var(--edge);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -676,7 +678,7 @@ kbd,
 }
 .dock {
   left: 50%;
-  bottom: 22px;
+  bottom: var(--edge);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -714,8 +716,8 @@ kbd,
   border-radius: var(--r-md);
 }
 .map-unit {
-  right: 20px;
-  bottom: 20px;
+  right: var(--edge);
+  bottom: var(--edge);
   width: 210px;
   padding: 8px;
 }
@@ -734,11 +736,11 @@ kbd,
 .with-drawer .toast,
 .with-drawer .hint,
 .with-drawer .map-progress {
-  left: calc((100% - var(--drawer-w) - 40px) / 2);
+  left: calc((100% - var(--drawer-w) - 2 * var(--edge)) / 2);
 }
 .with-drawer .progress,
 .with-drawer .map-unit {
-  right: calc(var(--drawer-w) + 40px);
+  right: calc(var(--drawer-w) + 2 * var(--edge));
 }
 @media (max-width: 1180px) {
   .with-drawer .map-unit {
@@ -828,7 +830,7 @@ kbd,
 .hint {
   position: fixed;
   left: 50%;
-  bottom: 86px;
+  bottom: calc(var(--edge) + 64px);
   transform: translateX(-50%);
   z-index: 20;
   background: var(--paper);
@@ -837,7 +839,7 @@ kbd,
 }
 .relation-bar {
   left: 50%;
-  top: 14px;
+  top: var(--edge);
   transform: translateX(-50%);
   display: flex;
   gap: 8px;
@@ -881,7 +883,7 @@ kbd,
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 90px;
+  bottom: calc(var(--edge) + 68px);
   transform: translateX(-50%);
   z-index: 40;
   display: flex;
@@ -913,7 +915,7 @@ kbd,
 }
 .palette {
   left: var(--chrome-inset-left);
-  top: 70px;
+  top: calc(var(--edge) + 58px);
   width: 420px;
   padding: 10px;
   box-shadow: var(--shadow-2);
@@ -953,9 +955,9 @@ kbd,
 /* ---- right drawer (AI) */
 .drawer {
   box-shadow: var(--shadow-drawer);
-  right: 20px;
-  top: 16px;
-  bottom: 16px;
+  right: var(--edge);
+  top: var(--edge);
+  bottom: var(--edge);
   width: var(--drawer-w);
   display: flex;
   flex-direction: column;
@@ -2632,12 +2634,13 @@ kbd,
   animation: spin 2s linear infinite;
 }
 
-/* macOS hidden-inset title bar: the traffic lights sit at (20, 20) and span ~56px. */
+/* macOS hidden-inset title bar: the traffic lights sit at x = 16 (main.ts), are 52px wide
+   and vertically centred on the switcher; the switcher starts one --edge after them. */
 :root {
-  --chrome-inset-left: 20px;
+  --chrome-inset-left: var(--edge);
 }
 .mac-titlebar {
-  --chrome-inset-left: 92px;
+  --chrome-inset-left: 80px;
 }
 .titlebar-drag {
   position: fixed;

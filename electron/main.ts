@@ -254,7 +254,8 @@ async function bootstrap(): Promise<void> {
         title: "Studyboard",
         icon: app.isPackaged ? undefined : devIcon,
         titleBarStyle: "hiddenInset",
-        trafficLightPosition: { x: 20, y: 20 },
+        // Inset like the rest of the chrome (--edge), centred on the top chrome row.
+        trafficLightPosition: { x: 16, y: 30 },
         webPreferences: {
           preload: path.join(here, "preload.cjs"),
           contextIsolation: true,
