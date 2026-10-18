@@ -54,15 +54,18 @@ test("siblings sit left to right in one row; Tab adds a child, Enter a sibling",
   expect(b.x).toBeGreaterThan(a.x);
   expect(Math.abs(a.y - b.y)).toBeLessThan(1);
   expect(a.y).toBeGreaterThan(xs[0][1] + 100);
-  await page.waitForTimeout(700);
-  const [board] = await stored(page);
-  const kids = board.nodes
-    .filter((n: { parentId: string }) => n.parentId === "concept-dom")
-    .map((n: { title: string; order: number }) => [n.title, n.order]);
-  expect(kids).toEqual([
-    ["标签树", 0],
-    ["文本节点", 1],
-  ]);
+  // Poll the debounced autosave instead of sleeping a fixed time.
+  await expect
+    .poll(async () => {
+      const [board] = await stored(page);
+      return (board?.nodes ?? [])
+        .filter((n: { parentId: string }) => n.parentId === "concept-dom")
+        .map((n: { title: string; order: number }) => [n.title, n.order]);
+    })
+    .toEqual([
+      ["标签树", 0],
+      ["文本节点", 1],
+    ]);
 });
 test("mastery lives on the card, is undoable, and the note drawer keeps input without AI", async ({
   page,
@@ -85,7 +88,13 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
   await expect(
     page.locator(".drawer .chip", { hasText: "样式计算" }),
   ).toBeVisible();
-  await page.waitForTimeout(700);
+  await expect
+    .poll(async () =>
+      (await stored(page)).some((b: { notes?: { text: string }[] }) =>
+        b.notes?.some((n) => n.text === "What changes when width changes?"),
+      ),
+    )
+    .toBe(true);
   await page.reload();
   await card(page, "样式计算").click();
   await page.keyboard.press("n");
@@ -123,7 +132,13 @@ test("arbitrary topic stays a real AI setup state and keeps the new board", asyn
     "How does a rainbow form?",
   );
   await expect(page.locator(".react-flow__node-concept")).toHaveCount(0);
-  await page.waitForTimeout(700);
+  await expect
+    .poll(async () =>
+      (await stored(page)).some((b: { nodes?: { title: string }[] }) =>
+        b.nodes?.some((n) => n.title === "How does a rainbow form?"),
+      ),
+    )
+    .toBe(true);
   await page.reload();
   await expect(page.locator(".react-flow__node-root h2")).toHaveText(
     "How does a rainbow form?",
