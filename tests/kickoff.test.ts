@@ -70,7 +70,9 @@ describe("「让 AI 带我开始」 kickoff", () => {
     expect(answers).toEqual(["知道光会折射，但不懂为什么分成七色"]);
     const prompt = firstLevelPrompt("彩虹", answers);
     expect(prompt).toContain("「知道光会折射，但不懂为什么分成七色」");
-    expect(prompt).toContain("3–5 个按先后顺序");
+    expect(prompt).toContain("3–5 个抽象程度相近");
+    expect(prompt).toContain("都以 anchor 为 parent");
+    expect(prompt).toContain("提问次数不决定层级");
     expect(firstLevelPrompt("彩虹", [])).toContain("按初学者处理");
     expect(firstLevelPrompt("彩虹", [])).toContain("3–5 个");
     expect(firstLevelPrompt("彩虹", [])).not.toContain("只给 3 个");

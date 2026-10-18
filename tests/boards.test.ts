@@ -217,7 +217,7 @@ describe("constrained AI map parsing", () => {
     // x↔z is kept once; x→y is a causal link, not a sequence, so it stays.
     expect(result.relations.map((r) => r.label)).toEqual(["对照", "导致"]);
   });
-  it("ignores a deeper parent: each expansion grows exactly one level", () => {
+  it("preserves explicit knowledge parents instead of flattening the generated hierarchy", () => {
     const board = createEmptyBoard("学习");
     const result = buildMapFromAI(
       JSON.stringify({
@@ -229,9 +229,156 @@ describe("constrained AI map parsing", () => {
       }),
       board,
     );
-    expect(
-      result.nodes.slice(1).every((n) => n.parentId === board.nodes[0].id),
-    ).toBe(true);
+    const [root, parent, child] = result.nodes;
+    expect(parent.parentId).toBe(root.id);
+    expect(child.parentId).toBe(parent.id);
+    const { positions } = layoutTree(result.nodes);
+    expect(positions.get(parent.id)!.level).toBe(1);
+    expect(positions.get(child.id)!.level).toBe(2);
+  });
+  it("places peers and details by knowledge even when generated from the same selected card", () => {
+    const original = buildMapFromAI(
+      JSON.stringify({
+        nodes: [
+          { id: "http", title: "HTTP", body: "请求和响应。", parent: "anchor" },
+        ],
+        relations: [],
+      }),
+      createEmptyBoard("网络通信"),
+    );
+    const [network, http] = original.nodes;
+    const before = JSON.stringify(original);
+    const result = buildMapFromAI(
+      JSON.stringify({
+        // Forward references and interleaved levels must not change placement.
+        nodes: [
+          {
+            id: "header",
+            title: "请求头",
+            body: "请求中的元数据。",
+            parent: "request",
+          },
+          { id: "tcp", title: "TCP", body: "可靠传输。", parent: network.id },
+          {
+            id: "request",
+            title: "HTTP 请求",
+            body: "客户端发出的请求。",
+            parent: "anchor",
+          },
+          {
+            id: "response",
+            title: "HTTP 响应",
+            body: "服务端返回的响应。",
+            parent: http.id,
+          },
+        ],
+        relations: [
+          { source: "tcp", target: "anchor", label: "提供传输能力" },
+          { source: "request", target: "response", label: "然后" },
+          { source: "request", target: "header", label: "包含" },
+          { source: "tcp", target: "request", label: "随后" },
+        ],
+      }),
+      original,
+      http.id,
+    );
+    const byTitle = new Map(result.nodes.map((n) => [n.title, n]));
+    const tcp = byTitle.get("TCP")!;
+    const request = byTitle.get("HTTP 请求")!;
+    const response = byTitle.get("HTTP 响应")!;
+    const header = byTitle.get("请求头")!;
+    expect(tcp).toMatchObject({ parentId: network.id, order: 1 });
+    expect(request).toMatchObject({ parentId: http.id, order: 0 });
+    expect(response).toMatchObject({ parentId: http.id, order: 1 });
+    expect(header.parentId).toBe(request.id);
+    const { positions } = layoutTree(result.nodes);
+    expect(positions.get(tcp.id)!.y).toBe(positions.get(http.id)!.y);
+    expect(positions.get(tcp.id)!.x).toBeGreaterThan(positions.get(http.id)!.x);
+    expect(positions.get(request.id)!.level).toBe(2);
+    expect(positions.get(response.id)!.level).toBe(2);
+    expect(positions.get(header.id)!.level).toBe(3);
+    // Cross-links to the selected card survive; sequence only disappears for siblings.
+    expect(result.relations.map((r) => r.label)).toEqual([
+      "提供传输能力",
+      "随后",
+    ]);
+    expect(result.nodes.find((n) => n.id === network.id)?.expanded).toBe(true);
+    expect(result.nodes.some((n) => n.status === "explained")).toBe(false);
+    expect(JSON.stringify(original)).toBe(before);
+  });
+  it("can add a peer of a top-level card and its details", () => {
+    const board = createEmptyBoard("HTTP");
+    const result = buildMapFromAI(
+      JSON.stringify({
+        nodes: [
+          { id: "tcp", title: "TCP", body: "可靠传输。", parent: null },
+          {
+            id: "ack",
+            title: "确认机制",
+            body: "确认收到的数据。",
+            parent: "tcp",
+          },
+        ],
+        relations: [],
+      }),
+      board,
+    );
+    expect(result.nodes[1]).toMatchObject({ parentId: null, order: 1 });
+    expect(result.nodes[2].parentId).toBe(result.nodes[1].id);
+    const { positions } = layoutTree(result.nodes);
+    expect(positions.get(result.nodes[1].id)!.level).toBe(0);
+    expect(positions.get(result.nodes[2].id)!.level).toBe(1);
+  });
+  it.each(
+    [
+      [{ id: "a", parent: "missing" }],
+      [{ id: "a", parent: "a" }],
+      [
+        { id: "a", parent: "b" },
+        { id: "b", parent: "a" },
+      ],
+      [
+        { id: "a", parent: "b" },
+        { id: "b", parent: "c" },
+        { id: "c", parent: "a" },
+      ],
+      [{ id: "anchor", parent: null }],
+    ].map((nodes) => ({ nodes })),
+  )("rejects invalid knowledge parents atomically: %j", ({ nodes }) => {
+    const board = createEmptyBoard("网络通信");
+    const before = JSON.stringify(board);
+    expect(() =>
+      buildMapFromAI(
+        JSON.stringify({
+          nodes: nodes.map((n) => ({ ...n, title: "概念", body: "说明。" })),
+          relations: [],
+        }),
+        board,
+      ),
+    ).toThrow();
+    expect(JSON.stringify(board)).toBe(before);
+  });
+  it("rejects a generated id that shadows an existing parent", () => {
+    const board = createWalkthroughBoard();
+    const before = JSON.stringify(board);
+    expect(() =>
+      buildMapFromAI(
+        JSON.stringify({
+          nodes: [
+            {
+              id: "concept-dom",
+              title: "新概念",
+              body: "说明。",
+              parent: "anchor",
+            },
+          ],
+          relations: [],
+        }),
+        board,
+        "concept-style",
+      ),
+    ).toThrow("重复或保留");
+    expect(JSON.stringify(board)).toBe(before);
   });
   it("connects disconnected components without fabricating semantic edges", () => {
     const board = createEmptyBoard("学习");

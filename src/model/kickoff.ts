@@ -59,7 +59,7 @@ export const KICKOFF_MESSAGE = "我想从这里开始学，带我起步吧。";
 export function kickoffPrompt(topic: string): string {
   return `${KICKOFF_MESSAGE}
 我的起点问题是：「${topic}」。
-请先别讲解。用 1–2 个简短、具体的问题问我对它已经知道些什么、想弄懂到什么程度；再用一句话说明我们接下来会先把它拆成哪几个按先后顺序的子问题。`;
+请先别讲解。用 1–2 个简短、具体的问题问我对它已经知道些什么、想弄懂到什么程度；再用一句话说明这个主题包含哪几个同层的核心概念，以及建议从左到右怎样学。知识层级按整体到细节划分，不按问答先后划分。`;
 }
 
 /** What the learner said in the kickoff conversation (their own replies, not the kickoff line). */
@@ -82,13 +82,13 @@ export function firstLevelPrompt(
   outline?: string[],
 ): string {
   const known = answers.length
-    ? `学习者说自己已经知道 / 想弄懂的是：${answers.map((a) => `「${a.slice(0, 300)}」`).join("；")}。据此跳过他已掌握的部分，从他的起点往下拆。`
+    ? `学习者说自己已经知道 / 想弄懂的是：${answers.map((a) => `「${a.slice(0, 300)}」`).join("；")}。据此调整解释和学习顺序，知识层级仍按主题的整体与细节划分。`
     : "学习者还没说自己知道什么，按初学者处理。";
   const skeleton = outline?.length
     ? `\n必须按这份骨架拆，一项一个子问题，顺序不变：${outline.map((h, i) => `${i + 1}. ${h.slice(0, 60)}`).join("；")}。`
     : "";
   return `为这个问题创建学习地图的第一层：「${topic}」。${known}${skeleton}
-给 3–5 个按先后顺序（先→后）排列、彼此并列不重叠、合起来覆盖整个问题的子问题，每个标题写成一个具体的小问题，正文一两句说明为什么先问它。具体、直观、少文字。`;
+给 3–5 个抽象程度相近、彼此并列不重叠、合起来覆盖整个问题的大图景子问题，都以 anchor 为 parent。按建议的阅读或学习顺序从左到右排列；具体原理与细节属于下一知识层，提问次数不决定层级。每个标题写成一个具体的小问题，正文一两句说明它在主题中的作用。具体、直观、少文字。`;
 }
 
 /** The thread shows only the learner-facing line of the kickoff request. */

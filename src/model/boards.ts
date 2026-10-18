@@ -251,63 +251,95 @@ export function buildMapFromAI(
     (item) => item.id === (anchorId ?? board.nodes[0]?.id),
   );
   if (!anchor) throw new Error("请先选择一个学习起点。");
-  const sourceIds = new Set<string>();
+  // Existing ids keep their identity; generated ids are replaced before insertion.
+  const resolvedIds = new Map(board.nodes.map((item) => [item.id, item.id]));
+  resolvedIds.set("anchor", anchor.id);
   for (const item of map.nodes) {
-    if (sourceIds.has(item.id) || item.id === "anchor" || item.id === anchor.id)
+    if (resolvedIds.has(item.id))
       throw new Error("AI 返回了重复或保留的节点编号。请重试。");
-    sourceIds.add(item.id);
+    resolvedIds.set(item.id, newId("concept"));
   }
-  const ids = new Map(map.nodes.map((item) => [item.id, newId("concept")]));
-  const resolve = (id: string) =>
-    id === "anchor" || id === anchor.id ? anchor.id : ids.get(id);
-  // One level at a time: every generated node is a direct child of the
-  // anchor, in the model's listing order (先→后), after existing children.
-  // Relations never decide the tree; they only become cross-links.
-  const existing = board.nodes.filter((n) => n.parentId === anchor.id).length;
-  const placed = map.nodes.map((item, index) => ({
-    ...node(
-      ids.get(item.id)!,
-      item.title,
-      item.body,
-      anchor.id,
-      existing + index,
-    ),
-    ...(item.visual
-      ? { visual: { ...item.visual, labels: [...item.visual.labels] } }
-      : {}),
-  }));
-  const order = new Map(map.nodes.map((item, index) => [item.id, index]));
+  function resolveParent(parent: string | null | undefined): string | null {
+    if (parent === null) return null;
+    // Omitted parents remain compatible with older, single-level responses.
+    const id = resolvedIds.get(parent ?? "anchor");
+    if (!id) throw new Error("AI 返回的父节点不存在，画布没有改变。请重试。");
+    return id;
+  }
+  const parents = new Map(
+    map.nodes.map((item) => [
+      resolvedIds.get(item.id)!,
+      resolveParent(item.parent),
+    ]),
+  );
+  for (const id of parents.keys()) {
+    const seen = new Set<string>();
+    let cursor: string | null = id;
+    while (cursor !== null && parents.has(cursor)) {
+      if (seen.has(cursor))
+        throw new Error("AI 返回的知识层级存在循环，画布没有改变。请重试。");
+      seen.add(cursor);
+      cursor = parents.get(cursor) ?? null;
+    }
+  }
+  // Knowledge parents decide the rows. Listing order decides only the order
+  // within each sibling group, after that group's existing cards.
+  const nextOrder = new Map<string | null, number>();
+  for (const item of board.nodes)
+    nextOrder.set(
+      item.parentId,
+      Math.max(nextOrder.get(item.parentId) ?? 0, item.order + 1),
+    );
+  const placed = map.nodes.map((item) => {
+    const id = resolvedIds.get(item.id)!;
+    const parent = parents.get(id) ?? null;
+    const order = nextOrder.get(parent) ?? 0;
+    nextOrder.set(parent, order + 1);
+    return {
+      ...node(id, item.title, item.body, parent, order),
+      ...(item.visual
+        ? { visual: { ...item.visual, labels: [...item.visual.labels] } }
+        : {}),
+    };
+  });
+  const nodesById = new Map([...board.nodes, ...placed].map((n) => [n.id, n]));
   const cross: Relation[] = [];
   const pairs = new Set<string>();
   for (const edge of map.relations) {
-    const source = resolve(edge.source);
-    const target = resolve(edge.target);
+    const source = resolvedIds.get(edge.source);
+    const target = resolvedIds.get(edge.target);
     if (!source || !target || source === target)
       throw new Error("AI 返回了无效的关系，画布没有改变。");
-    // anchor → child is already the tree edge.
-    if (source === anchor.id || target === anchor.id) continue;
-    // 先→后 between neighbours is already the sibling arrow.
-    const a = order.get(edge.source)!,
-      b = order.get(edge.target)!;
-    if (Math.abs(a - b) === 1 && SEQUENCE_LABEL.test(edge.label)) continue;
+    const a = nodesById.get(source)!,
+      b = nodesById.get(target)!;
+    // Direct parent-child relations are already shown by the tree.
+    if (a.parentId === b.id || b.parentId === a.id) continue;
+    // Only neighbouring siblings already have a left-to-right sequence arrow.
+    if (
+      a.parentId === b.parentId &&
+      Math.abs(a.order - b.order) === 1 &&
+      SEQUENCE_LABEL.test(edge.label)
+    )
+      continue;
     const key = [source, target].sort().join(":");
     if (pairs.has(key)) continue;
     pairs.add(key);
     cross.push(relation(newId("relation"), source, target, edge.label));
   }
+  const expandedParents = new Set(parents.values());
   return boardSchema.parse({
     ...board,
     updatedAt: now(),
     nodes: [
-      ...board.nodes.map((item) =>
-        item.id === anchor.id
-          ? {
-              ...item,
-              expanded: true,
-              status: item.status === "explained" ? "explained" : "exploring",
-            }
-          : item,
-      ),
+      ...board.nodes.map((item) => {
+        const hasNewChildren = expandedParents.has(item.id);
+        if (item.id !== anchor.id && !hasNewChildren) return item;
+        return {
+          ...item,
+          ...(hasNewChildren ? { expanded: true } : {}),
+          status: item.status === "explained" ? "explained" : "exploring",
+        };
+      }),
       ...placed,
     ],
     relations: [...board.relations, ...cross],

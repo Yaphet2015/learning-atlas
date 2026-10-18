@@ -362,8 +362,8 @@ export const aiMapSchema = z
             id: idSchema,
             title: plainText(100),
             body: plainText(1_200),
-            /** Always "anchor" this round: one level per expansion. */
-            parent: idSchema.optional(),
+            /** "anchor", an existing card id, a generated id, or null for a root. */
+            parent: idSchema.nullable().optional(),
             emoji: z.string().max(16).optional(),
             color: colorSchema.optional(),
             visual: visualDiagramSchema.optional(),

@@ -65,11 +65,15 @@ describe("serializeStructure", () => {
   it("writes the tree as an indented outline with §, level, mastery and order", () => {
     const text = serializeStructure(board(), { anchor: "when" });
     const lines = text.split("\n");
-    expect(lines).toContain("L0 起点 重疾险有哪些重要条款 [探索中]");
-    expect(lines).toContain("  §1 L1 保什么 [探索中]");
-    expect(lines).toContain("    §1.1 L2 重疾中症轻症 [我能解释]");
-    expect(lines).toContain("  §2 L1 什么时候不赔 [待探索] ◀ 当前卡片");
-    expect(lines).toContain("      §2.1.1 L3 等待期多长 [待探索]");
+    expect(lines).toContain("L0 起点 重疾险有哪些重要条款 [探索中] [id:root]");
+    expect(lines).toContain("  §1 L1 保什么 [探索中] [id:what]");
+    expect(lines).toContain("    §1.1 L2 重疾中症轻症 [我能解释] [id:tiers]");
+    expect(lines).toContain(
+      "  §2 L1 什么时候不赔 [待探索] ◀ 当前卡片 [id:when]",
+    );
+    expect(lines).toContain(
+      "      §2.1.1 L3 等待期多长 [待探索] [id:wait-len]",
+    );
     // Siblings keep their left-to-right order.
     expect(text.indexOf("§1 L1")).toBeLessThan(text.indexOf("§2 L1"));
     expect(text.indexOf("§2 L1")).toBeLessThan(text.indexOf("§3 L1"));
@@ -79,6 +83,7 @@ describe("serializeStructure", () => {
     expect(text).toContain("路径：起点问题 › §2 什么时候不赔");
     expect(text).toContain("同层兄弟（按顺序）：§1 保什么、§3 怎么赔");
     expect(text).toContain("子卡片（按顺序）：§2.1 等待期");
+    expect(text).toContain("知识父节点：起点 重疾险有哪些重要条款 [id:root]");
   });
 
   it("marks extra selected cards and works without any anchor", () => {
@@ -104,6 +109,7 @@ describe("serializeStructure", () => {
     expect(text.length).toBeLessThanOrEqual(2_000);
     expect(text).toContain("◀ 当前卡片");
     expect(text).toContain("路径：起点问题 › §2 什么时候不赔 › §2.1 等待期");
+    expect(text).toContain("知识父节点：§2 什么时候不赔 [id:when]");
     expect(text).toMatch(/已折叠/);
     expect(text).not.toContain("更远的细节39-2");
   });

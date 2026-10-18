@@ -58,10 +58,18 @@ export function serializeStructure(
     n.id === root.id && roots.length === 1 ? "起点问题" : label(n);
   const tag = (n: ConceptNode) =>
     n.id === anchor ? " ◀ 当前卡片" : picked.includes(n.id) ? " ◀ 已选入" : "";
-  const line = (n: ConceptNode) =>
-    n.parentId
-      ? `${"  ".repeat(depth.get(n.id) ?? 0)}${no.get(n.id) ?? ""} L${depth.get(n.id)} ${clip(n.title, 40)} [${STATUS[n.status]}]${tag(n)}`
-      : `${no.get(n.id) ? `${no.get(n.id)} ` : ""}L0 起点 ${rootText(n, 80)} [${STATUS[n.status]}]${tag(n)}`;
+  function line(n: ConceptNode): string {
+    const section = no.get(n.id) ?? "";
+    let heading: string;
+    if (n.parentId) {
+      const indent = "  ".repeat(depth.get(n.id) ?? 0);
+      heading = `${indent}${section} L${depth.get(n.id)} ${clip(n.title, 40)}`;
+    } else {
+      const prefix = section ? `${section} ` : "";
+      heading = `${prefix}L0 起点 ${rootText(n, 80)}`;
+    }
+    return `${heading} [${STATUS[n.status]}]${tag(n)} [id:${n.id}]`;
+  }
 
   // Cards that are always written out: the path to every focus card, the focus
   // cards, their siblings and children, and the whole first level.
@@ -109,8 +117,8 @@ export function serializeStructure(
   };
 
   const head = [
-    "白板结构（树形大纲）：缩进表示父子；L0 是起点问题，L1 是第一层，同一层 L 号相同的卡片是并列的子问题，不是先后深入；",
-    "§ 编号由祖先次序拼成（§2.1 是 §2 下的第 1 张），同一父卡下按编号从左到右排列。方括号里是学习者的掌握度。",
+    "白板结构（树形大纲）：缩进表示知识的父子关系；L0 是起点问题，L1 是第一层，同一层 L 号相同的卡片是并列的子问题。左右表示同层概念的阅读或学习顺序，上下表示知识从整体到细节的深入，层级不表示提问或探索的先后。",
+    "§ 编号由祖先次序拼成（§2.1 是 §2 下的第 1 张），同一父卡下按编号从左到右排列。方括号里是学习者的掌握度；[id:…] 是生成节点时可引用的卡片 id。",
     ...(roots.length > 1
       ? [
           `这张白板有 ${roots.length} 个并列的起点（L0），从左到右排列；第一个之后的起点用字母编号（§B 下的卡片是 §B1、§B1.2）。`,
@@ -135,8 +143,10 @@ export function serializeStructure(
       path.unshift(c.parentId ? label(c) : rootName(c));
     const siblings = (kids.get(n.parentId) ?? []).filter((s) => s.id !== id);
     const children = kids.get(id) ?? [];
+    const parent = n.parentId ? byId.get(n.parentId) : undefined;
     about.push(
-      `${id === anchor ? "当前卡片" : "已选入的卡片"}：${n.parentId ? label(n) : rootName(n)}（L${depth.get(id)}，${STATUS[n.status]}）`,
+      `${id === anchor ? "当前卡片" : "已选入的卡片"}：${n.parentId ? label(n) : rootName(n)}（L${depth.get(id)}，${STATUS[n.status]}） [id:${n.id}]`,
+      `  知识父节点：${parent ? `${label(parent)} [id:${parent.id}]` : "无（顶层起点）"}`,
       `  路径：${path.join(" › ")}`,
       `  同层兄弟（按顺序）：${siblings.map(label).join("、") || "无"}`,
       `  子卡片（按顺序）：${children.map(label).join("、") || "无"}`,
