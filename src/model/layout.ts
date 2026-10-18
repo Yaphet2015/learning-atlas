@@ -218,3 +218,21 @@ export function insertSlot<T extends TreeNode>(
   }
   return null;
 }
+
+/** Hierarchical section numbers from the ancestors' order: §1, §1.1, §2.3. The root has none. */
+export function sectionNumbers<T extends TreeNode>(nodes: T[]) {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const out = new Map<string, string>();
+  const of = (n: T, depth = 0): string => {
+    const known = out.get(n.id);
+    if (known !== undefined) return known;
+    const parent = n.parentId ? byId.get(n.parentId) : undefined;
+    if (!parent || depth > 64) return "";
+    const up = of(parent, depth + 1);
+    const no = up ? `${up}.${n.order + 1}` : `${n.order + 1}`;
+    out.set(n.id, no);
+    return no;
+  };
+  for (const n of nodes) of(n);
+  return new Map([...out].map(([id, no]) => [id, `§${no}`]));
+}

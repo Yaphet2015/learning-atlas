@@ -2539,3 +2539,25 @@ kbd,
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+
+/* Root card details (P2): date, bracketed subtitle */
+.date {
+  font: 400 12px var(--kai);
+  letter-spacing: 0;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.origin h2 .sub {
+  display: block;
+  font: 400 19px/1.5 var(--kai);
+  color: var(--ink-2);
+  margin-top: 2px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

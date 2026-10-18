@@ -111,3 +111,24 @@ test("progress reads 「N / M 讲清楚」 and the long title keeps a tooltip", 
     /教会我 12 条及以上/,
   );
 });
+
+test("the drawer is a labelled region; Esc closes it and returns focus to the card", async ({
+  page,
+}) => {
+  await open(page, insuranceBoard(true));
+  const drawer = page.getByRole("complementary", { name: "批注：带我起步" });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByLabel("向 AI 提问")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(drawer).toHaveCount(0);
+  await expect(page.locator(".react-flow__node-root")).toBeFocused();
+  // Hierarchical numbering and the bracketed subtitle on the root.
+  await expect(
+    page
+      .locator(".react-flow__node-concept", { hasText: "等待期是什么" })
+      .locator(".no"),
+  ).toHaveText("§2.1");
+  await expect(page.locator(".origin h2 .sub")).toHaveText(
+    "（教会我 12 条及以上）",
+  );
+});

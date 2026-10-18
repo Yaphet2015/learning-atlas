@@ -48,7 +48,13 @@ import {
   reorder,
   reparent,
 } from "./model/editor";
-import { cardWidth, insertSlot, layoutTree, type Slot } from "./model/layout";
+import {
+  cardWidth,
+  insertSlot,
+  layoutTree,
+  sectionNumbers,
+  type Slot,
+} from "./model/layout";
 import { flushBoardCache, loadBoardForNavigation } from "./model/persistence";
 import {
   ConceptCard,
@@ -649,6 +655,24 @@ export default function App() {
     // A new question starts the guided kickoff (or leads to AI settings) instead of a silent map.
     if (kickoff) startKickoff();
   }
+  const drawerRef = useRef(drawer);
+  drawerRef.current = drawer;
+  /** Close the drawer and hand focus back to the card it hung on. */
+  const closeDrawer = useCallback(() => {
+    const id = boardRef.current?.notes.find((n) => n.id === drawerRef.current)
+      ?.attachedTo?.id;
+    setDrawer(null);
+    if (id)
+      setTimeout(
+        () =>
+          document
+            .querySelector<HTMLElement>(
+              `.react-flow__node[data-id="${CSS.escape(id)}"]`,
+            )
+            ?.focus({ preventScroll: true }),
+        0,
+      );
+  }, []);
   const undo = useCallback(() => {
     if (editingLocked.current) return;
     setPast((p) => {
@@ -752,7 +776,7 @@ export default function App() {
         setPromote(null);
         setPalette(false);
         if (!typing) {
-          if (drawer) setDrawer(null);
+          if (drawer) closeDrawer();
           else setSelection(null);
           setTool("select");
         }
@@ -912,6 +936,10 @@ export default function App() {
     const t = setTimeout(() => frameFamily(drawerAnchor, true), 300);
     return () => clearTimeout(t);
   }, [drawerAnchor, frameFamily]);
+  const numbers = useMemo(
+    () => sectionNumbers(board?.nodes ?? []),
+    [board?.nodes],
+  );
   const nodes = useMemo<CanvasNode[]>(() => {
     if (!shown || !board) return [];
     const out: CanvasNode[] = [];
@@ -960,9 +988,7 @@ export default function App() {
         data: {
           concept: n,
           noteOpen: drawerAnchor === n.id,
-          no: n.parentId
-            ? `§${String(n.order + 1).padStart(2, "0")}`
-            : undefined,
+          no: numbers.get(n.id),
           topic: board.topic,
           createdAt: board.createdAt,
           scene: board.scene,
@@ -1016,6 +1042,7 @@ export default function App() {
     kickoffReady,
     startKickoff,
     drawerAnchor,
+    numbers,
   ]);
   const edges = useMemo<Edge[]>(() => {
     if (!shown) return [];
@@ -1376,7 +1403,7 @@ export default function App() {
             setDrawer(null);
             showToast("已删除这张批注。⌘Z 可以撤销。");
           }}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
         />
       )}
       {board && study && (

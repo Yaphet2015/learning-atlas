@@ -12,6 +12,7 @@ import {
   insertSlot,
   layoutTree,
 } from "../src/model/layout";
+import { sectionNumbers } from "../src/model/layout";
 
 type N = {
   id: string;
@@ -176,5 +177,29 @@ describe("insertSlot", () => {
     expect(slot).toBeNull();
     expect(insertSlot("dom", { x: 0, y: 2000 }, atlas, layout)).toBeNull();
     expect(insertSlot("q", { x: 0, y: 100 }, atlas, layout)).toBeNull();
+  });
+});
+
+describe("sectionNumbers", () => {
+  it("joins the ancestors' order: §1, §1.1, §2.3; the root has none", () => {
+    const n = (id: string, parentId: string | null, order: number) => ({
+      id,
+      parentId,
+      order,
+      kind: "concept" as const,
+    });
+    const no = sectionNumbers([
+      n("root", null, 0),
+      n("b", "root", 1),
+      n("a", "root", 0),
+      n("a1", "a", 0),
+      n("b3", "b", 2),
+      n("b3x", "b3", 0),
+    ]);
+    expect(no.get("root")).toBeUndefined();
+    expect(no.get("a")).toBe("§1");
+    expect(no.get("a1")).toBe("§1.1");
+    expect(no.get("b3")).toBe("§2.3");
+    expect(no.get("b3x")).toBe("§2.3.1");
   });
 });

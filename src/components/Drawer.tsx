@@ -413,6 +413,19 @@ export function Drawer({
   const [prompt, setPrompt] = useState("");
   const [menu, setMenu] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
+  // Screen readers hear the streaming answer at most every 600ms.
+  const [spoken, setSpoken] = useState("");
+  const latest = useRef(pending);
+  latest.current = pending;
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => setSpoken(latest.current ?? ""), 600);
+    return () => clearInterval(t);
+  }, [busy]);
+  // Opening the drawer puts focus in the composer.
+  useEffect(() => {
+    composer.current?.focus({ preventScroll: true });
+  }, []);
   const [scrolled, setScrolled] = useState(false);
   const thread = useRef<HTMLDivElement>(null);
   const onScroll = () => setScrolled((thread.current?.scrollTop ?? 0) > 4);
@@ -492,10 +505,21 @@ export function Drawer({
   return (
     <aside
       ref={root}
+      role="complementary"
       className="chrome drawer"
-      aria-label="批注与提问"
+      aria-label={`批注：${note.title || defaultTitle}`}
       onMouseUp={onMouseUp}
+      onKeyDown={(e) => {
+        // Esc from anywhere in the drawer closes it (menus and the composer handle their own).
+        if (e.key === "Escape" && !e.defaultPrevented) {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
     >
+      <div className="sr-only" aria-live="polite">
+        {spoken}
+      </div>
       <header className="dhead">
         <div className="t">
           <input
@@ -649,7 +673,7 @@ export function Drawer({
           );
         })}
         {busy && (
-          <div className="msg assistant ans streaming">
+          <div className="msg assistant ans streaming" aria-hidden={!!pending}>
             <div className="who">
               <span>AI</span>
             </div>

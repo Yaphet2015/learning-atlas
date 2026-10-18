@@ -22,7 +22,7 @@ import { Seal } from "./Seal";
 export type CardData = {
   [key: string]: unknown;
   concept: ConceptNode;
-  /** "§02"-style index shown top-right. */
+  /** Hierarchical "§1.2" index shown top-right. */
   no?: string;
   topic?: string;
   createdAt?: string;
@@ -114,7 +114,18 @@ function Title({ data, as: Tag }: { data: CardData; as: "h2" | "h3" }) {
         }}
       />
     );
-  return <Tag>{Tag === "h2" ? (data.topic ?? n.title) : n.title}</Tag>;
+  if (Tag === "h3") return <h3>{n.title}</h3>;
+  // A bracketed aside in the root question gets its own quieter line.
+  const text = data.topic ?? n.title;
+  const m = text.match(/^(.+?)([（(].+[）)])$/);
+  return m ? (
+    <h2>
+      {m[1]}
+      <span className="sub">{m[2]}</span>
+    </h2>
+  ) : (
+    <h2>{text}</h2>
+  );
 }
 
 /** Hangs on the card the drawer is talking about. */
@@ -283,7 +294,7 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
       <Ports linkMode={data.linkMode} />
       <div className="origin-head">
         <span className="eyebrow">起点 · 问题</span>
-        <span className="lab">{dateLabel(data.createdAt)}</span>
+        <span className="date">{dateLabel(data.createdAt)}</span>
       </div>
       <Title data={data} as="h2" />
       {n.kind === "scene" && data.scene && (
