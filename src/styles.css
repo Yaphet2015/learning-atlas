@@ -564,7 +564,7 @@ kbd,
 .switcher-text strong {
   display: block;
   font: 700 16px/1.25 var(--kai);
-  max-width: 280px;
+  max-width: min(460px, 38vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -587,13 +587,42 @@ kbd,
 }
 .progress .bar {
   display: flex;
-  gap: 2px;
-  height: 8px;
+  gap: 3px;
+  height: 10px;
 }
 .progress .bar i {
-  width: 12px;
-  border: 1px solid var(--border-strong);
+  width: 18px;
+  border: 1.25px solid var(--border-strong);
   border-radius: 3px;
+}
+.progress .bar.long {
+  width: 160px;
+  gap: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1.25px solid var(--border-strong);
+}
+.progress .bar.long i {
+  width: auto;
+  flex-basis: 0;
+  border: 0;
+  border-radius: 0;
+}
+.progress .bar.long i.s-unseen {
+  background: transparent;
+}
+.progress .bar.long i.s-exploring {
+  background: color-mix(in srgb, var(--ink-2) 45%, transparent);
+}
+.progress .count {
+  font: 400 12px var(--kai);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.progress .count b {
+  font: 700 15px var(--kai);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 .progress .bar i.s-unseen {
   border-style: dashed;

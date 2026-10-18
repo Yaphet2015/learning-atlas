@@ -66,7 +66,7 @@ export function MapSwitcher({
     <button className="chrome switcher" onClick={onOpen} title="切换地图 ⌘K">
       <Compass />
       <span className="switcher-text">
-        <strong>{title}</strong>
+        <strong title={title}>{title}</strong>
         <small>
           {concepts.length} 概念 · {explained} 能解释
         </small>
@@ -210,13 +210,31 @@ export function Progress({
   return (
     <div className="chrome progress">
       <span className="lab">理解进度</span>
-      <span className="bar" aria-hidden="true">
-        {concepts.map((n) => (
-          <i key={n.id} className={`s-${n.status}`} />
-        ))}
-      </span>
-      <span className="lab count">
-        {done}/{concepts.length}
+      {concepts.length > 16 ? (
+        // Many concepts: one continuous bar, filled by share of each state.
+        <span className="bar long" aria-hidden="true">
+          {(["explained", "exploring", "unseen"] as const).map((st) => {
+            const k = concepts.filter((n) => n.status === st).length;
+            return k ? (
+              <i key={st} className={`s-${st}`} style={{ flexGrow: k }} />
+            ) : null;
+          })}
+        </span>
+      ) : (
+        <span className="bar" aria-hidden="true">
+          {concepts.map((n) => (
+            <i key={n.id} className={`s-${n.status}`} />
+          ))}
+        </span>
+      )}
+      <span
+        className="count"
+        aria-label={`${concepts.length} 个概念里讲清楚了 ${done} 个`}
+      >
+        <b>
+          {done} / {concepts.length}
+        </b>{" "}
+        讲清楚
       </span>
       <button
         className="btn primary"

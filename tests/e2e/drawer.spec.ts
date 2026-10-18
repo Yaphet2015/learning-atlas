@@ -99,3 +99,15 @@ test("the composer shows its state: empty, typing", async ({ page }) => {
   await expect(send).toHaveClass(/ready/);
   await expect(drawer.locator(".hint-kbd")).toHaveText("⇧↵ 换行");
 });
+
+test("progress reads 「N / M 讲清楚」 and the long title keeps a tooltip", async ({
+  page,
+}) => {
+  await open(page, insuranceBoard(true));
+  await expect(page.locator(".progress .count")).toHaveText("1 / 6 讲清楚");
+  await expect(page.locator(".progress .bar i")).toHaveCount(6);
+  await expect(page.locator(".switcher-text strong")).toHaveAttribute(
+    "title",
+    /教会我 12 条及以上/,
+  );
+});
