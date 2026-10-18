@@ -433,7 +433,7 @@ kbd,
   left: calc(50% - 13px);
   top: -40px;
 }
-.react-flow__node:hover .plus,
+.react-flow__node:is(:hover, :focus-within, :has(> .hints-open)) .plus,
 .react-flow__node.selected .plus {
   opacity: 1;
 }
@@ -483,8 +483,7 @@ kbd,
   left: calc(100% + 14px);
   top: calc(50% + 20px);
 }
-.react-flow__node:hover .ghost-hint,
-.react-flow__node:focus-within .ghost-hint {
+.react-flow__node:is(:hover, :focus-within, :has(> .hints-open)) .ghost-hint {
   opacity: 1;
   pointer-events: auto;
 }
@@ -497,9 +496,12 @@ kbd,
   background: var(--card);
 }
 /* The hovered card lifts so its hints can overlap a neighbour like a popover. */
-.react-flow__node:hover,
-.react-flow__node:focus-within {
+.react-flow__node:is(:hover, :focus-within, :has(> .hints-open)) {
   z-index: 1000 !important;
+}
+/* Keep active controls above a neighbour crossed on the way to a hint. */
+.react-flow__node:is(:focus-within, :has(> .hint-controls-active)) {
+  z-index: 1001 !important;
 }
 .is-dragging .ghost-hint,
 .react-flow__node.is-picked .ghost-hint {
@@ -514,12 +516,14 @@ kbd,
   display: none;
 }
 /* In a multi-select the cards are a pick, not a place to grow: + only on hover. */
-.react-flow__node.is-picked:not(:hover) .plus:not(:focus-visible) {
+.react-flow__node.is-picked:not(:hover, :focus-within, :has(> .hints-open))
+  .plus:not(:focus-visible) {
   opacity: 0;
 }
 /* The root's connectors fan out from its bottom edge: its + shows on hover or
    keyboard focus only, not merely because the root is selected. */
-.react-flow__node-root.selected:not(:hover) .plus:not(:focus-visible) {
+.react-flow__node-root.selected:not(:hover, :focus-within, :has(> .hints-open))
+  .plus:not(:focus-visible) {
   opacity: 0;
 }
 .ghost {
@@ -2644,11 +2648,25 @@ kbd,
   padding: 9px;
   margin-top: 12px;
 }
-/* Diagrams live in the drawer's 「这张卡」 block, themed by tokens (no fixed light colours). */
+/* Full card content and diagrams share the drawer's scrollable reading area. */
 .this-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  flex: none;
+  gap: 10px;
+  overflow-wrap: anywhere;
+}
+.this-card h2 {
+  margin: 0;
+  font: 700 21px/1.4 var(--kai);
+  color: var(--ink);
+}
+.this-card .card-body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--ink-2);
+  white-space: pre-wrap;
 }
 .structured-visual {
   margin: 0;

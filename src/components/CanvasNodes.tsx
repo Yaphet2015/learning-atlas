@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   Handle,
   NodeToolbar,
@@ -8,6 +8,7 @@ import {
 } from "@xyflow/react";
 import {
   ArrowRight,
+  BookOpen,
   ChevronRight,
   Image,
   Layers3,
@@ -184,18 +185,41 @@ function useHintAttention(data: CardData, selected: boolean) {
   const id = data.concept.id;
   const want = data.onWantHints;
   const hovered = useRef(false);
+  const [hintsOpen, setHintsOpen] = useState(false);
+  const [controlsActive, setControlsActive] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   useEffect(() => {
     if (!want) return;
     if (selected) want(id, true);
     else if (!hovered.current) want(id, false);
   }, [selected, want, id]);
   useEffect(() => () => want?.(id, false), [want, id]);
+  useEffect(() => () => clearTimeout(hideTimer.current), []);
   return {
+    hintsOpen,
+    controlsActive,
     onMouseEnter: () => {
+      clearTimeout(hideTimer.current);
+      setHintsOpen(true);
       hovered.current = true;
       want?.(id, true);
     },
+    onMouseOver: (event: MouseEvent<HTMLElement>) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(".plus, .ghost-hint")
+      )
+        setControlsActive(true);
+    },
     onMouseLeave: () => {
+      // Keep the controls clickable while the pointer crosses the gaps between them.
+      clearTimeout(hideTimer.current);
+      hideTimer.current = setTimeout(() => {
+        setHintsOpen(false);
+        setControlsActive(false);
+      }, 300);
       hovered.current = false;
       if (!selected) want?.(id, false);
     },
@@ -333,11 +357,18 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
   // Stamp only when the status changes while mounted, not on first paint.
   const first = useRef(n.status);
   const animate = first.current !== n.status;
-  const attention = useHintAttention(data, !!selected);
+  const { hintsOpen, controlsActive, ...attention } = useHintAttention(
+    data,
+    !!selected,
+  );
+  function openNote(event: MouseEvent<HTMLButtonElement>): void {
+    event.stopPropagation();
+    data.onNote?.(n.id);
+  }
   return (
     <article
       {...attention}
-      className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""}`}
+      className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""} ${hintsOpen ? "hints-open" : ""} ${controlsActive ? "hint-controls-active" : ""}`}
     >
       {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />
@@ -345,16 +376,19 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
       {data.no && <span className="no">{data.no}</span>}
       <Title data={data} as="h3" />
       {n.body && <p>{n.body}</p>}
-      {(n.visual || n.hand) && (
+      {(data.onNote || n.visual || n.hand) && (
         <div className="meta">
+          {data.onNote && (
+            <button className="chip-fig nodrag nopan" onClick={openNote}>
+              <BookOpen size={13} className="ico" />
+              查看全文
+            </button>
+          )}
           {n.visual && (
             <button
               className="chip-fig nodrag nopan"
               data-tip="在批注里看图示"
-              onClick={(e) => {
-                e.stopPropagation();
-                data.onNote?.(n.id);
-              }}
+              onClick={openNote}
             >
               <Image size={13} className="ico" />
               含图示
@@ -381,11 +415,14 @@ const dateLabel = (iso?: string) => {
 export function RootCard({ data, selected }: NodeProps<CardNode>) {
   const n = data.concept;
   const [open, setOpen] = useState(false);
-  const attention = useHintAttention(data, !!selected);
+  const { hintsOpen, controlsActive, ...attention } = useHintAttention(
+    data,
+    !!selected,
+  );
   return (
     <article
       {...attention}
-      className={`origin ${selected || data.noteOpen ? "is-selected" : ""}`}
+      className={`origin ${selected || data.noteOpen ? "is-selected" : ""} ${hintsOpen ? "hints-open" : ""} ${controlsActive ? "hint-controls-active" : ""}`}
     >
       {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />

@@ -15,6 +15,60 @@ async function open(page: Page, board: unknown) {
   return page.locator(".drawer");
 }
 
+for (const withVisual of [false, true]) {
+  test(`the drawer shows the complete card ${withVisual ? "with" : "without"} a diagram`, async ({
+    page,
+  }) => {
+    const board = insuranceBoard(true);
+    const concept = board.nodes.find(
+      (n) => n.id === (withVisual ? "c-tiers" : "c-what"),
+    )!;
+    concept.title =
+      "保额：赔付的计算基数，以及不同保障责任怎样共同决定实际赔付金额";
+    concept.body = Array.from(
+      { length: 12 },
+      (_, i) =>
+        `第${i + 1}段：保额是投保时约定的基础金额。赔付金额通常等于保额乘以对应病种的赔付比例。`,
+    ).join("\n\n");
+    await page.addInitScript(
+      (value) => {
+        localStorage.setItem("studyboard-preview-boards-v1", value);
+      },
+      JSON.stringify([board]),
+    );
+    await gotoApp(page);
+    const card = page.locator(`.react-flow__node[data-id="${concept.id}"]`);
+    await card.click();
+    await page.keyboard.press("/");
+    const content = page.getByRole("region", { name: "这张卡", exact: true });
+    await expect(content.getByRole("heading")).toHaveText(concept.title);
+    await expect(content.locator(".card-body")).toHaveText(concept.body);
+    await expect(content.locator(".structured-visual")).toHaveCount(
+      withVisual ? 1 : 0,
+    );
+    await expect(content.locator(".card-body")).toHaveCSS(
+      "white-space",
+      "pre-wrap",
+    );
+    // The whole body remains in the scrollable thread, at its natural height.
+    await expect(content).toHaveCSS("flex-shrink", "0");
+    const thread = page.locator(".drawer .thread");
+    await expect
+      .poll(() => thread.evaluate((el) => el.scrollHeight > el.clientHeight))
+      .toBe(true);
+    await expect.poll(() => thread.evaluate((el) => el.scrollTop)).toBe(0);
+    await thread.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await expect(page.locator(".drawer .my-note")).toBeInViewport();
+    // The card also exposes a visible reading entry, without a keyboard shortcut.
+    await page.getByRole("button", { name: "关闭", exact: true }).click();
+    await card.getByRole("button", { name: "查看全文", exact: true }).click();
+    await expect(content.locator(".card-body")).toHaveText(concept.body);
+    await expect.poll(() => thread.evaluate((el) => el.scrollTop)).toBe(0);
+  });
+}
+
 test("an answer renders as blocks, never as raw markdown", async ({ page }) => {
   const drawer = await open(page, insuranceBoard(false));
   const answer = drawer.locator(".msg.assistant");

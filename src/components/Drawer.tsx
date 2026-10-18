@@ -617,7 +617,7 @@ export function Drawer({
   onNewSession,
 }: {
   note: StickyNote;
-  /** The card this conversation hangs on; its diagram renders here, not on the card. */
+  /** The card this conversation hangs on; its full content renders here. */
   anchor?: ConceptNode;
   anchorTitle?: string;
   anchorHasChildren: boolean;
@@ -889,10 +889,12 @@ export function Drawer({
           <div className="rule-h" />
           <div className="thread" ref={thread} onScroll={onScroll}>
             {scrolled && <div className="fadeTop" aria-hidden="true" />}
-            {anchor?.visual && (
+            {anchor && (
               <section className="this-card" aria-label="这张卡">
-                <span className="lab">这张卡 · {anchor.title}</span>
-                <StructuredVisual visual={anchor.visual} />
+                <span className="lab">这张卡 · 完整内容</span>
+                <h2>{anchor.title}</h2>
+                {anchor.body && <p className="card-body">{anchor.body}</p>}
+                {anchor.visual && <StructuredVisual visual={anchor.visual} />}
               </section>
             )}
             <label className={`my-note ${note.text ? "has" : ""}`}>
