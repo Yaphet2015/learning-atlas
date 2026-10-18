@@ -30,7 +30,6 @@
     "lxgw-wenkai-webfont": "1.7.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "roughjs": "4.6.6",
     "zod": "4.3.6"
   },
   "devDependencies": {

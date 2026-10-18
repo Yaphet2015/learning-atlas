@@ -16,7 +16,8 @@ const api: AtlasAPI = {
     };
     ipcRenderer.on("studyboard:before-close", listener);
     void ipcRenderer.invoke("studyboard:renderer-ready");
-    return () => ipcRenderer.removeListener("studyboard:before-close", listener);
+    return () =>
+      ipcRenderer.removeListener("studyboard:before-close", listener);
   },
   listBoards: () => ipcRenderer.invoke("studyboard:list"),
   loadBoard: (id) => ipcRenderer.invoke("studyboard:load", id),
@@ -25,7 +26,8 @@ const api: AtlasAPI = {
   getAISettings: () => ipcRenderer.invoke("studyboard:ai-settings"),
   setAISettings: (settings) =>
     ipcRenderer.invoke("studyboard:configure-ai", settings),
-  testAIConnection: (settings) => ipcRenderer.invoke("studyboard:test-ai", settings),
+  testAIConnection: (settings) =>
+    ipcRenderer.invoke("studyboard:test-ai", settings),
   ask: (request) => ipcRenderer.invoke("studyboard:ask", request),
   stop: (board, sticky) => ipcRenderer.invoke("studyboard:stop", board, sticky),
   getHistory: (board, sticky) =>

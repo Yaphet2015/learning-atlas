@@ -1,12 +1,13 @@
 import { test, expect } from "@playwright/test";
 import { installFakeAtlas } from "./fake-atlas";
+import { gotoApp } from "./ready";
 
 // Chromium on Linux cannot draw real traffic lights; this checks the inset logic and drag strip.
 test("macOS insets the map switcher past the traffic lights and drops it in fullscreen", async ({
   page,
 }) => {
   await installFakeAtlas(page, true, "darwin");
-  await page.goto("/");
+  await gotoApp(page);
   const switcher = page.locator(".switcher");
   await expect(switcher).toBeVisible();
   expect((await switcher.boundingBox())!.x).toBe(92);
@@ -32,12 +33,12 @@ test("macOS insets the map switcher past the traffic lights and drops it in full
 test("web preview and other platforms keep the original top-left layout", async ({
   page,
 }) => {
-  await page.goto("/");
+  await gotoApp(page);
   await expect(page.locator(".switcher")).toBeVisible();
   expect((await page.locator(".switcher").boundingBox())!.x).toBe(20);
   await expect(page.locator(".titlebar-drag")).toHaveCount(0);
   await installFakeAtlas(page, true, "win32");
-  await page.goto("/");
+  await gotoApp(page);
   await expect(page.locator(".switcher")).toBeVisible();
   expect((await page.locator(".switcher").boundingBox())!.x).toBe(20);
   await expect(page.locator(".titlebar-drag")).toHaveCount(0);

@@ -1,7 +1,4 @@
-import { useMemo } from "react";
 import { ViewportPortal, useViewport } from "@xyflow/react";
-import { rowY } from "../model/layout";
-import { Paths, sketch } from "./sketch/rough";
 
 const NAMES = [
   "问题",
@@ -14,36 +11,24 @@ const NAMES = [
 ];
 export const levelName = (l: number) => NAMES[l] ?? `第 ${l} 层`;
 
-/** Notebook rules above each level row, following the canvas pan/zoom. */
+/**
+ * Faint 1px rules above each level row (none above the root), following the
+ * canvas pan/zoom. `rows[l]` is the top of level l in flow coordinates.
+ */
 export function LevelGuides({
-  levels,
+  rows,
   left,
   right,
 }: {
-  levels: number;
+  rows: number[];
   left: number;
   right: number;
 }) {
   const x1 = left - 2400,
     x2 = right + 2400;
   const { y: vy, zoom } = useViewport();
-  const paths = useMemo(
-    () =>
-      Array.from({ length: levels }, (_, l) =>
-        sketch.line(
-          x1,
-          rowY(l) - 22,
-          x2,
-          rowY(l) - 21,
-          500 + l,
-          { stroke: "var(--pencil)", width: 0.8 },
-          { roughness: 0.8, bowing: 0.3 },
-        ),
-      ).flat(),
-    [levels, x1, x2],
-  );
   const top = -40,
-    bottom = rowY(levels) + 40;
+    bottom = (rows.at(-1) ?? 0) + 40;
   return (
     <>
       <ViewportPortal>
@@ -55,15 +40,27 @@ export function LevelGuides({
           viewBox={`${x1} ${top} ${x2 - x1} ${bottom - top}`}
           aria-hidden="true"
         >
-          <Paths sketch={paths} />
+          {rows.map((y, l) =>
+            l === 0 ? null : (
+              <line
+                key={l}
+                x1={x1}
+                x2={x2}
+                y1={y - 28.5}
+                y2={y - 28.5}
+                stroke="var(--rule)"
+                strokeWidth={1}
+              />
+            ),
+          )}
         </svg>
       </ViewportPortal>
       {/* Labels stay pinned to the left margin, like a notebook's ruled lines. */}
-      {Array.from({ length: levels }, (_, l) => (
+      {rows.map((y, l) => (
         <div
           key={l}
           className="lvl-label"
-          style={{ left: 22, top: (rowY(l) - 16) * zoom + vy }}
+          style={{ left: 22, top: (y - 22) * zoom + vy }}
         >
           <b>L{l}</b>
           {levelName(l)}

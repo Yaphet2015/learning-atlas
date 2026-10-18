@@ -191,3 +191,66 @@ export function cacheMessages(messages: ChatMessage[]): ChatMessage[] {
   }
   return recent.reverse();
 }
+
+/**
+ * The durable runtime's history replaces the renderer cache on load, under its
+ * own message ids. Carry renderer-only meta (ticked steps, laid outline) over
+ * from the cached copy of the same message (same id, or same role and text).
+ */
+export function mergeHistory(
+  cached: ChatMessage[],
+  history: ChatMessage[],
+): ChatMessage[] {
+  const byId = new Map(cached.map((m) => [m.id, m]));
+  const byText = new Map(cached.map((m) => [`${m.role}\u0000${m.text}`, m]));
+  return cacheMessages(
+    history.map((m) => {
+      const meta = (byId.get(m.id) ?? byText.get(`${m.role}\u0000${m.text}`))
+        ?.meta;
+      return meta && !m.meta ? { ...m, meta } : m;
+    }),
+  );
+}
+
+/**
+ * 「铺成第一层」: each outline item becomes an unseen card under `anchorId`,
+ * appended after its existing children. The answer that produced it is marked
+ * as laid, so the drawer can offer 「在画布上定位」 instead. One edit, one undo.
+ */
+export function layOutline(
+  board: Board,
+  anchorId: string,
+  items: { head: string; body: string }[],
+  ids: string[],
+  from?: { noteId: string; messageId: string },
+): Board {
+  if (!board.nodes.some((n) => n.id === anchorId)) return board;
+  const room = Math.max(0, LIMITS.nodes - board.nodes.length);
+  const start = board.nodes.filter((n) => n.parentId === anchorId).length;
+  const cards: ConceptNode[] = items
+    .slice(0, Math.min(room, ids.length))
+    .map((item, i) => ({
+      ...blank(ids[i], anchorId, start + i),
+      title: (item.head || item.body).slice(0, 100) || "新的概念",
+      body: item.head ? item.body.slice(0, 4000) : "",
+    }));
+  if (!cards.length) return board;
+  return {
+    ...board,
+    nodes: [...board.nodes, ...cards],
+    notes: from
+      ? board.notes.map((n) =>
+          n.id !== from.noteId
+            ? n
+            : {
+                ...n,
+                messages: n.messages.map((m) =>
+                  m.id === from.messageId
+                    ? { ...m, meta: { ...m.meta, laid: true } }
+                    : m,
+                ),
+              },
+        )
+      : board.notes,
+  };
+}

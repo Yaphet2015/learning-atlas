@@ -28,6 +28,7 @@ import {
   buildMapFromAI,
 } from "./model/boards";
 import { contextForNote } from "./model/context";
+import { plain } from "./model/answer";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import {
   firstLevelPrompt,
@@ -41,11 +42,19 @@ import {
   addChild,
   addSibling,
   cacheMessages,
+  layOutline,
+  mergeHistory,
   removeSelection,
   reorder,
   reparent,
 } from "./model/editor";
-import { insertSlot, layoutTree, type Slot } from "./model/layout";
+import {
+  cardWidth,
+  insertSlot,
+  layoutTree,
+  sectionNumbers,
+  type Slot,
+} from "./model/layout";
 import { flushBoardCache, loadBoardForNavigation } from "./model/persistence";
 import {
   ConceptCard,
@@ -67,7 +76,6 @@ import {
 import { Drawer } from "./components/Drawer";
 import { StudyMode } from "./components/StudyMode";
 import { Outline } from "./components/Outline";
-import { RoughBox, SketchDefs } from "./components/sketch/RoughBox";
 import { Settings } from "./components/Settings";
 
 const nodeTypes = { concept: ConceptCard, root: RootCard, ghost: GhostCard };
@@ -280,7 +288,13 @@ export default function App() {
                       ...current,
                       notes: current.notes.map((n) =>
                         n.id === note.id
-                          ? { ...n, messages: cacheMessages(history.messages) }
+                          ? {
+                              ...n,
+                              messages: mergeHistory(
+                                n.messages,
+                                history.messages,
+                              ),
+                            }
                           : n,
                       ),
                     }
@@ -439,7 +453,7 @@ export default function App() {
     [showToast],
   );
   const askNote = useCallback(
-    (noteId: string, prompt: string) => {
+    (noteId: string, prompt: string, retry = false) => {
       if (editingLocked.current) return false;
       const b = boardRef.current;
       if (!b) return false;
@@ -456,28 +470,30 @@ export default function App() {
         context,
         mode: "answer",
       };
-      edit(
-        (current) => ({
-          ...current,
-          notes: current.notes.map((n) =>
-            n.id === noteId
-              ? {
-                  ...n,
-                  messages: cacheMessages([
-                    ...n.messages,
-                    {
-                      id: request.requestId,
-                      role: "user" as const,
-                      text: prompt,
-                      createdAt: now(),
-                    },
-                  ]),
-                }
-              : n,
-          ),
-        }),
-        false,
-      );
+      // A retry resends the question already in the thread.
+      if (!retry)
+        edit(
+          (current) => ({
+            ...current,
+            notes: current.notes.map((n) =>
+              n.id === noteId
+                ? {
+                    ...n,
+                    messages: cacheMessages([
+                      ...n.messages,
+                      {
+                        id: request.requestId,
+                        role: "user" as const,
+                        text: prompt,
+                        createdAt: now(),
+                      },
+                    ]),
+                  }
+                : n,
+            ),
+          }),
+          false,
+        );
       void sendAI(request);
       return true;
     },
@@ -515,7 +531,7 @@ export default function App() {
           stickyId: "expand-" + id,
           requestId: uid(),
           mode: "expand",
-          prompt: `围绕「${node.title}」展开下一层，最多 3 个概念。先解释它如何工作或用一个例子拆开，不要一次铺开整个领域。`,
+          prompt: `围绕「${node.title}」展开下一层，给 2–4 个并列的子问题。先解释它如何工作或用一个例子拆开，不要一次铺开整个领域。`,
           context,
         },
         id,
@@ -544,7 +560,7 @@ export default function App() {
           mode: "map",
           prompt:
             prompt ??
-            `为这个问题创建学习地图的第一小步：「${target.topic}」。只给 3 个大图景概念，具体、直观、少文字，适合初学者。`,
+            `为这个问题创建学习地图的第一层：「${target.topic}」。给 3–5 个并列的大图景子问题，具体、直观、少文字，适合初学者。`,
           context,
         },
         target.nodes[0]?.id,
@@ -639,6 +655,24 @@ export default function App() {
     // A new question starts the guided kickoff (or leads to AI settings) instead of a silent map.
     if (kickoff) startKickoff();
   }
+  const drawerRef = useRef(drawer);
+  drawerRef.current = drawer;
+  /** Close the drawer and hand focus back to the card it hung on. */
+  const closeDrawer = useCallback(() => {
+    const id = boardRef.current?.notes.find((n) => n.id === drawerRef.current)
+      ?.attachedTo?.id;
+    setDrawer(null);
+    if (id)
+      setTimeout(
+        () =>
+          document
+            .querySelector<HTMLElement>(
+              `.react-flow__node[data-id="${CSS.escape(id)}"]`,
+            )
+            ?.focus({ preventScroll: true }),
+        0,
+      );
+  }, []);
   const undo = useCallback(() => {
     if (editingLocked.current) return;
     setPast((p) => {
@@ -706,13 +740,15 @@ export default function App() {
   }
   const ask = useCallback(() => {
     addNote(selectedNodeId ? { kind: "node", id: selectedNodeId } : undefined);
-    setTimeout(
-      () =>
-        document
-          .querySelector<HTMLTextAreaElement>(".drawer footer textarea")
-          ?.focus(),
-      60,
-    );
+    // A newly opened drawer focuses its composer itself. For one that was already
+    // open, move focus there, but never steal it from a field inside the drawer
+    // (the learner may already be typing a note).
+    setTimeout(() => {
+      if (document.activeElement?.closest(".drawer")) return;
+      document
+        .querySelector<HTMLTextAreaElement>(".drawer footer textarea")
+        ?.focus();
+    }, 60);
   }, [addNote, selectedNodeId]);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -742,7 +778,7 @@ export default function App() {
         setPromote(null);
         setPalette(false);
         if (!typing) {
-          if (drawer) setDrawer(null);
+          if (drawer) closeDrawer();
           else setSelection(null);
           setTool("select");
         }
@@ -800,16 +836,37 @@ export default function App() {
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
   });
+  // Readiness signal for automation: set once a board is on screen, in the same
+  // commit (and after) the shortcut listener above is attached.
+  useEffect(() => {
+    document.documentElement.toggleAttribute(
+      "data-app-ready",
+      loaded && !!board,
+    );
+  }, [loaded, board]);
 
   // ---- layout: positions come only from layoutTree (or a drag/insert preview)
   const shown = preview ?? board;
+  // Card widths come from the title; row tops from the measured card heights.
+  const layoutOptions = useMemo(
+    () => ({
+      heights: new Map(
+        Object.entries(measured).map(([id, size]) => [id, size.height]),
+      ),
+      widthOf: (n: { title: string }) => cardWidth(n.title),
+    }),
+    [measured],
+  );
   const baseLayout = useMemo(
-    () => layoutTree(board?.nodes ?? []),
-    [board?.nodes],
+    () => layoutTree(board?.nodes ?? [], layoutOptions),
+    [board?.nodes, layoutOptions],
   );
   const layout = useMemo(
-    () => (shown === board ? baseLayout : layoutTree(shown?.nodes ?? [])),
-    [shown, board, baseLayout],
+    () =>
+      shown === board
+        ? baseLayout
+        : layoutTree(shown?.nodes ?? [], layoutOptions),
+    [shown, board, baseLayout, layoutOptions],
   );
   const slotRef = useRef<{ id: string; slot: Slot } | null>(null);
   const hoverAdd = useCallback((id: string | null) => {
@@ -817,6 +874,82 @@ export default function App() {
     setPreview(id && b ? addChild(b, id, GHOST) : null);
   }, []);
   const kickoffReady = needsKickoff(board) && !mapBusy && !study;
+  const drawerNoteAttachment = board?.notes.find(
+    (n) => n.id === drawer,
+  )?.attachedTo;
+  const drawerAnchor =
+    drawerNoteAttachment?.kind === "node" ? drawerNoteAttachment.id : null;
+  /** Where 「铺成第一层」 lays cards: the anchor card, or the root for a free note. */
+  const drawerAnchorOrRoot =
+    drawerAnchor ?? board?.nodes.find((n) => n.parentId === null)?.id ?? "";
+  /** Bring a card and its children into the visible canvas; with onlyIfHidden, leave a visible card alone. */
+  const frameFamily = useCallback(
+    (anchorId: string, onlyIfHidden = false) => {
+      const pane = document
+        .querySelector(".react-flow")
+        ?.getBoundingClientRect();
+      const anchor = flow.getInternalNode(anchorId);
+      if (!pane || !anchor?.measured.width) return;
+      if (onlyIfHidden) {
+        const a = anchor.internals.positionAbsolute;
+        const tl = flow.flowToScreenPosition(a);
+        const br = flow.flowToScreenPosition({
+          x: a.x + anchor.measured.width,
+          y: a.y + (anchor.measured.height ?? 0),
+        });
+        if (
+          tl.x >= pane.left &&
+          br.x <= pane.right - 36 &&
+          tl.y >= pane.top &&
+          br.y <= pane.bottom
+        )
+          return;
+      }
+      const ids = [
+        anchorId,
+        ...(boardRef.current?.nodes ?? [])
+          .filter((n) => n.parentId === anchorId)
+          .map((n) => n.id),
+      ];
+      const boxes = ids.flatMap((id) => {
+        const n = flow.getInternalNode(id);
+        if (!n?.measured.width) return [];
+        const p = n.internals.positionAbsolute;
+        return [
+          {
+            x: p.x,
+            y: p.y,
+            r: p.x + n.measured.width,
+            b: p.y + (n.measured.height ?? 0),
+          },
+        ];
+      });
+      const x = Math.min(...boxes.map((b) => b.x)),
+        y = Math.min(...boxes.map((b) => b.y));
+      void flow.fitBounds(
+        {
+          x,
+          y,
+          width: Math.max(...boxes.map((b) => b.r)) - x,
+          height: Math.max(...boxes.map((b) => b.b)) - y,
+        },
+        { padding: 0.18, duration: 320 },
+      );
+    },
+    [flow],
+  );
+  // The drawer squeezes the canvas (CSS). Once the container has resized, bring
+  // the anchor and its children into view, but only if the anchor is not
+  // already visible: never move the viewport needlessly.
+  useEffect(() => {
+    if (!drawerAnchor) return;
+    const t = setTimeout(() => frameFamily(drawerAnchor, true), 300);
+    return () => clearTimeout(t);
+  }, [drawerAnchor, frameFamily]);
+  const numbers = useMemo(
+    () => sectionNumbers(board?.nodes ?? []),
+    [board?.nodes],
+  );
   const nodes = useMemo<CanvasNode[]>(() => {
     if (!shown || !board) return [];
     const out: CanvasNode[] = [];
@@ -864,9 +997,8 @@ export default function App() {
         className: dragging ? "is-dragging" : undefined,
         data: {
           concept: n,
-          no: n.parentId
-            ? `§${String(n.order + 1).padStart(2, "0")}`
-            : undefined,
+          noteOpen: drawerAnchor === n.id,
+          no: numbers.get(n.id),
           topic: board.topic,
           createdAt: board.createdAt,
           scene: board.scene,
@@ -919,6 +1051,8 @@ export default function App() {
     edit,
     kickoffReady,
     startKickoff,
+    drawerAnchor,
+    numbers,
   ]);
   const edges = useMemo<Edge[]>(() => {
     if (!shown) return [];
@@ -926,9 +1060,11 @@ export default function App() {
     const by = new Map(shown.nodes.map((n) => [n.id, n]));
     for (const [parent, kids] of layout.children) {
       const real = kids.filter((k) => k !== GHOST);
-      const pw = layout.positions.get(parent)?.w ?? 176;
+      const pw = layout.positions.get(parent)?.w ?? 240;
       real.forEach((child, i) => {
         const k = real.length;
+        // Fan out ±26px per edge on the parent's bottom edge, kept inside the card.
+        const step = k > 1 ? Math.min(26, (pw - 48) / (k - 1)) : 0;
         out.push({
           id: `tree-${child}`,
           type: "tree",
@@ -939,7 +1075,7 @@ export default function App() {
           selectable: false,
           focusable: false,
           data: {
-            offset: k > 1 ? (i - (k - 1) / 2) * Math.min(24, pw / k / 1.5) : 0,
+            offset: (i - (k - 1) / 2) * step,
             unseen: by.get(child)?.status === "unseen",
           },
         });
@@ -984,11 +1120,11 @@ export default function App() {
     (_: unknown, node: CanvasNode) => {
       const b = boardRef.current;
       if (!b) return;
-      const w = baseLayout.positions.get(node.id)?.w ?? 176;
+      const w = baseLayout.positions.get(node.id)?.w ?? 240;
       const heights = new Map(
         b.nodes.map((n) => [
           n.id,
-          flow.getInternalNode(n.id)?.measured.height ?? 120,
+          flow.getInternalNode(n.id)?.measured.height ?? 130,
         ]),
       );
       const slot = insertSlot(
@@ -1041,7 +1177,7 @@ export default function App() {
   const bounds = useMemo(() => {
     const ps = [...baseLayout.positions.values()];
     return {
-      levels: Math.max(1, ...ps.map((p) => p.level + 1)),
+      rows: baseLayout.rows,
       left: Math.min(0, ...ps.map((p) => p.x)),
       right: Math.max(0, ...ps.map((p) => p.x + p.w)),
     };
@@ -1058,7 +1194,6 @@ export default function App() {
     );
   return (
     <main className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""}`}>
-      <SketchDefs />
       <div className="grain" />
       {chromeClasses.includes("mac-titlebar") && (
         <div className="titlebar-drag" aria-hidden="true" />
@@ -1157,8 +1292,6 @@ export default function App() {
           )}
           {selectedRelation && (
             <div className="chrome relation-bar">
-              <RoughBox kind="soft" seedKey="relbar" />
-              <div className="bg" />
               <span className="lab">交叉链接</span>
               <input
                 aria-label="关系标签"
@@ -1201,6 +1334,7 @@ export default function App() {
         <Drawer
           key={drawerNote.id}
           note={drawerNote}
+          anchor={board.nodes.find((n) => n.id === drawerNote.attachedTo?.id)}
           anchorTitle={
             board.nodes.find((n) => n.id === drawerNote.attachedTo?.id)?.title
           }
@@ -1209,8 +1343,16 @@ export default function App() {
               board,
               drawerNote.id,
               selection?.kind === "note" ? null : selection,
+              true,
             ).references
           }
+          nodes={board.nodes}
+          onRetry={() => {
+            const q = drawerNote.messages
+              .filter((m) => m.role === "user")
+              .at(-1);
+            if (q) askNote(drawerNote.id, q.text, true);
+          }}
           pending={pending[`${board.id}/${drawerNote.id}`]?.text}
           busy={pending[`${board.id}/${drawerNote.id}`]?.busy}
           error={pending[`${board.id}/${drawerNote.id}`]?.error}
@@ -1239,13 +1381,39 @@ export default function App() {
           onPromote={(text) =>
             setPromote({ noteId: drawerNote.id, title: "新的发现", text })
           }
+          anchorHasChildren={board.nodes.some(
+            (n) => n.parentId === drawerAnchorOrRoot,
+          )}
+          onLay={(items, messageId) => {
+            const ids = items.map(() => newId("concept"));
+            edit((b) =>
+              layOutline(
+                b,
+                drawerAnchorOrRoot,
+                items.map((i) => ({ head: i.head, body: plain(i.rest) })),
+                ids,
+                messageId ? { noteId: drawerNote.id, messageId } : undefined,
+              ),
+            );
+            showToast(
+              ids.length > 1
+                ? `已铺成 ${ids.length} 张卡，⌘Z 可以撤销。`
+                : `已加成一张卡：${items[0].head}。⌘Z 可以撤销。`,
+            );
+            setTimeout(() => frameFamily(drawerAnchorOrRoot), 120);
+          }}
+          onLocate={() => {
+            setSelection({ kind: "node", id: drawerAnchorOrRoot });
+            frameFamily(drawerAnchorOrRoot);
+          }}
           onRemove={() => {
             edit((b) =>
               removeSelection(b, { kind: "note", id: drawerNote.id }),
             );
             setDrawer(null);
+            showToast("已删除这张批注。⌘Z 可以撤销。");
           }}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
         />
       )}
       {board && study && (
@@ -1322,7 +1490,6 @@ export default function App() {
             aria-modal="true"
             aria-labelledby="new-title"
           >
-            <RoughBox kind="soft" seedKey="new-modal" />
             <button
               className="modal-close icon-button"
               onClick={() => setShowNew(false)}
@@ -1372,7 +1539,6 @@ export default function App() {
             aria-modal="true"
             aria-labelledby="promote-title"
           >
-            <RoughBox kind="soft" seedKey="promote" />
             <button
               className="modal-close icon-button"
               onClick={() => setPromote(null)}

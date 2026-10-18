@@ -20,7 +20,6 @@ import {
   StickyNote,
 } from "lucide-react";
 import type { BoardSummary, ConceptNode } from "../shared/types";
-import { RoughBox } from "./sketch/RoughBox";
 
 function Compass() {
   return (
@@ -31,7 +30,7 @@ function Compass() {
       className="compass"
       aria-hidden="true"
     >
-      <g filter="url(#wobble)">
+      <g>
         <circle
           cx="13"
           cy="13"
@@ -65,11 +64,9 @@ export function MapSwitcher({
   const explained = concepts.filter((n) => n.status === "explained").length;
   return (
     <button className="chrome switcher" onClick={onOpen} title="切换地图 ⌘K">
-      <RoughBox kind="soft" seedKey="switcher" />
-      <div className="bg" />
       <Compass />
       <span className="switcher-text">
-        <strong>{title}</strong>
+        <strong title={title}>{title}</strong>
         <small>
           {concepts.length} 概念 · {explained} 能解释
         </small>
@@ -165,8 +162,6 @@ export function Palette({
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <section className="chrome palette" role="dialog" aria-label="切换地图">
-        <RoughBox kind="soft" seedKey="palette" />
-        <div className="bg" />
         <input
           autoFocus
           placeholder="找一张地图，或输入新问题…"
@@ -214,16 +209,32 @@ export function Progress({
   const done = concepts.filter((n) => n.status === "explained").length;
   return (
     <div className="chrome progress">
-      <RoughBox kind="soft" seedKey="progress" />
-      <div className="bg" />
       <span className="lab">理解进度</span>
-      <span className="bar" aria-hidden="true">
-        {concepts.map((n) => (
-          <i key={n.id} className={`s-${n.status}`} />
-        ))}
-      </span>
-      <span className="lab count">
-        {done}/{concepts.length}
+      {concepts.length > 16 ? (
+        // Many concepts: one continuous bar, filled by share of each state.
+        <span className="bar long" aria-hidden="true">
+          {(["explained", "exploring", "unseen"] as const).map((st) => {
+            const k = concepts.filter((n) => n.status === st).length;
+            return k ? (
+              <i key={st} className={`s-${st}`} style={{ flexGrow: k }} />
+            ) : null;
+          })}
+        </span>
+      ) : (
+        <span className="bar" aria-hidden="true">
+          {concepts.map((n) => (
+            <i key={n.id} className={`s-${n.status}`} />
+          ))}
+        </span>
+      )}
+      <span
+        className="count"
+        aria-label={`${concepts.length} 个概念里讲清楚了 ${done} 个`}
+      >
+        <b>
+          {done} / {concepts.length}
+        </b>{" "}
+        讲清楚
       </span>
       <button
         className="btn primary"
@@ -267,8 +278,6 @@ export function Dock({
   );
   return (
     <nav className="chrome dock" aria-label="工具">
-      <RoughBox kind="soft" seedKey="dock" />
-      <div className="bg" />
       {b("select", "选择", "V", <MousePointer2 size={18} className="ico" />)}
       {b("hand", "平移", "H", <Hand size={18} className="ico" />)}
       <span className="sep" />
@@ -308,7 +317,7 @@ function MiniNode({ x, y, width, height, className }: MiniMapNodeProps) {
       y={y}
       width={width}
       height={height}
-      rx={3}
+      rx={20} // ≈ 2px at the minimap’s ~0.1 scale
       className={`mini-node ${className ?? ""}`}
     />
   );
@@ -320,13 +329,14 @@ export function MapUnit() {
   const { zoom } = useViewport();
   return (
     <div className="chrome map-unit">
-      <RoughBox kind="soft" seedKey="minimap" />
-      <div className="bg" />
       <MiniMap
         pannable
         zoomable
         position="top-left"
         className="atlas-minimap"
+        // Match the CSS box so the viewBox has the same aspect ratio; otherwise the
+        // mask's outer sub-path shows in the letterbox as a second frame.
+        style={{ width: 194, height: 120 }}
         nodeComponent={MiniNode}
         nodeClassName={(n) =>
           n.type === "ghost"
@@ -335,7 +345,7 @@ export function MapUnit() {
         }
         maskColor="transparent"
         maskStrokeColor="var(--accent)"
-        maskStrokeWidth={2}
+        maskStrokeWidth={1.25}
         bgColor="transparent"
       />
       <div className="zoom">

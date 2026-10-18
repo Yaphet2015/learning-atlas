@@ -1,14 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
+import { gotoApp, reloadApp } from "./ready";
 const card = (page: Page, title: string) =>
   page.locator(".react-flow__node", { hasText: title }).first();
 const stored = (page: Page) =>
   page.evaluate(() =>
-    JSON.parse(
-      localStorage.getItem("studyboard-preview-boards-v1") ?? "[]",
-    ),
+    JSON.parse(localStorage.getItem("studyboard-preview-boards-v1") ?? "[]"),
   );
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await gotoApp(page);
   await expect(card(page, "样式计算")).toBeVisible();
 });
 test("walkthrough renders on the tree and the experiment still works", async ({
@@ -31,15 +30,16 @@ test("walkthrough renders on the tree and the experiment still works", async ({
 test("siblings sit left to right in one row; Tab adds a child, Enter a sibling", async ({
   page,
 }) => {
-  const xs = await Promise.all(
-    ["DOM", "样式计算", "布局与绘制"].map(async (t) => {
-      const b = (await card(page, t).boundingBox())!;
-      return [b.x, b.y] as const;
-    }),
-  );
-  expect(xs[0][0]).toBeLessThan(xs[1][0]);
-  expect(xs[1][0]).toBeLessThan(xs[2][0]);
-  expect(Math.abs(xs[0][1] - xs[2][1])).toBeLessThan(1);
+  // Cards ease into place (transform transition, initial fit): poll the geometry.
+  const box = async (t: string) => (await card(page, t).boundingBox())!;
+  await expect
+    .poll(async () => {
+      const [a, b, c] = await Promise.all(
+        ["DOM", "样式计算", "布局与绘制"].map(box),
+      );
+      return a.x < b.x && b.x < c.x && Math.abs(a.y - c.y) < 1;
+    })
+    .toBe(true);
   await card(page, "DOM").click();
   await page.keyboard.press("Tab");
   await expect(page.locator(".title-input")).toBeFocused();
@@ -49,11 +49,14 @@ test("siblings sit left to right in one row; Tab adds a child, Enter a sibling",
   await expect(page.locator(".title-input")).toBeFocused();
   await page.locator(".title-input").fill("文本节点");
   await page.keyboard.press("Enter");
-  const a = (await card(page, "标签树").boundingBox())!;
-  const b = (await card(page, "文本节点").boundingBox())!;
-  expect(b.x).toBeGreaterThan(a.x);
-  expect(Math.abs(a.y - b.y)).toBeLessThan(1);
-  expect(a.y).toBeGreaterThan(xs[0][1] + 100);
+  await expect
+    .poll(async () => {
+      const [dom, a, b] = await Promise.all(
+        ["DOM", "标签树", "文本节点"].map(box),
+      );
+      return b.x > a.x && Math.abs(a.y - b.y) < 1 && a.y > dom.y + 100;
+    })
+    .toBe(true);
   // Poll the debounced autosave instead of sleeping a fixed time.
   await expect
     .poll(async () => {
@@ -72,7 +75,9 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
 }) => {
   await card(page, "样式计算").click();
   await page.getByRole("radio", { name: "我能解释" }).click();
-  await expect(card(page, "样式计算").locator(".seal")).toHaveText("懂");
+  await expect(
+    card(page, "样式计算").getByRole("img", { name: "我能解释" }),
+  ).toBeVisible();
   await page.keyboard.press("ControlOrMeta+z");
   await expect(card(page, "样式计算").locator(".seal")).toHaveCount(0);
   await card(page, "样式计算").click();
@@ -86,7 +91,7 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
     "Help me compare the two changes",
   );
   await expect(
-    page.locator(".drawer .chip", { hasText: "样式计算" }),
+    page.locator(".drawer .ctx", { hasText: "样式计算" }),
   ).toBeVisible();
   await expect
     .poll(async () =>
@@ -95,7 +100,7 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
       ),
     )
     .toBe(true);
-  await page.reload();
+  await reloadApp(page);
   await card(page, "样式计算").click();
   await page.keyboard.press("n");
   await expect(page.getByLabel("批注内容")).toHaveValue(
@@ -139,7 +144,7 @@ test("arbitrary topic stays a real AI setup state and keeps the new board", asyn
       ),
     )
     .toBe(true);
-  await page.reload();
+  await reloadApp(page);
   await expect(page.locator(".react-flow__node-root h2")).toHaveText(
     "How does a rainbow form?",
   );

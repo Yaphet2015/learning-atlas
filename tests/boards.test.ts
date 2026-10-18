@@ -12,6 +12,7 @@ import {
   settingsSchema,
   visualDiagramSchema,
 } from "../src/shared/validation";
+import { layoutTree } from "../src/model/layout";
 
 const map = () => ({
   nodes: [
@@ -127,10 +128,17 @@ describe("constrained AI map parsing", () => {
     expect(original.nodes).toHaveLength(1);
     expect(result.nodes).toHaveLength(3);
     expect(result.nodes[1].id).not.toBe("structure");
-    // structure→style is the first incoming edge: it becomes the tree edge.
-    expect(result.relations).toHaveLength(0);
+    // Relations never decide the tree: both are children of the anchor and
+    // structure→style stays a cross-link.
     expect(result.nodes[1].parentId).toBe(original.nodes[0].id);
-    expect(result.nodes[2].parentId).toBe(result.nodes[1].id);
+    expect(result.nodes[2].parentId).toBe(original.nodes[0].id);
+    expect(result.relations).toHaveLength(1);
+    expect(result.relations[0]).toMatchObject({
+      source: result.nodes[1].id,
+      target: result.nodes[2].id,
+      label: "决定呈现对象",
+      kind: "cross",
+    });
     expect(boardSchema.safeParse(result).success).toBe(true);
     expect(result.nodes.some((node) => node.status === "explained")).toBe(
       false,
@@ -149,10 +157,81 @@ describe("constrained AI map parsing", () => {
       board,
       board.nodes[0].id,
     );
-    expect(result.relations).toHaveLength(0);
+    // anchor → structure is already the tree edge, so only the cross-link stays.
+    expect(result.relations).toHaveLength(1);
     expect(
       result.nodes.filter((n) => n.parentId === board.nodes[0].id),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
+  });
+  it("lays a chained first level side by side: c1→c2→c3 is not a vertical chain", () => {
+    const board = createEmptyBoard("重疾险");
+    const anchor = board.nodes[0].id;
+    const payload = {
+      nodes: [
+        { id: "c1", title: "保什么", body: "病种与分层。", parent: "anchor" },
+        { id: "c2", title: "什么时候不赔", body: "等待期与免责。" },
+        { id: "c3", title: "怎么赔", body: "次数与比例。", parent: "anchor" },
+      ],
+      relations: [
+        { source: "c1", target: "c2", label: "先看" },
+        { source: "c2", target: "c3", label: "然后" },
+      ],
+    };
+    const result = buildMapFromAI(JSON.stringify(payload), board, anchor);
+    const added = result.nodes.slice(1);
+    expect(added.map((n) => n.parentId)).toEqual([anchor, anchor, anchor]);
+    expect(added.map((n) => n.order)).toEqual([0, 1, 2]);
+    const { positions } = layoutTree(result.nodes);
+    expect(added.map((n) => positions.get(n.id)!.level)).toEqual([1, 1, 1]);
+    // 先/然后 between neighbours is the sibling arrow, not a cross-link.
+    expect(result.relations).toHaveLength(0);
+  });
+  it("keeps cross-branch relations and appends after existing children", () => {
+    const board = buildMapFromAI(
+      JSON.stringify({
+        nodes: [{ id: "a", title: "已有", body: "已有的一张。" }],
+        relations: [],
+      }),
+      createEmptyBoard("学习"),
+    );
+    const anchor = board.nodes[0].id;
+    const result = buildMapFromAI(
+      JSON.stringify({
+        nodes: [
+          { id: "x", title: "甲", body: "一。" },
+          { id: "y", title: "乙", body: "二。" },
+          { id: "z", title: "丙", body: "三。" },
+        ],
+        relations: [
+          { source: "x", target: "z", label: "对照" },
+          { source: "z", target: "x", label: "反过来" },
+          { source: "x", target: "y", label: "导致" },
+        ],
+      }),
+      board,
+      anchor,
+    );
+    expect(
+      result.nodes.filter((n) => n.parentId === anchor).map((n) => n.order),
+    ).toEqual([0, 1, 2, 3]);
+    // x↔z is kept once; x→y is a causal link, not a sequence, so it stays.
+    expect(result.relations.map((r) => r.label)).toEqual(["对照", "导致"]);
+  });
+  it("ignores a deeper parent: each expansion grows exactly one level", () => {
+    const board = createEmptyBoard("学习");
+    const result = buildMapFromAI(
+      JSON.stringify({
+        nodes: [
+          { id: "p", title: "父", body: "一。" },
+          { id: "q", title: "子", body: "二。", parent: "p" },
+        ],
+        relations: [],
+      }),
+      board,
+    );
+    expect(
+      result.nodes.slice(1).every((n) => n.parentId === board.nodes[0].id),
+    ).toBe(true);
   });
   it("connects disconnected components without fabricating semantic edges", () => {
     const board = createEmptyBoard("学习");

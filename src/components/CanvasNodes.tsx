@@ -7,21 +7,22 @@ import {
   type Node,
 } from "@xyflow/react";
 import {
-  ArrowDown,
   ArrowRight,
   ChevronRight,
+  Image,
   Layers3,
   MessageCircle,
   PencilLine,
   Sparkles,
+  StickyNote,
 } from "lucide-react";
-import type { ConceptNode, SceneState, VisualDiagram } from "../shared/types";
-import { RoughBox, SelectRing, type BoxKind } from "./sketch/RoughBox";
+import type { ConceptNode, SceneState } from "../shared/types";
+import { Seal } from "./Seal";
 
 export type CardData = {
   [key: string]: unknown;
   concept: ConceptNode;
-  /** "§02"-style index shown top-right. */
+  /** Hierarchical "§1.2" index shown top-right. */
   no?: string;
   topic?: string;
   createdAt?: string;
@@ -29,6 +30,8 @@ export type CardData = {
   editing?: boolean;
   linkMode?: boolean;
   dimmed?: boolean;
+  /** The drawer is open on this card's note. */
+  noteOpen?: boolean;
   onRename?: (id: string, title: string) => void;
   onEditDone?: () => void;
   onAddChild?: (id: string) => void;
@@ -50,44 +53,6 @@ export type CardNode = Node<CardData, "concept" | "root">;
 export type GhostNode = Node<GhostData, "ghost">;
 export type CanvasNode = CardNode | GhostNode;
 
-export const boxFor = (status: ConceptNode["status"]): BoxKind =>
-  status === "unseen" ? "dash" : status === "explained" ? "strong" : "card";
-const washFor = (status: ConceptNode["status"]) =>
-  status === "explained" ? 1 : status === "exploring" ? 0.5 : 0;
-
-function StructuredVisual({ visual }: { visual: VisualDiagram }) {
-  return (
-    <figure className={`structured-visual visual-${visual.kind}`}>
-      <figcaption>
-        <span>
-          {visual.title ??
-            (visual.kind === "process"
-              ? "过程一览"
-              : visual.kind === "parts"
-                ? "拆开看组成"
-                : "放在一起比较")}
-        </span>
-        <small>{visual.basis === "analogy" ? "类比示意" : "结构示意"}</small>
-      </figcaption>
-      <div className="visual-labels">
-        {visual.labels.map((label, index) => (
-          <div className="visual-item" key={index}>
-            {visual.kind === "process" && (
-              <span className="visual-sequence">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-            )}
-            <span>{label}</span>
-            {visual.kind === "process" && index < visual.labels.length - 1 && (
-              <ArrowDown size={11} />
-            )}
-          </div>
-        ))}
-      </div>
-      {visual.caption && <p>{visual.caption}</p>}
-    </figure>
-  );
-}
 function Ports({ linkMode }: { linkMode?: boolean }) {
   return (
     <>
@@ -115,7 +80,7 @@ function Ports({ linkMode }: { linkMode?: boolean }) {
   );
 }
 
-/** Title with the mastery highlighter stroke underneath (0 / 50% / 100%). */
+/** Card title; double-click or F2 turns it into an input. */
 function Title({ data, as: Tag }: { data: CardData; as: "h2" | "h3" }) {
   const n = data.concept;
   const [draft, setDraft] = useState(n.title);
@@ -149,18 +114,27 @@ function Title({ data, as: Tag }: { data: CardData; as: "h2" | "h3" }) {
         }}
       />
     );
-  return (
-    <Tag>
-      <span className="ttl">
-        <span
-          className="wash"
-          style={{ "--f": washFor(n.status) } as React.CSSProperties}
-        />
-        {Tag === "h2" ? (data.topic ?? n.title) : n.title}
-      </span>
-    </Tag>
+  if (Tag === "h3") return <h3>{n.title}</h3>;
+  // A bracketed aside in the root question gets its own quieter line.
+  const text = data.topic ?? n.title;
+  const m = text.match(/^(.+?)([（(].+[）)])$/);
+  return m ? (
+    <h2>
+      {m[1]}
+      <span className="sub">{m[2]}</span>
+    </h2>
+  ) : (
+    <h2>{text}</h2>
   );
 }
+
+/** Hangs on the card the drawer is talking about. */
+const NoteTab = () => (
+  <span className="note-tab" aria-hidden="true">
+    <StickyNote size={13} className="ico" />
+    批注
+  </span>
+);
 
 function AddHandles({ data }: { data: CardData }) {
   const id = data.concept.id;
@@ -264,32 +238,39 @@ function SelectToolbar({
   );
 }
 
-export function ConceptCard({
-  data,
-  selected,
-  width,
-  height,
-}: NodeProps<CardNode>) {
+export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
   const n = data.concept;
   // Stamp only when the status changes while mounted, not on first paint.
   const first = useRef(n.status);
   const animate = first.current !== n.status;
   return (
     <article
-      className={`card s-${n.status} ${selected ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""}`}
+      className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""}`}
     >
-      <RoughBox kind={boxFor(n.status)} seedKey={n.id} />
-      <div className="bg" />
+      {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />
-      {n.status === "explained" && <span className="seal">懂</span>}
+      {n.status === "explained" && <Seal />}
       {data.no && <span className="no">{data.no}</span>}
       <Title data={data} as="h3" />
       {n.body && <p>{n.body}</p>}
-      {n.visual && <StructuredVisual visual={n.visual} />}
-      {n.hand && <span className="hand">{n.hand}</span>}
-      {selected && width && height ? (
-        <SelectRing w={width} h={height} seedKey={n.id + ":sel"} />
-      ) : null}
+      {(n.visual || n.hand) && (
+        <div className="meta">
+          {n.visual && (
+            <button
+              className="chip-fig nodrag nopan"
+              title="在批注里看图示"
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onNote?.(n.id);
+              }}
+            >
+              <Image size={13} className="ico" />
+              含图示
+            </button>
+          )}
+          {n.hand && <span className="hand">{n.hand}</span>}
+        </div>
+      )}
       {!data.linkMode && <AddHandles data={data} />}
       <SelectToolbar data={data} visible={!!selected && !data.editing} />
     </article>
@@ -306,13 +287,14 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
   const n = data.concept;
   const [open, setOpen] = useState(false);
   return (
-    <article className={`origin ${selected ? "is-selected" : ""}`}>
-      <RoughBox kind="origin" seedKey={n.id} />
-      <div className="bg" />
+    <article
+      className={`origin ${selected || data.noteOpen ? "is-selected" : ""}`}
+    >
+      {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />
       <div className="origin-head">
         <span className="eyebrow">起点 · 问题</span>
-        <span className="lab">{dateLabel(data.createdAt)}</span>
+        <span className="date">{dateLabel(data.createdAt)}</span>
       </div>
       <Title data={data} as="h2" />
       {n.kind === "scene" && data.scene && (
@@ -362,11 +344,7 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
 
 /** Insertion preview: a vermilion dashed slot. */
 export function GhostCard({ data }: NodeProps<GhostNode>) {
-  return (
-    <div className="ghost" style={{ width: data.w }}>
-      <RoughBox kind="ghost" seedKey="ghost" />
-    </div>
-  );
+  return <div className="ghost" style={{ width: data.w }} />;
 }
 
 export function SceneExperiment({

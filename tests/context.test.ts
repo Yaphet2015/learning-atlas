@@ -4,7 +4,7 @@ import {
   expandWalkthrough,
   newNote,
 } from "../src/model/boards";
-import { contextForNote } from "../src/model/context";
+import { contextForNote, refKey } from "../src/model/context";
 import { contextBundleSchema } from "../src/shared/validation";
 
 function fixture() {
@@ -37,6 +37,24 @@ function fixture() {
 }
 
 describe("local note context", () => {
+  it("leaves unticked references out of what is sent, but can still list them", () => {
+    const { board, current } = fixture();
+    current.excludedRefs = [
+      refKey({ kind: "node", id: "concept-style" }),
+      refKey({ kind: "topic", id: board.id }),
+    ];
+    const sel = { kind: "node" as const, id: "concept-dom" };
+    const sent = contextForNote(board, current.id, sel);
+    const ids = sent.references.map((ref) => ref.id);
+    expect(ids).toContain("concept-dom");
+    expect(ids).not.toContain("concept-style");
+    expect(sent.summary).not.toContain("[node:concept-style]");
+    // The topic and the note itself are always sent.
+    expect(sent.references[0].kind).toBe("topic");
+    expect(ids).toContain(current.id);
+    const listed = contextForNote(board, current.id, sel, true);
+    expect(listed.references.map((ref) => ref.id)).toContain("concept-style");
+  });
   it("uses only original topic and its own note for a free note", () => {
     const { board, current } = fixture();
     const context = contextForNote(board, current.id);

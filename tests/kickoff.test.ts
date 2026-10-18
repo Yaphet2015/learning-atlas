@@ -70,7 +70,14 @@ describe("「让 AI 带我开始」 kickoff", () => {
     expect(answers).toEqual(["知道光会折射，但不懂为什么分成七色"]);
     const prompt = firstLevelPrompt("彩虹", answers);
     expect(prompt).toContain("「知道光会折射，但不懂为什么分成七色」");
-    expect(prompt).toContain("3 个按先后顺序");
+    expect(prompt).toContain("3–5 个按先后顺序");
     expect(firstLevelPrompt("彩虹", [])).toContain("按初学者处理");
+    expect(firstLevelPrompt("彩虹", [])).toContain("3–5 个");
+    expect(firstLevelPrompt("彩虹", [])).not.toContain("只给 3 个");
+  });
+  it("follows the tutor's outline when there is one", () => {
+    const prompt = firstLevelPrompt("重疾险", [], ["保什么", "什么时候不赔"]);
+    expect(prompt).toContain("必须按这份骨架拆");
+    expect(prompt).toContain("1. 保什么；2. 什么时候不赔");
   });
 });

@@ -42,13 +42,24 @@ export function learnerAnswers(note: StickyNote | undefined): string[] {
     .slice(-3);
 }
 
-/** Map-mode prompt for the first level of child questions, informed by the learner's answers. */
-export function firstLevelPrompt(topic: string, answers: string[]): string {
+/**
+ * Map-mode prompt for the first level of child questions, informed by the
+ * learner's answers. With an outline (the numbered skeleton the tutor already
+ * gave), the level must follow it so the canvas matches the drawer.
+ */
+export function firstLevelPrompt(
+  topic: string,
+  answers: string[],
+  outline?: string[],
+): string {
   const known = answers.length
     ? `学习者说自己已经知道 / 想弄懂的是：${answers.map((a) => `「${a.slice(0, 300)}」`).join("；")}。据此跳过他已掌握的部分，从他的起点往下拆。`
     : "学习者还没说自己知道什么，按初学者处理。";
-  return `为这个问题创建学习地图的第一层：「${topic}」。${known}
-只给 3 个按先后顺序（先→后）排列的子问题，每个标题写成一个具体的小问题，正文一两句说明为什么先问它。具体、直观、少文字。`;
+  const skeleton = outline?.length
+    ? `\n必须按这份骨架拆，一项一个子问题，顺序不变：${outline.map((h, i) => `${i + 1}. ${h.slice(0, 60)}`).join("；")}。`
+    : "";
+  return `为这个问题创建学习地图的第一层：「${topic}」。${known}${skeleton}
+给 3–5 个按先后顺序（先→后）排列、彼此并列不重叠、合起来覆盖整个问题的子问题，每个标题写成一个具体的小问题，正文一两句说明为什么先问它。具体、直观、少文字。`;
 }
 
 /** The thread shows only the learner-facing line of the kickoff request. */
