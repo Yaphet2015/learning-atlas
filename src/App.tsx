@@ -45,7 +45,7 @@ import {
   reorder,
   reparent,
 } from "./model/editor";
-import { insertSlot, layoutTree, rowY, type Slot } from "./model/layout";
+import { cardWidth, insertSlot, layoutTree, type Slot } from "./model/layout";
 import { flushBoardCache, loadBoardForNavigation } from "./model/persistence";
 import {
   ConceptCard,
@@ -802,13 +802,26 @@ export default function App() {
 
   // ---- layout: positions come only from layoutTree (or a drag/insert preview)
   const shown = preview ?? board;
+  // Card widths come from the title; row tops from the measured card heights.
+  const layoutOptions = useMemo(
+    () => ({
+      heights: new Map(
+        Object.entries(measured).map(([id, size]) => [id, size.height]),
+      ),
+      widthOf: (n: { title: string }) => cardWidth(n.title),
+    }),
+    [measured],
+  );
   const baseLayout = useMemo(
-    () => layoutTree(board?.nodes ?? []),
-    [board?.nodes],
+    () => layoutTree(board?.nodes ?? [], layoutOptions),
+    [board?.nodes, layoutOptions],
   );
   const layout = useMemo(
-    () => (shown === board ? baseLayout : layoutTree(shown?.nodes ?? [])),
-    [shown, board, baseLayout],
+    () =>
+      shown === board
+        ? baseLayout
+        : layoutTree(shown?.nodes ?? [], layoutOptions),
+    [shown, board, baseLayout, layoutOptions],
   );
   const slotRef = useRef<{ id: string; slot: Slot } | null>(null);
   const hoverAdd = useCallback((id: string | null) => {
@@ -925,9 +938,11 @@ export default function App() {
     const by = new Map(shown.nodes.map((n) => [n.id, n]));
     for (const [parent, kids] of layout.children) {
       const real = kids.filter((k) => k !== GHOST);
-      const pw = layout.positions.get(parent)?.w ?? 176;
+      const pw = layout.positions.get(parent)?.w ?? 240;
       real.forEach((child, i) => {
         const k = real.length;
+        // Fan out ±26px per edge on the parent's bottom edge, kept inside the card.
+        const step = k > 1 ? Math.min(26, (pw - 48) / (k - 1)) : 0;
         out.push({
           id: `tree-${child}`,
           type: "tree",
@@ -938,7 +953,7 @@ export default function App() {
           selectable: false,
           focusable: false,
           data: {
-            offset: k > 1 ? (i - (k - 1) / 2) * Math.min(24, pw / k / 1.5) : 0,
+            offset: (i - (k - 1) / 2) * step,
             unseen: by.get(child)?.status === "unseen",
           },
         });
@@ -983,11 +998,11 @@ export default function App() {
     (_: unknown, node: CanvasNode) => {
       const b = boardRef.current;
       if (!b) return;
-      const w = baseLayout.positions.get(node.id)?.w ?? 176;
+      const w = baseLayout.positions.get(node.id)?.w ?? 240;
       const heights = new Map(
         b.nodes.map((n) => [
           n.id,
-          flow.getInternalNode(n.id)?.measured.height ?? 120,
+          flow.getInternalNode(n.id)?.measured.height ?? 130,
         ]),
       );
       const slot = insertSlot(
@@ -1039,9 +1054,8 @@ export default function App() {
   );
   const bounds = useMemo(() => {
     const ps = [...baseLayout.positions.values()];
-    const levels = Math.max(1, ...ps.map((p) => p.level + 1));
     return {
-      rows: Array.from({ length: levels }, (_, l) => rowY(l)),
+      rows: baseLayout.rows,
       left: Math.min(0, ...ps.map((p) => p.x)),
       right: Math.max(0, ...ps.map((p) => p.x + p.w)),
     };
@@ -1198,6 +1212,7 @@ export default function App() {
         <Drawer
           key={drawerNote.id}
           note={drawerNote}
+          anchor={board.nodes.find((n) => n.id === drawerNote.attachedTo?.id)}
           anchorTitle={
             board.nodes.find((n) => n.id === drawerNote.attachedTo?.id)?.title
           }

@@ -1,17 +1,16 @@
 import type { ConceptNode } from "../shared/types";
 
-/** Fixed notebook rows: L0 100, L1 350, L2 610, then +260 per level. */
-export const ROW_Y = [100, 350, 610];
-export const rowY = (level: number) =>
-  level < ROW_Y.length
-    ? ROW_Y[level]
-    : ROW_Y[ROW_Y.length - 1] + 260 * (level - ROW_Y.length + 1);
-export const CARD_W = 176;
-export const ROOT_W = 470;
-export const GAP_IN = 22;
-export const GAP_GROUP = 46;
-/** Assumed card height when the DOM height is not known yet. */
-export const CARD_H = 120;
+/** Top of the root row; each next row starts below the tallest card above it. */
+export const ROW0 = 100;
+export const ROW_GAP = 96;
+export const CARD_MIN = 240;
+export const CARD_MAX = 320;
+export const ROOT_W = 500;
+export const GAP_IN = 28;
+export const GAP_GROUP = 56;
+/** Assumed heights before the DOM has measured a card. */
+export const CARD_H = 130;
+export const ROOT_H = 150;
 
 export type TreeNode = Pick<ConceptNode, "id" | "parentId" | "order" | "kind">;
 export interface Placement {
@@ -24,6 +23,45 @@ export interface TreeLayout {
   rootId: string | null;
   positions: Map<string, Placement>;
   children: Map<string, string[]>;
+  /** rows[l] = top of level l, in flow coordinates. */
+  rows: number[];
+}
+export interface LayoutOptions<T> {
+  /** Measured card heights; unknown cards use CARD_H / ROOT_H. */
+  heights?: Map<string, number>;
+  /** Card width for a non-root node; defaults to CARD_MIN. */
+  widthOf?: (node: T) => number;
+}
+
+let ctx: CanvasRenderingContext2D | null | undefined;
+const widthCache = new Map<string, number>();
+/**
+ * clamp(240, title width at 700 21px WenKai + 32 padding + 30 for the §no, 320).
+ * Measured on an offscreen canvas once the font has loaded (main.tsx waits for
+ * it); without a canvas (tests) a CJK ≈ 21px / Latin ≈ 11px estimate is used.
+ */
+export function cardWidth(title: string): number {
+  const hit = widthCache.get(title);
+  if (hit) return hit;
+  if (ctx === undefined)
+    ctx =
+      typeof document === "undefined"
+        ? null
+        : document.createElement("canvas").getContext("2d");
+  let text: number;
+  if (ctx) {
+    ctx.font = '700 21px "LXGW WenKai"';
+    text = ctx.measureText(title).width;
+  } else {
+    text = [...title].reduce(
+      (sum, ch) => sum + (/[\u0000-\u024f]/.test(ch) ? 11 : 21),
+      0,
+    );
+  }
+  const w = Math.min(CARD_MAX, Math.max(CARD_MIN, Math.ceil(text + 32 + 30)));
+  if (widthCache.size > 2_000) widthCache.clear();
+  widthCache.set(title, w);
+  return w;
 }
 
 export function childrenOf<T extends TreeNode>(nodes: T[]) {
@@ -37,22 +75,30 @@ export function childrenOf<T extends TreeNode>(nodes: T[]) {
 }
 
 /**
- * Tidy tree with fixed row heights (simplified Reingold–Tilford).
- * Width of a subtree: max(own card, Σ children + gaps). A parent is centred
- * over its subtree; the whole tree is centred on x = 0. Pure and O(n).
+ * Tidy tree (simplified Reingold–Tilford). Width of a subtree: max(own card,
+ * Σ children + gaps). A parent is centred over its subtree; the whole tree is
+ * centred on x = 0. Neighbouring siblings sit GAP_IN apart, or GAP_GROUP when
+ * either one fans out wider than its own card. Row tops follow the tallest
+ * card of the row above, so a tall card never crosses the next level's rule.
+ * Pure and O(n).
  */
-export function layoutTree<T extends TreeNode>(nodes: T[]): TreeLayout {
+export function layoutTree<T extends TreeNode>(
+  nodes: T[],
+  options: LayoutOptions<T> = {},
+): TreeLayout {
   const positions = new Map<string, Placement>();
   const children = childrenOf(nodes);
   const root = nodes.find((n) => n.parentId === null);
-  if (!root) return { rootId: null, positions, children };
+  if (!root) return { rootId: null, positions, children, rows: [] };
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const own = (id: string, level: number) =>
-    level === 0 || byId.get(id)?.kind === "scene" ? ROOT_W : CARD_W;
+  const own = (id: string, level: number) => {
+    const n = byId.get(id)!;
+    if (level === 0 || n.kind === "scene") return ROOT_W;
+    return options.widthOf?.(n) ?? CARD_MIN;
+  };
   const widths = new Map<string, number>();
   const levels = new Map<string, number>();
-  const gap = (level: number) => (level >= 1 ? GAP_IN : GAP_GROUP);
-  // Iterative post-order so deep trees cannot overflow the stack.
+  // Iterative pre-order so deep trees cannot overflow the stack.
   const order: string[] = [];
   const stack: [string, number][] = [[root.id, 0]];
   while (stack.length) {
@@ -62,31 +108,48 @@ export function layoutTree<T extends TreeNode>(nodes: T[]): TreeLayout {
     order.push(id);
     for (const c of children.get(id) ?? []) stack.push([c, level + 1]);
   }
+  const fans = (id: string) => widths.get(id)! > own(id, levels.get(id)!);
+  const span = (kids: string[]) =>
+    kids.reduce(
+      (a, c, i) =>
+        a +
+        widths.get(c)! +
+        (i ? (fans(c) || fans(kids[i - 1]) ? GAP_GROUP : GAP_IN) : 0),
+      0,
+    );
   for (const id of [...order].reverse()) {
-    const level = levels.get(id)!;
     const kids = children.get(id)!.filter((c) => levels.has(c));
-    const sum =
-      kids.reduce((a, c) => a + widths.get(c)!, 0) +
-      gap(level) * Math.max(0, kids.length - 1);
-    widths.set(id, Math.max(own(id, level), sum));
+    children.set(id, kids);
+    widths.set(id, Math.max(own(id, levels.get(id)!), span(kids)));
   }
-  const place = (id: string, left: number) => {
+  // Row tops from measured heights.
+  const depth = Math.max(...levels.values()) + 1;
+  const tallest = new Array<number>(depth).fill(0);
+  for (const [id, level] of levels)
+    tallest[level] = Math.max(
+      tallest[level],
+      options.heights?.get(id) ?? (level === 0 ? ROOT_H : CARD_H),
+    );
+  const rows = [ROW0];
+  for (let l = 1; l < depth; l++)
+    rows.push(rows[l - 1] + tallest[l - 1] + ROW_GAP);
+  // Iterative placement as well.
+  const queue: [string, number][] = [[root.id, -widths.get(root.id)! / 2]];
+  while (queue.length) {
+    const [id, left] = queue.pop()!;
     const level = levels.get(id)!;
     const w = own(id, level);
     const total = widths.get(id)!;
-    positions.set(id, { x: left + (total - w) / 2, y: rowY(level), w, level });
+    positions.set(id, { x: left + (total - w) / 2, y: rows[level], w, level });
     const kids = children.get(id)!;
-    const span =
-      kids.reduce((a, c) => a + widths.get(c)!, 0) +
-      gap(level) * Math.max(0, kids.length - 1);
-    let cursor = left + (total - span) / 2;
-    for (const c of kids) {
-      place(c, cursor);
-      cursor += widths.get(c)! + gap(level);
-    }
-  };
-  place(root.id, -widths.get(root.id)! / 2);
-  return { rootId: root.id, positions, children };
+    let cursor = left + (total - span(kids)) / 2;
+    kids.forEach((c, i) => {
+      if (i) cursor += fans(c) || fans(kids[i - 1]) ? GAP_GROUP : GAP_IN;
+      queue.push([c, cursor]);
+      cursor += widths.get(c)!;
+    });
+  }
+  return { rootId: root.id, positions, children, rows };
 }
 
 export function isDescendant(

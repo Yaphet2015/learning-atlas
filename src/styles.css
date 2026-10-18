@@ -277,6 +277,20 @@ kbd,
   color: var(--ink-3);
   min-width: 0;
 }
+.chip-fig {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font: 400 12px var(--kai);
+  color: var(--ink-2);
+  padding: 1px 8px 1px 6px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.chip-fig:hover {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
 .card .hand {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1563,24 +1577,31 @@ kbd,
   padding: 9px;
   margin-top: 12px;
 }
+/* Diagrams live in the drawer's 「这张卡」 block, themed by tokens (no fixed light colours). */
+.this-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .structured-visual {
-  margin: 14px 0 0;
-  border: 1px solid #e6ecdf;
-  border-radius: var(--r-sm);
-  background: #f7faf3;
+  margin: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--paper-deep);
   padding: 10px;
 }
 .structured-visual figcaption {
   display: flex;
   justify-content: space-between;
-  gap: 5px;
-  font-size: 8px;
-  color: #8fa17e;
-  margin-bottom: 9px;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-bottom: 8px;
 }
 .structured-visual figcaption small {
-  font-size: 7px;
-  color: #b4bea8;
+  font-size: 12px;
+  color: var(--ink-3);
   white-space: nowrap;
 }
 .visual-labels {
@@ -1592,25 +1613,24 @@ kbd,
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 9px;
+  font-size: 13.5px;
   line-height: 1.5;
-  background: #fff;
-  border: 1px solid #dfe8d5;
-  padding: 6px 7px;
-  border-radius: var(--r-xs);
-  color: #829570;
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
 }
 .visual-sequence {
-  font-size: 7px;
-  font-family: var(--kai-mono);
-  color: #b5c1a8;
+  font: 400 11.5px var(--kai-mono);
+  color: var(--ink-3);
 }
 .visual-item > svg {
   position: absolute;
   bottom: -9px;
   left: 49%;
   z-index: 1;
-  color: #b7c5aa;
+  color: var(--ink-3);
 }
 .visual-process .visual-labels {
   gap: 9px;
@@ -1619,19 +1639,14 @@ kbd,
 .visual-comparison .visual-labels {
   grid-template-columns: 1fr 1fr;
 }
-.visual-comparison .visual-item:nth-child(even) {
-  background: #f6f1e8;
-  border-color: #e8dfce;
-  color: #a8987b;
-}
 .visual-parts .visual-item {
-  border-left: 3px solid #bacfa8;
+  box-shadow: inset 3px 0 0 var(--border-strong);
 }
 .structured-visual > p {
-  font-size: 8px;
-  color: #a0ae92;
-  line-height: 1.7;
-  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  line-height: 1.6;
+  margin: 8px 0 0;
 }
 .closing-overlay {
   position: fixed;
@@ -1678,8 +1693,7 @@ kbd,
 .browser-preview,
 .pipeline,
 .prediction-input,
-.explain-lab textarea,
-.structured-visual {
+.explain-lab textarea {
   background: var(--paper);
   border-color: var(--border);
   color: var(--ink);

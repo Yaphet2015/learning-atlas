@@ -1,11 +1,17 @@
 import { useState } from "react";
 import { ArrowUp, LoaderCircle, Plus, Square, X } from "lucide-react";
-import type { ContextReference, StickyNote } from "../shared/types";
+import type {
+  ConceptNode,
+  ContextReference,
+  StickyNote,
+} from "../shared/types";
+import { StructuredVisual } from "./StructuredVisual";
 import { displayMessage } from "../model/kickoff";
 
 /** AI conversations live in a right-hand drawer, attached to a card or free. */
 export function Drawer({
   note,
+  anchor,
   anchorTitle,
   refs,
   pending,
@@ -20,6 +26,8 @@ export function Drawer({
   onClose,
 }: {
   note: StickyNote;
+  /** The card this conversation hangs on; its diagram renders here, not on the card. */
+  anchor?: ConceptNode;
   anchorTitle?: string;
   refs: ContextReference[];
   pending?: string;
@@ -72,6 +80,12 @@ export function Drawer({
         </div>
       </div>
       <div className="thread">
+        {anchor?.visual && (
+          <section className="this-card" aria-label="这张卡">
+            <span className="lab">这张卡 · {anchor.title}</span>
+            <StructuredVisual visual={anchor.visual} />
+          </section>
+        )}
         <textarea
           className="note-text"
           aria-label="批注内容"

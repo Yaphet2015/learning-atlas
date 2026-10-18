@@ -7,15 +7,15 @@ import {
   type Node,
 } from "@xyflow/react";
 import {
-  ArrowDown,
   ArrowRight,
   ChevronRight,
+  Image,
   Layers3,
   MessageCircle,
   PencilLine,
   Sparkles,
 } from "lucide-react";
-import type { ConceptNode, SceneState, VisualDiagram } from "../shared/types";
+import type { ConceptNode, SceneState } from "../shared/types";
 import { Seal } from "./Seal";
 
 export type CardData = {
@@ -50,39 +50,6 @@ export type CardNode = Node<CardData, "concept" | "root">;
 export type GhostNode = Node<GhostData, "ghost">;
 export type CanvasNode = CardNode | GhostNode;
 
-function StructuredVisual({ visual }: { visual: VisualDiagram }) {
-  return (
-    <figure className={`structured-visual visual-${visual.kind}`}>
-      <figcaption>
-        <span>
-          {visual.title ??
-            (visual.kind === "process"
-              ? "过程一览"
-              : visual.kind === "parts"
-                ? "拆开看组成"
-                : "放在一起比较")}
-        </span>
-        <small>{visual.basis === "analogy" ? "类比示意" : "结构示意"}</small>
-      </figcaption>
-      <div className="visual-labels">
-        {visual.labels.map((label, index) => (
-          <div className="visual-item" key={index}>
-            {visual.kind === "process" && (
-              <span className="visual-sequence">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-            )}
-            <span>{label}</span>
-            {visual.kind === "process" && index < visual.labels.length - 1 && (
-              <ArrowDown size={11} />
-            )}
-          </div>
-        ))}
-      </div>
-      {visual.caption && <p>{visual.caption}</p>}
-    </figure>
-  );
-}
 function Ports({ linkMode }: { linkMode?: boolean }) {
   return (
     <>
@@ -263,8 +230,24 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
       {data.no && <span className="no">{data.no}</span>}
       <Title data={data} as="h3" />
       {n.body && <p>{n.body}</p>}
-      {n.visual && <StructuredVisual visual={n.visual} />}
-      {n.hand && <span className="hand">{n.hand}</span>}
+      {(n.visual || n.hand) && (
+        <div className="meta">
+          {n.visual && (
+            <button
+              className="chip-fig nodrag nopan"
+              title="在批注里看图示"
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onNote?.(n.id);
+              }}
+            >
+              <Image size={13} className="ico" />
+              含图示
+            </button>
+          )}
+          {n.hand && <span className="hand">{n.hand}</span>}
+        </div>
+      )}
       {!data.linkMode && <AddHandles data={data} />}
       <SelectToolbar data={data} visible={!!selected && !data.editing} />
     </article>

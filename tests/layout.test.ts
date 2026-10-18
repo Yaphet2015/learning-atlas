@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
-  CARD_W,
+  CARD_H,
+  CARD_MAX,
+  CARD_MIN as CARD_W,
   GAP_GROUP,
   GAP_IN,
+  ROOT_H,
   ROOT_W,
+  ROW_GAP,
+  cardWidth,
   insertSlot,
   layoutTree,
-  rowY,
 } from "../src/model/layout";
 
 type N = {
@@ -36,13 +40,45 @@ const atlas = [
 ];
 
 describe("layoutTree", () => {
-  it("puts each level on its fixed row", () => {
-    const { positions } = layoutTree(atlas);
+  it("puts each level on one row, below the tallest card of the row above", () => {
+    const { positions, rows } = layoutTree(atlas);
     expect(positions.get("q")!.y).toBe(100);
-    expect(positions.get("dom")!.y).toBe(350);
-    expect(positions.get("tok")!.y).toBe(610);
+    expect(positions.get("dom")!.y).toBe(100 + ROOT_H + ROW_GAP);
+    expect(positions.get("tok")!.y).toBe(100 + ROOT_H + CARD_H + 2 * ROW_GAP);
     expect(positions.get("tok")!.level).toBe(2);
-    expect(rowY(3)).toBe(870);
+    expect(rows).toEqual([100, 346, 572]);
+    // A tall card on level 1 pushes level 2 down instead of crossing its rule.
+    const tall = layoutTree(atlas, {
+      heights: new Map([
+        ["q", 140],
+        ["style", 260],
+      ]),
+    });
+    expect(tall.rows).toEqual([100, 336, 692]);
+    expect(tall.positions.get("sel")!.y).toBe(692);
+  });
+  it("sizes cards 240–320 from the title", () => {
+    expect(cardWidth("保什么")).toBe(240);
+    expect(cardWidth("一个特别特别长的标题，长到要折两行才能放下")).toBe(
+      CARD_MAX,
+    );
+    const w = layoutTree(atlas, {
+      widthOf: (n) => (n.id === "dom" ? 300 : 240),
+    });
+    expect(w.positions.get("dom")!.w).toBe(300);
+    expect(w.positions.get("q")!.w).toBe(ROOT_W);
+  });
+  it("lays the 重疾险 first level as 4 × 240 with 28px gaps (1044 wide)", () => {
+    const four = [
+      n("q", null),
+      ...["a", "b", "c", "d"].map((id, i) => n(id, "q", i)),
+      n("a1", "a", 0),
+      n("b1", "b", 0),
+    ];
+    const { positions } = layoutTree(four);
+    const row = ["a", "b", "c", "d"].map((id) => positions.get(id)!);
+    expect(row[3].x + row[3].w - row[0].x).toBe(1044);
+    expect(row[0].x + 1044 / 2).toBeCloseTo(0);
   });
   it("orders siblings left to right by order, regardless of array order", () => {
     const { positions } = layoutTree([...atlas].reverse());
@@ -56,9 +92,14 @@ describe("layoutTree", () => {
     expect(positions.get("q")!.w).toBe(ROOT_W);
     expect(positions.get("dom")!.w).toBe(CARD_W);
     // dom's subtree = two leaves + gapIn
+    // dom and style both fan out wider than a card: GAP_GROUP between them.
     const domW = 2 * CARD_W + GAP_IN;
     expect(positions.get("style")!.x - positions.get("dom")!.x).toBe(
       (domW + 2 * CARD_W + GAP_IN) / 2 + GAP_GROUP,
+    );
+    // layout (one child, no wider) and paint (leaf) sit GAP_IN apart.
+    expect(positions.get("paint")!.x - positions.get("layout")!.x).toBe(
+      CARD_W + GAP_IN,
     );
     expect(positions.get("tree")!.x - positions.get("tok")!.x).toBe(
       CARD_W + GAP_IN,
@@ -104,7 +145,7 @@ describe("insertSlot", () => {
   const p = (id: string) => layout.positions.get(id)!;
   it("reorders within the row by horizontal position", () => {
     const right = p("paint").x + p("paint").w;
-    expect(insertSlot("dom", { x: right + 10, y: 350 }, atlas, layout)).toEqual(
+    expect(insertSlot("dom", { x: right + 10, y: 346 }, atlas, layout)).toEqual(
       { kind: "reorder", parentId: "q", order: 3 },
     );
     expect(
