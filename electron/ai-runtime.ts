@@ -10,6 +10,7 @@ import {
   type AssistantMessage,
   type Message,
   type MutableModels,
+  type Provider,
 } from "@earendil-works/pi-ai";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
@@ -38,6 +39,7 @@ import type {
   AIRequest,
   AISettings,
   AISettingsInput,
+  AIConnectionResult,
   AIUpdate,
   ChatMessage,
   ContextBundle,
@@ -292,6 +294,104 @@ type ActiveRun = {
   settle: () => void;
 };
 
+/** Default limit for the settings connection probe. */
+export const CONNECTION_TIMEOUT_MS = 15_000;
+const normalizeUrl = (url: string) => (url || OFFICIAL_URL).replace(/\/$/, "");
+const isOfficialUrl = (url: string) => normalizeUrl(url) === OFFICIAL_URL;
+
+/** The provider used for real requests. Shared by `ask` and the settings connection probe. */
+function buildProvider(baseUrl: string, model: string): Provider {
+  const original = openaiProvider();
+  if (isOfficialUrl(baseUrl)) return original;
+  // pi-ai's supported custom provider API explicitly selects Chat Completions for compatible endpoints.
+  return createProvider({
+    id: "openai",
+    name: "User-configured OpenAI-compatible endpoint",
+    baseUrl,
+    auth: { apiKey: original.auth.apiKey! },
+    api: openAICompletionsApi(),
+    models: [
+      {
+        id: model,
+        name: model,
+        provider: "openai",
+        api: "openai-completions",
+        baseUrl,
+        reasoning: false,
+        input: ["text"],
+        contextWindow: 32768,
+        maxTokens: 4096,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      },
+    ],
+  });
+}
+
+const CONNECTION_MESSAGES: Record<
+  Exclude<AIConnectionResult, { ok: true }>["kind"],
+  string
+> = {
+  config: "还没有 API Key：请先填写密钥再测试。",
+  auth: "鉴权失败：API Key 无效、已过期或没有这个模型的权限。",
+  model: "找不到这个模型：请检查模型 ID 是否拼写正确、该服务商是否提供。",
+  network: "连不上 API 地址：请检查地址、网络或代理设置。",
+  timeout: "请求超时（15 秒内没有响应）：服务商可能繁忙，或地址不可达。",
+  rate: "请求被限流或额度不足（429）：稍后再试，或检查账户余额。",
+  unknown: "服务商返回了错误，连接未成功。",
+};
+
+/**
+ * Map a failed probe to a user-facing category. Only the HTTP status and well-known
+ * phrases are inspected; the raw provider text is never returned (it can echo credentials).
+ */
+export function classifyConnectionFailure(input: {
+  status?: number;
+  message?: string;
+  timedOut?: boolean;
+}): Exclude<AIConnectionResult, { ok: true }> {
+  const text = input.message ?? "";
+  const status = input.status ?? Number(/^\s*(\d{3})\b/.exec(text)?.[1] ?? NaN);
+  const known = Number.isFinite(status) ? status : undefined;
+  let kind: Exclude<AIConnectionResult, { ok: true }>["kind"];
+  if (input.timedOut || /timed? ?out|timeout/i.test(text)) kind = "timeout";
+  else if (
+    known === 401 ||
+    known === 403 ||
+    /api key|unauthori[sz]ed|authentication/i.test(text)
+  )
+    kind = "auth";
+  else if (
+    known === 404 ||
+    /model.*(not.*(found|exist)|does not exist|invalid|unknown)|(unknown|invalid) model|model_not_found/i.test(
+      text,
+    )
+  )
+    kind = "model";
+  else if (known === 429) kind = "rate";
+  else if (
+    known === undefined &&
+    /fetch failed|connection|network|ENOTFOUND|ECONNREFUSED|ECONNRESET|EAI_AGAIN|certificate|socket/i.test(
+      text,
+    )
+  )
+    kind = "network";
+  else kind = "unknown";
+  const message =
+    kind === "unknown" && known !== undefined
+      ? `${CONNECTION_MESSAGES.unknown}（HTTP ${known}）`
+      : CONNECTION_MESSAGES[kind];
+  return {
+    ok: false,
+    kind,
+    message,
+    ...(known !== undefined ? { status: known } : {}),
+  };
+}
+
+function classifyConnectionFailureConfig(): AIConnectionResult {
+  return { ok: false, kind: "config", message: CONNECTION_MESSAGES.config };
+}
+
 /** Main-process only. Credentials are kept in memory and never written to settings, SQLite or IPC results. */
 export class AIRuntime {
   private readonly directory: string;
@@ -414,35 +514,83 @@ export class AIRuntime {
   }
 
   private installProvider(): void {
-    if (this.isOfficial()) {
-      this.models.setProvider(openaiProvider());
-      return;
+    this.models.setProvider(buildProvider(this.baseUrl, this.model));
+  }
+
+  /**
+   * Make one minimal real request with the entered (unsaved) settings. Nothing is saved and
+   * the active session is untouched. An empty key reuses the current session key only for
+   * the same destination (and the environment key only at the official endpoint), exactly
+   * like saving would. The key never leaves the main process; only a category is returned.
+   */
+  async testConnection(
+    input: AISettingsInput,
+    timeoutMs = CONNECTION_TIMEOUT_MS,
+  ): Promise<AIConnectionResult> {
+    const parsed = aiSettingsInputSchema.parse(input);
+    if (this.closed) throw new Error("AI_CLOSED");
+    const sameDestination =
+      normalizeUrl(this.baseUrl) === normalizeUrl(parsed.baseUrl);
+    const key =
+      parsed.apiKey?.trim() ||
+      (sameDestination ? this.sessionKey : undefined) ||
+      (isOfficialUrl(parsed.baseUrl)
+        ? process.env.OPENAI_API_KEY?.trim()
+        : undefined);
+    if (!key) return classifyConnectionFailureConfig();
+    const credentials = new InMemoryCredentialStore();
+    await credentials.modify("openai", async () => ({ type: "api_key", key }));
+    const models = createModels({
+      credentials,
+      authContext: {
+        env: async () => undefined,
+        fileExists: async () => false,
+      },
+    });
+    models.setProvider(buildProvider(parsed.baseUrl, parsed.model));
+    const model = models.getModel("openai", parsed.model);
+    if (!model) return classifyConnectionFailure({ status: 404 });
+    let status: number | undefined;
+    const fetchWithStatus: typeof fetch = async (...args) => {
+      const response = await fetch(...args);
+      status = response.status;
+      return response;
+    };
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    const started = Date.now();
+    try {
+      const reply = await models.completeSimple(
+        model,
+        {
+          messages: [
+            { role: "user", content: "Reply with: ok", timestamp: Date.now() },
+          ],
+        },
+        { maxTokens: 16, signal: controller.signal, fetch: fetchWithStatus },
+      );
+      const latencyMs = Date.now() - started;
+      if (reply.stopReason === "error" || reply.stopReason === "aborted")
+        return classifyConnectionFailure({
+          status: status && status >= 400 ? status : undefined,
+          message: reply.errorMessage,
+          timedOut: timedOut || reply.stopReason === "aborted",
+        });
+      return { ok: true, model: reply.model || parsed.model, latencyMs };
+    } catch (error) {
+      return classifyConnectionFailure({
+        status: status && status >= 400 ? status : undefined,
+        message: error instanceof Error ? error.message : undefined,
+        timedOut,
+      });
+    } finally {
+      clearTimeout(timer);
+      await credentials.delete("openai");
     }
-    const original = openaiProvider();
-    // pi-ai's supported custom provider API explicitly selects Chat Completions for compatible endpoints.
-    this.models.setProvider(
-      createProvider({
-        id: "openai",
-        name: "User-configured OpenAI-compatible endpoint",
-        baseUrl: this.baseUrl,
-        auth: { apiKey: original.auth.apiKey! },
-        api: openAICompletionsApi(),
-        models: [
-          {
-            id: this.model,
-            name: this.model,
-            provider: "openai",
-            api: "openai-completions",
-            baseUrl: this.baseUrl,
-            reasoning: false,
-            input: ["text"],
-            contextWindow: 32768,
-            maxTokens: 4096,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          },
-        ],
-      }),
-    );
   }
 
   private openBoard(boardId: string, stickyId: string): Promise<Harness> {

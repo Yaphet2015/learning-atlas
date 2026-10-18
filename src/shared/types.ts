@@ -99,6 +99,22 @@ export interface AISettingsInput {
   baseUrl: string;
   apiKey?: string;
 }
+/** Outcome of the settings 「测试连接」 probe. Never carries the key or raw provider text. */
+export type AIConnectionResult =
+  | { ok: true; model: string; latencyMs: number }
+  | {
+      ok: false;
+      kind:
+        | "config"
+        | "auth"
+        | "model"
+        | "network"
+        | "timeout"
+        | "rate"
+        | "unknown";
+      message: string;
+      status?: number;
+    };
 export interface AIRequest {
   boardId: string;
   stickyId: string;
@@ -120,6 +136,10 @@ export interface AIHistory {
   running: boolean;
 }
 export interface AtlasAPI {
+  /** Host OS from the preload ("darwin", "win32", …); "web" in the browser preview. */
+  platform: string;
+  /** Native fullscreen changes (macOS hides the traffic lights there). */
+  onFullscreenChange(callback: (fullscreen: boolean) => void): () => void;
   onBeforeClose(callback: () => Promise<void>): () => void;
   listBoards(): Promise<BoardSummary[]>;
   loadBoard(id: string): Promise<Board | null>;
@@ -127,6 +147,7 @@ export interface AtlasAPI {
   deleteBoard(id: string): Promise<void>;
   getAISettings(): Promise<AISettings>;
   setAISettings(settings: AISettingsInput): Promise<AISettings>;
+  testAIConnection(settings: AISettingsInput): Promise<AIConnectionResult>;
   ask(request: AIRequest): Promise<void>;
   stop(boardId: string, stickyId: string): Promise<void>;
   getHistory(boardId: string, stickyId: string): Promise<AIHistory>;

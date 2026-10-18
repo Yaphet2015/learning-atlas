@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AtlasAPI, AIUpdate } from "../src/shared/types.js";
 const api: AtlasAPI = {
+  platform: process.platform,
+  onFullscreenChange: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: boolean) =>
+      callback(value === true);
+    ipcRenderer.on("atlas:fullscreen", listener);
+    return () => ipcRenderer.removeListener("atlas:fullscreen", listener);
+  },
   onBeforeClose: (callback) => {
     const listener = () => {
       void callback()
@@ -18,6 +25,7 @@ const api: AtlasAPI = {
   getAISettings: () => ipcRenderer.invoke("atlas:ai-settings"),
   setAISettings: (settings) =>
     ipcRenderer.invoke("atlas:configure-ai", settings),
+  testAIConnection: (settings) => ipcRenderer.invoke("atlas:test-ai", settings),
   ask: (request) => ipcRenderer.invoke("atlas:ask", request),
   stop: (board, sticky) => ipcRenderer.invoke("atlas:stop", board, sticky),
   getHistory: (board, sticky) =>

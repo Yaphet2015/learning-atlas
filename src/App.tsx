@@ -28,6 +28,15 @@ import {
   buildMapFromAI,
 } from "./model/boards";
 import { contextForNote } from "./model/context";
+import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
+import {
+  firstLevelPrompt,
+  kickoffNote,
+  kickoffPrompt,
+  learnerAnswers,
+  needsKickoff,
+  rootOf,
+} from "./model/kickoff";
 import {
   addChild,
   addSibling,
@@ -515,7 +524,7 @@ export default function App() {
     [putBoard, settings.configured, sendAI, showToast],
   );
   const generateMap = useCallback(
-    (target: Board) => {
+    (target: Board, prompt?: string) => {
       if (!settings.configured) {
         showToast("白板已创建。连接 AI 后就能探索这个问题。");
         setShowSettings(true);
@@ -533,7 +542,9 @@ export default function App() {
           stickyId: "map-root",
           requestId: uid(),
           mode: "map",
-          prompt: `为这个问题创建学习地图的第一小步：「${target.topic}」。只给 3 个大图景概念，具体、直观、少文字，适合初学者。`,
+          prompt:
+            prompt ??
+            `为这个问题创建学习地图的第一小步：「${target.topic}」。只给 3 个大图景概念，具体、直观、少文字，适合初学者。`,
           context,
         },
         target.nodes[0]?.id,
@@ -541,6 +552,38 @@ export default function App() {
     },
     [settings.configured, sendAI, showToast],
   );
+  /** 「让 AI 带我开始」: open the root's drawer conversation and let the tutor probe what the learner knows. */
+  const startKickoff = useCallback(() => {
+    if (editingLocked.current) return;
+    const b = boardRef.current;
+    const root = b && rootOf(b);
+    if (!b || !root) return;
+    if (!settings.configured) {
+      showToast("先连接 AI，它就能带你从这个问题开始。");
+      setShowSettings(true);
+      return;
+    }
+    const existing = kickoffNote(b);
+    if (existing?.messages.length) {
+      setDrawer(existing.id);
+      return;
+    }
+    let noteId = existing?.id;
+    if (!noteId) {
+      const note = newNote(b, { x: 0, y: 0 }, { kind: "node", id: root.id });
+      note.title = "AI 带我开始";
+      noteId = note.id;
+      edit((current) => ({ ...current, notes: [...current.notes, note] }));
+    }
+    setDrawer(noteId);
+    askNote(noteId, kickoffPrompt(b.topic));
+  }, [settings.configured, showToast, edit, askNote]);
+  /** Accept: turn the kickoff conversation into the first level of child questions on the canvas. */
+  const proposeFirstLevel = useCallback(() => {
+    const b = boardRef.current;
+    if (!b || editingLocked.current) return;
+    generateMap(b, firstLevelPrompt(b.topic, learnerAnswers(kickoffNote(b))));
+  }, [generateMap]);
   async function switchBoard(id: string) {
     if (boardRef.current?.id === id || editingLocked.current) return;
     editingLocked.current = true;
@@ -570,6 +613,7 @@ export default function App() {
   async function createBoard(walkthrough = false) {
     if (editingLocked.current || (!walkthrough && !topic.trim())) return;
     editingLocked.current = true;
+    let kickoff = false;
     try {
       await flush();
       const next = walkthrough
@@ -586,12 +630,14 @@ export default function App() {
       setTopic("");
       await refreshList();
       setTimeout(() => flow.fitView({ padding: 0.22, duration: 450 }), 80);
-      if (!walkthrough) generateMap(next);
+      kickoff = !walkthrough;
     } catch (e) {
       showToast(errorText(e));
     } finally {
       editingLocked.current = false;
     }
+    // A new question starts the guided kickoff (or leads to AI settings) instead of a silent map.
+    if (kickoff) startKickoff();
   }
   const undo = useCallback(() => {
     if (editingLocked.current) return;
@@ -671,6 +717,14 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => api.onFullscreenChange(setFullscreen), []);
+  const chromeClasses = windowChromeClasses(api.platform, fullscreen);
+  useEffect(() => {
+    const root = document.documentElement.classList;
+    for (const name of WINDOW_CHROME_CLASSES)
+      root.toggle(name, chromeClasses.includes(name));
+  }, [chromeClasses.join(" ")]);
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement)?.matches(
@@ -762,6 +816,7 @@ export default function App() {
     const b = boardRef.current;
     setPreview(id && b ? addChild(b, id, GHOST) : null);
   }, []);
+  const kickoffReady = needsKickoff(board) && !mapBusy && !study;
   const nodes = useMemo<CanvasNode[]>(() => {
     if (!shown || !board) return [];
     const out: CanvasNode[] = [];
@@ -835,6 +890,12 @@ export default function App() {
           onScene: (patch: Partial<Board["scene"]>) =>
             edit((b) => ({ ...b, scene: { ...b.scene, ...patch } }), false),
           onNote: (id: string) => addNote({ kind: "node", id }),
+          ...(n.parentId === null && kickoffReady
+            ? {
+                onKickoff: startKickoff,
+                kickoffStarted: Boolean(kickoffNote(board)?.messages.length),
+              }
+            : {}),
         },
       });
     }
@@ -856,6 +917,8 @@ export default function App() {
     addNote,
     expand,
     edit,
+    kickoffReady,
+    startKickoff,
   ]);
   const edges = useMemo<Edge[]>(() => {
     if (!shown) return [];
@@ -997,6 +1060,9 @@ export default function App() {
     <main className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""}`}>
       <SketchDefs />
       <div className="grain" />
+      {chromeClasses.includes("mac-titlebar") && (
+        <div className="titlebar-drag" aria-hidden="true" />
+      )}
       {closing && (
         <div className="closing-overlay" role="status">
           <LoaderCircle size={18} />
@@ -1160,6 +1226,11 @@ export default function App() {
             )
           }
           onAsk={(prompt) => askNote(drawerNote.id, prompt)}
+          kickoff={
+            needsKickoff(board) && kickoffNote(board)?.id === drawerNote.id
+              ? { onAccept: proposeFirstLevel, busy: mapBusy }
+              : undefined
+          }
           onStop={() =>
             void api
               .stop(board.id, drawerNote.id)
@@ -1237,6 +1308,7 @@ export default function App() {
             setSettings(await api.setAISettings(input));
             showToast("AI 设置已更新。发出提问时才会调用模型。");
           }}
+          onTest={(input) => api.testAIConnection(input)}
         />
       )}
       {showNew && (

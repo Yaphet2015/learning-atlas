@@ -1,0 +1,263 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+
+// Only the provider transport is mocked, for both the official provider and compatible endpoints.
+type Behaviour =
+  | { type: "ok"; model?: string }
+  | { type: "error"; message: string }
+  | { type: "hang" };
+const probe = vi.hoisted(() => ({
+  behaviour: { type: "ok" } as Behaviour,
+  calls: [] as {
+    api: string;
+    model: string;
+    apiKey?: string;
+    maxTokens?: number;
+    context: string;
+  }[],
+  makeStream: undefined as unknown as (...args: any[]) => any,
+}));
+async function install() {
+  if (probe.makeStream) return probe.makeStream;
+  const { createAssistantMessageEventStream } =
+    await import("@earendil-works/pi-ai");
+  probe.makeStream = (model: any, context: any, options?: any) => {
+    probe.calls.push({
+      api: model.api,
+      model: model.id,
+      apiKey: options?.apiKey,
+      maxTokens: options?.maxTokens,
+      context: JSON.stringify(context),
+    });
+    const events = createAssistantMessageEventStream();
+    const base: AssistantMessage = {
+      role: "assistant",
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      content: [],
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "stop",
+      timestamp: Date.now(),
+    };
+    let ended = false;
+    const fail = (reason: "error" | "aborted", errorMessage: string) => {
+      if (ended) return;
+      ended = true;
+      events.push({
+        type: "error",
+        reason,
+        error: { ...base, stopReason: reason, errorMessage },
+      });
+    };
+    options?.signal?.addEventListener(
+      "abort",
+      () => fail("aborted", "Request was aborted."),
+      { once: true },
+    );
+    const b = probe.behaviour;
+    if (b.type === "hang") return events;
+    setTimeout(() => {
+      if (b.type === "error") return fail("error", b.message);
+      if (ended) return;
+      ended = true;
+      const message: AssistantMessage = {
+        ...base,
+        model: b.model ?? model.id,
+        content: [{ type: "text", text: "ok" }],
+      };
+      events.push({ type: "done", reason: "stop", message });
+    }, 5);
+    return events;
+  };
+  return probe.makeStream;
+}
+vi.mock("@earendil-works/pi-ai/providers/openai", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@earendil-works/pi-ai/providers/openai")
+    >();
+  const stream = await install();
+  return {
+    openaiProvider: () => ({
+      ...actual.openaiProvider(),
+      streamSimple: stream,
+      stream,
+    }),
+  };
+});
+vi.mock("@earendil-works/pi-ai/api/openai-completions.lazy", async () => {
+  const stream = await install();
+  return {
+    openAICompletionsApi: () => ({ streamSimple: stream, stream }),
+  };
+});
+
+import { AIRuntime, classifyConnectionFailure } from "../electron/ai-runtime";
+
+let directory: string;
+let runtimes: AIRuntime[];
+const createRuntime = () => {
+  const runtime = new AIRuntime(directory, () => {});
+  runtimes.push(runtime);
+  return runtime;
+};
+const official = { model: "gpt-4o-mini", baseUrl: "https://api.openai.com/v1" };
+const local = { model: "qwen2.5-7b", baseUrl: "http://127.0.0.1:1234/v1" };
+beforeEach(async () => {
+  vi.stubEnv("OPENAI_API_KEY", "");
+  probe.behaviour = { type: "ok" };
+  probe.calls.length = 0;
+  directory = await mkdtemp(join(tmpdir(), "atlas-connection-test-"));
+  runtimes = [];
+});
+afterEach(async () => {
+  await Promise.all(runtimes.map((runtime) => runtime.close()));
+  await rm(directory, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+});
+
+describe("「测试连接」 probe", () => {
+  it("makes one minimal request with the unsaved settings and reports model + latency", async () => {
+    const runtime = createRuntime();
+    const result = await runtime.testConnection({
+      ...official,
+      apiKey: "SECRET_TEST_KEY",
+    });
+    expect(result).toMatchObject({ ok: true, model: "gpt-4o-mini" });
+    expect(result.ok && result.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(probe.calls).toHaveLength(1);
+    expect(probe.calls[0]).toMatchObject({
+      model: "gpt-4o-mini",
+      apiKey: "SECRET_TEST_KEY",
+      maxTokens: 16,
+    });
+    expect(JSON.stringify(result)).not.toContain("SECRET_TEST_KEY");
+    // Nothing is saved: the session stays unconfigured and no settings file is written.
+    expect(runtime.getSettings()).toMatchObject({ configured: false });
+    await expect(
+      readFile(join(directory, "ai/settings.json"), "utf8"),
+    ).rejects.toThrow();
+  });
+  it("tests a compatible endpoint through the Chat Completions provider", async () => {
+    const runtime = createRuntime();
+    const result = await runtime.testConnection({ ...local, apiKey: "LOCAL" });
+    expect(result).toMatchObject({ ok: true, model: "qwen2.5-7b" });
+    expect(probe.calls[0]).toMatchObject({
+      api: "openai-completions",
+      model: "qwen2.5-7b",
+      apiKey: "LOCAL",
+    });
+  });
+  it("reuses the session key only for the same destination", async () => {
+    const runtime = createRuntime();
+    await runtime.setSettings({ ...official, apiKey: "SESSION_KEY" });
+    await runtime.testConnection(official);
+    expect(probe.calls[0].apiKey).toBe("SESSION_KEY");
+    const other = await runtime.testConnection(local);
+    expect(other).toMatchObject({ ok: false, kind: "config" });
+    expect(probe.calls).toHaveLength(1);
+    // The saved session is left exactly as it was.
+    expect(runtime.getSettings()).toMatchObject({
+      ...official,
+      source: "session",
+    });
+  });
+  it("fails without a key and without calling the provider", async () => {
+    const result = await createRuntime().testConnection(official);
+    expect(result).toMatchObject({ ok: false, kind: "config" });
+    expect(probe.calls).toHaveLength(0);
+  });
+  it("rejects an official model the SDK does not know as a bad model", async () => {
+    const result = await createRuntime().testConnection({
+      model: "made-up-model",
+      baseUrl: official.baseUrl,
+      apiKey: "K",
+    });
+    expect(result).toMatchObject({ ok: false, kind: "model" });
+    expect(probe.calls).toHaveLength(0);
+  });
+  it.each([
+    ["401 Incorrect API key provided: SECRET_TEST_KEY", "auth", "鉴权失败"],
+    ["404 The model `nope` does not exist", "model", "找不到这个模型"],
+    ["Connection error.", "network", "连不上"],
+    ["429 You exceeded your current quota", "rate", "限流"],
+    ["500 upstream exploded", "unknown", "HTTP 500"],
+  ])(
+    "classifies %s as %s without echoing provider text",
+    async (message, kind, text) => {
+      probe.behaviour = { type: "error", message };
+      const result = await createRuntime().testConnection({
+        ...local,
+        apiKey: "SECRET_TEST_KEY",
+      });
+      expect(result).toMatchObject({ ok: false, kind });
+      expect(!result.ok && result.message).toContain(text);
+      expect(JSON.stringify(result)).not.toContain("SECRET_TEST_KEY");
+      expect(JSON.stringify(result)).not.toContain(message);
+    },
+  );
+  it("times out a hanging provider", async () => {
+    probe.behaviour = { type: "hang" };
+    const result = await createRuntime().testConnection(
+      { ...local, apiKey: "K" },
+      40,
+    );
+    expect(result).toMatchObject({ ok: false, kind: "timeout" });
+    expect(!result.ok && result.message).toContain("15 秒");
+  });
+  it("rejects malformed settings before any request", async () => {
+    await expect(
+      createRuntime().testConnection({
+        model: "gpt-4o-mini",
+        baseUrl: "http://example.com/v1",
+        apiKey: "K",
+      }),
+    ).rejects.toThrow();
+    expect(probe.calls).toHaveLength(0);
+  });
+});
+
+describe("classifyConnectionFailure", () => {
+  it("prefers the captured HTTP status over the message text", () => {
+    expect(classifyConnectionFailure({ status: 403, message: "x" }).kind).toBe(
+      "auth",
+    );
+    expect(classifyConnectionFailure({ message: "fetch failed" }).kind).toBe(
+      "network",
+    );
+    expect(
+      classifyConnectionFailure({ timedOut: true, message: "aborted" }).kind,
+    ).toBe("timeout");
+  });
+});
+
+describe("connection status line", () => {
+  it("describes testing, success and failure", async () => {
+    const { connectionStatusText } = await import("../src/model/connection");
+    expect(connectionStatusText({ phase: "idle" })).toBe("");
+    expect(connectionStatusText({ phase: "testing" })).toContain("正在测试");
+    expect(
+      connectionStatusText({
+        phase: "done",
+        result: { ok: true, model: "gpt-4o-mini", latencyMs: 1234 },
+      }),
+    ).toBe("连接成功 · 已连到 gpt-4o-mini · 用时 1.2 秒");
+    expect(
+      connectionStatusText({
+        phase: "done",
+        result: { ok: false, kind: "auth", message: "鉴权失败：…" },
+      }),
+    ).toBe("鉴权失败：…");
+  });
+});

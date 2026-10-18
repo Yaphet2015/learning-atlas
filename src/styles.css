@@ -504,7 +504,7 @@ kbd,
   z-index: 1;
 }
 .switcher {
-  left: 20px;
+  left: var(--chrome-inset-left);
   top: 20px;
   display: flex;
   align-items: center;
@@ -744,7 +744,7 @@ kbd,
   background: color-mix(in srgb, var(--paper) 50%, transparent);
 }
 .palette {
-  left: 20px;
+  left: var(--chrome-inset-left);
   top: 76px;
   width: 420px;
   padding: 10px;
@@ -1638,4 +1638,109 @@ kbd,
   margin: 8px 4px 0;
   border-top: 1px dashed var(--pencil);
   padding-top: 6px;
+}
+
+/* Settings · 「测试连接」 */
+.connection-test {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+.secondary-button {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px dashed var(--stroke-soft);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.secondary-button:hover:not(:disabled) {
+  border-style: solid;
+}
+.secondary-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.connection-status {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.connection-status[data-state="success"] {
+  color: var(--ink);
+}
+.connection-status[data-state="success"]::before {
+  content: "✓ ";
+}
+.connection-status[data-state="failure"] {
+  color: var(--accent-ink);
+}
+
+/* 「让 AI 带我开始」: the one obvious next step on a lone root question. Vermilion is the only accent. */
+.kickoff,
+.kickoff-accept {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.kickoff {
+  margin-top: 14px;
+}
+.kickoff .lab,
+.kickoff-accept .lab {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+.btn.kickoff-btn {
+  background: var(--accent);
+  color: var(--card);
+  box-shadow: 1px 2px 0 color-mix(in srgb, var(--accent-ink) 70%, transparent);
+  cursor: pointer;
+}
+.btn.kickoff-btn:hover:not(:disabled) {
+  background: var(--accent-ink);
+}
+.btn.kickoff-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+.dark .btn.kickoff-btn {
+  color: var(--paper);
+}
+.kickoff-accept .spin {
+  animation: spin 2s linear infinite;
+}
+
+/* macOS hidden-inset title bar: the traffic lights sit at (20, 20) and span ~56px. */
+:root {
+  --chrome-inset-left: 20px;
+}
+.mac-titlebar {
+  --chrome-inset-left: 92px;
+}
+.titlebar-drag {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 15;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+/* Anything interactive that overlaps the strip must stay clickable. */
+.mac-titlebar .chrome,
+.mac-titlebar .modal-backdrop,
+.mac-titlebar .palette-backdrop,
+.mac-titlebar .toast,
+.mac-titlebar .study button,
+.mac-titlebar .closing-overlay {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
