@@ -9,6 +9,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ChildProcess } from "node:child_process";
+import { waitForApp } from "./ready";
 
 test("macOS desktop bridge, edit flush on immediate close, and durable reopening", async ({}, testInfo) => {
   test.skip(
@@ -61,6 +62,7 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
   try {
     const { app, page } = await launch();
     await expect(page.locator(".react-flow__node-root h2")).toBeVisible();
+    await waitForApp(page);
     await page.keyboard.press("ControlOrMeta+k");
     await expect(page.getByText(/白板保存在这台 Mac/)).toBeVisible();
     await page.keyboard.press("Escape");
@@ -96,8 +98,9 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     );
 
     const { app: reopened, page: nextPage } = await launch();
-    // Wait for the reopened board to render so the ⌘K listener is attached.
+    // Wait for the reopened board and the app's readiness signal (⌘K listener attached).
     await expect(nextPage.locator(".react-flow__node-root h2")).toBeVisible();
+    await waitForApp(nextPage);
     await nextPage.keyboard.press("ControlOrMeta+k");
     await nextPage.getByRole("button", { name: /^批注 · / }).click();
     await expect(nextPage.getByLabel("批注内容")).toHaveValue(

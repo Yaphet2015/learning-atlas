@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { insuranceBoard, masteryBoard } from "./fixtures";
+import { gotoApp } from "./ready";
 
 /**
  * Design screenshots for review (not a regression test). Run with
@@ -29,7 +30,7 @@ for (const mode of ["light", "dark"] as const) {
     mkdirSync(dir!, { recursive: true });
     await page.emulateMedia({ colorScheme: mode });
     await seed(page, [insuranceBoard()]);
-    await page.goto("/");
+    await gotoApp(page);
     await expect(page.locator(".react-flow__node-concept")).toHaveCount(6);
     await theme(page, mode === "dark");
     await page.waitForTimeout(800);
@@ -48,7 +49,7 @@ for (const mode of ["light", "dark"] as const) {
     mkdirSync(dir!, { recursive: true });
     await page.emulateMedia({ colorScheme: mode });
     await seed(page, [masteryBoard()]);
-    await page.goto("/");
+    await gotoApp(page);
     await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
     await theme(page, mode === "dark");
     await page.waitForTimeout(700);

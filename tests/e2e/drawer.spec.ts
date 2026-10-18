@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { insuranceBoard } from "./fixtures";
+import { gotoApp } from "./ready";
 
 async function open(page: Page, board: unknown) {
   await page.addInitScript(
@@ -8,7 +9,7 @@ async function open(page: Page, board: unknown) {
     },
     JSON.stringify([board]),
   );
-  await page.goto("/");
+  await gotoApp(page);
   await page.locator(".react-flow__node-root").click();
   await page.keyboard.press("/");
   return page.locator(".drawer");
@@ -199,6 +200,12 @@ test("the root's + stays off the connector origin unless hovered", async ({
   const plus = page.locator(".react-flow__node-root .plus.below");
   await page.mouse.move(5, 500);
   await expect(plus).toHaveCSS("opacity", "0");
-  await page.locator(".react-flow__node-root").hover();
-  await expect(plus).toHaveCSS("opacity", "1");
+  // The canvas may still be easing the root into view after the drawer opens;
+  // re-hover until the pointer is really over the card.
+  await expect
+    .poll(async () => {
+      await page.locator(".react-flow__node-root h2").hover();
+      return plus.evaluate((e) => getComputedStyle(e).opacity);
+    })
+    .toBe("1");
 });

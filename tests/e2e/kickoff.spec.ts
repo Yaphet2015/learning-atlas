@@ -1,8 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 import { installFakeAtlas } from "./fake-atlas";
+import { gotoApp } from "./ready";
 
 async function newQuestion(page: Page, topic: string) {
-  await page.goto("/");
+  await gotoApp(page);
   await page.keyboard.press("ControlOrMeta+k");
   await page.getByRole("button", { name: /新的问题/ }).click();
   await page.getByLabel("新白板问题").fill(topic);
@@ -27,12 +28,16 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   await drawer.getByRole("button", { name: "铺成第一层", exact: true }).click();
   await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
   // Side by side on the first level, not a vertical chain.
-  const ys = await page
-    .locator(".react-flow__node-concept")
-    .evaluateAll((els) =>
-      els.map((e) => Math.round(e.getBoundingClientRect().y)),
-    );
-  expect(new Set(ys).size).toBe(1);
+  await expect
+    .poll(async () => {
+      const ys = await page
+        .locator(".react-flow__node-concept")
+        .evaluateAll((els) =>
+          els.map((e) => Math.round(e.getBoundingClientRect().y)),
+        );
+      return new Set(ys).size;
+    })
+    .toBe(1);
   await expect(page.locator(".react-flow__node-concept").first()).toContainText(
     "阳光里有哪些颜色？",
   );
@@ -77,7 +82,7 @@ test("「测试连接」 shows success with model and latency, then a readable f
   page,
 }) => {
   await installFakeAtlas(page, false);
-  await page.goto("/");
+  await gotoApp(page);
   await page.getByRole("button", { name: "AI 设置", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel(/API 密钥/).fill("good");

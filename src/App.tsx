@@ -834,6 +834,14 @@ export default function App() {
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
   });
+  // Readiness signal for automation: set once a board is on screen, in the same
+  // commit (and after) the shortcut listener above is attached.
+  useEffect(() => {
+    document.documentElement.toggleAttribute(
+      "data-app-ready",
+      loaded && !!board,
+    );
+  }, [loaded, board]);
 
   // ---- layout: positions come only from layoutTree (or a drag/insert preview)
   const shown = preview ?? board;
