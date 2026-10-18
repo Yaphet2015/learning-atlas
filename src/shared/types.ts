@@ -136,6 +136,10 @@ export interface AIHistory {
   running: boolean;
 }
 export interface AtlasAPI {
+  /** Host OS from the preload ("darwin", "win32", …); "web" in the browser preview. */
+  platform: string;
+  /** Native fullscreen changes (macOS hides the traffic lights there). */
+  onFullscreenChange(callback: (fullscreen: boolean) => void): () => void;
   onBeforeClose(callback: () => Promise<void>): () => void;
   listBoards(): Promise<BoardSummary[]>;
   loadBoard(id: string): Promise<Board | null>;

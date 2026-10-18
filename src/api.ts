@@ -12,6 +12,10 @@ function read(): Board[] {
   });
 }
 const preview: AtlasAPI = {
+  platform: "web",
+  onFullscreenChange() {
+    return () => {};
+  },
   onBeforeClose() {
     return () => {};
   },

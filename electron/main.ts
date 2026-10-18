@@ -180,6 +180,14 @@ async function bootstrap(): Promise<void> {
         },
       });
       rendererReady = false;
+      // Fullscreen hides the traffic lights; the renderer drops its left inset there.
+      for (const [event, value] of [
+        ["enter-full-screen", true],
+        ["leave-full-screen", false],
+      ] as const)
+        window.on(event as "enter-full-screen", () =>
+          window?.webContents.send("atlas:fullscreen", value),
+        );
       window.webContents.on("render-process-gone", () => {
         rendererReady = false;
         closePending = false;

@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AtlasAPI, AIUpdate } from "../src/shared/types.js";
 const api: AtlasAPI = {
+  platform: process.platform,
+  onFullscreenChange: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: boolean) =>
+      callback(value === true);
+    ipcRenderer.on("atlas:fullscreen", listener);
+    return () => ipcRenderer.removeListener("atlas:fullscreen", listener);
+  },
   onBeforeClose: (callback) => {
     const listener = () => {
       void callback()

@@ -28,6 +28,7 @@ import {
   buildMapFromAI,
 } from "./model/boards";
 import { contextForNote } from "./model/context";
+import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import {
   firstLevelPrompt,
   kickoffNote,
@@ -716,6 +717,14 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => api.onFullscreenChange(setFullscreen), []);
+  const chromeClasses = windowChromeClasses(api.platform, fullscreen);
+  useEffect(() => {
+    const root = document.documentElement.classList;
+    for (const name of WINDOW_CHROME_CLASSES)
+      root.toggle(name, chromeClasses.includes(name));
+  }, [chromeClasses.join(" ")]);
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement)?.matches(
@@ -1051,6 +1060,9 @@ export default function App() {
     <main className={`app tool-${tool} ${drawerNote ? "with-drawer" : ""}`}>
       <SketchDefs />
       <div className="grain" />
+      {chromeClasses.includes("mac-titlebar") && (
+        <div className="titlebar-drag" aria-hidden="true" />
+      )}
       {closing && (
         <div className="closing-overlay" role="status">
           <LoaderCircle size={18} />

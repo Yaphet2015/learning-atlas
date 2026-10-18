@@ -504,7 +504,7 @@ kbd,
   z-index: 1;
 }
 .switcher {
-  left: 20px;
+  left: var(--chrome-inset-left);
   top: 20px;
   display: flex;
   align-items: center;
@@ -744,7 +744,7 @@ kbd,
   background: color-mix(in srgb, var(--paper) 50%, transparent);
 }
 .palette {
-  left: 20px;
+  left: var(--chrome-inset-left);
   top: 76px;
   width: 420px;
   padding: 10px;
@@ -1715,4 +1715,32 @@ kbd,
 }
 .kickoff-accept .spin {
   animation: spin 2s linear infinite;
+}
+
+/* macOS hidden-inset title bar: the traffic lights sit at (20, 20) and span ~56px. */
+:root {
+  --chrome-inset-left: 20px;
+}
+.mac-titlebar {
+  --chrome-inset-left: 92px;
+}
+.titlebar-drag {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 15;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+/* Anything interactive that overlaps the strip must stay clickable. */
+.mac-titlebar .chrome,
+.mac-titlebar .modal-backdrop,
+.mac-titlebar .palette-backdrop,
+.mac-titlebar .toast,
+.mac-titlebar .study button,
+.mac-titlebar .closing-overlay {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
