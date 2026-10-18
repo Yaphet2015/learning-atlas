@@ -61,6 +61,8 @@ import { Outline } from "./components/Outline";
 import { RoughBox, SketchDefs } from "./components/sketch/RoughBox";
 import { Settings } from "./components/Settings";
 
+/** Fit padding that keeps the bottom row (and cross-link labels) clear of the dock. */
+const FIT_PADDING = { top: "8%", left: "8%", right: "8%", bottom: "132px" } as const;
 const nodeTypes = { concept: ConceptCard, root: RootCard, ghost: GhostCard };
 const edgeTypes = { tree: TreeEdge, seq: SeqEdge, cross: CrossEdge };
 const GHOST = "ghost-slot";
@@ -222,7 +224,7 @@ export default function App() {
         setSettings(settings);
         await refreshList();
         setLoaded(true);
-        setTimeout(() => flow.fitView({ padding: 0.16, duration: 500 }), 160);
+        setTimeout(() => flow.fitView({ padding: FIT_PADDING, duration: 500 }), 160);
       } catch (error) {
         if (!cancelled) {
           showToast(errorText(error));
@@ -560,7 +562,7 @@ export default function App() {
       setPast([]);
       setSelection(null);
       setDrawer(null);
-      setTimeout(() => flow.fitView({ padding: 0.16, duration: 400 }), 60);
+      setTimeout(() => flow.fitView({ padding: FIT_PADDING, duration: 400 }), 60);
     } catch (e) {
       showToast(errorText(e));
     } finally {
@@ -733,7 +735,7 @@ export default function App() {
         e.preventDefault();
         ask();
       } else if (key === "0") {
-        flow.fitView({ padding: 0.16, duration: 400 });
+        flow.fitView({ padding: FIT_PADDING, duration: 400 });
       } else if (key === "d") {
         setDark((d) => !d);
       } else if (selectedNodeId && ["1", "2", "3"].includes(key)) {
@@ -1043,7 +1045,7 @@ export default function App() {
               addNote();
             }}
             fitView
-            fitViewOptions={{ padding: 0.16 }}
+            fitViewOptions={{ padding: FIT_PADDING }}
             minZoom={0.18}
             maxZoom={1.8}
             deleteKeyCode={null}

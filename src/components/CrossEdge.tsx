@@ -27,7 +27,9 @@ export function CrossEdge({
       y2 = b.y + b.h + 4,
       dx = ltr ? 20 : -20,
       d = `M${x1} ${y1} C${x1 + dx} ${y1 + 70},${x2 - dx} ${y2 + 70},${x2} ${y2 + 6}`;
-    return { d, lx: (x1 + x2) / 2, ly: Math.max(y1, y2) + 66, x2, y2 };
+    // Label sits on the curve's midpoint (cubic at t = 0.5).
+    const ly = (y1 + 3 * (y1 + 70) + 3 * (y2 + 70) + y2 + 6) / 8;
+    return { d, lx: (x1 + x2) / 2, ly, x2, y2 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [a?.x, a?.y, a?.w, a?.h, b?.x, b?.y, b?.w, b?.h]);
   const paths = useMemo<Sketch>(() => {

@@ -167,8 +167,10 @@ kbd,
   fill: var(--ink-3);
   text-anchor: middle;
   paint-order: stroke;
+  dominant-baseline: central;
   stroke: var(--paper);
-  stroke-width: 5px;
+  stroke-width: 8px;
+  stroke-linejoin: round;
 }
 .cross-edge.selected .cross-label {
   fill: var(--accent-ink);
@@ -188,6 +190,8 @@ kbd,
   opacity: 0.75;
 }
 .level-guides {
+  /* Faint pencil guides: ~40% of the old rule contrast, so they read as a guide. */
+  opacity: 0.4;
   pointer-events: none;
 }
 
