@@ -4,7 +4,7 @@ const card = (page: Page, title: string) =>
 const stored = (page: Page) =>
   page.evaluate(() =>
     JSON.parse(
-      localStorage.getItem("learning-atlas-preview-boards-v1") ?? "[]",
+      localStorage.getItem("studyboard-preview-boards-v1") ?? "[]",
     ),
   );
 test.beforeEach(async ({ page }) => {

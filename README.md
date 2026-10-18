@@ -1,4 +1,4 @@
-# Learning Atlas
+# Studyboard
 
 一个为 macOS 设计的视觉学习白板。先看一个小场景，再逐步展开概念、连起关系；在任意位置留下批注，并带着明确的上下文向 AI 提问。
 
@@ -51,7 +51,7 @@ npm run dev
 
 ## 保存与恢复
 
-桌面数据保存在 Electron 的 `userData` 目录，macOS 通常为 `~/Library/Application Support/Learning Atlas/`：
+桌面数据保存在 Electron 的 `userData` 目录，macOS 通常为 `~/Library/Application Support/Studyboard/`。从旧名 Learning Atlas 升级时，首次启动会把 `~/Library/Application Support/Learning Atlas/` 里的 `boards/` 和 `ai/` 复制过来（仅当新目录还没有数据时；旧目录保留不删）：
 
 - `boards/`：经过校验的 JSON 白板，串行原子写入
 - `ai/`：按白板/批注隔离的 SQLite 对话数据库，真实 durable 历史
@@ -90,15 +90,15 @@ GitHub Actions 工作流会在 macOS 上执行检查、实际 Electron + SQLite 
 
 ## 下载最新版本
 
-每次合并到 `main`（或在 Actions 页手动运行 “macOS preview”）且全部检查通过后，工作流会把新构建替换到滚动发布 [`latest`](https://github.com/Yaphet2015/learning-atlas/releases/tag/latest) 上，下载链接保持不变：
+每次合并到 `main`（或在 Actions 页手动运行 “macOS preview”）且全部检查通过后，工作流会把新构建替换到滚动发布 [`latest`](https://github.com/Yaphet2015/studyboard/releases/tag/latest) 上，下载链接保持不变：
 
-- DMG（Apple Silicon）：<https://github.com/Yaphet2015/learning-atlas/releases/latest/download/Learning-Atlas-arm64.dmg>
-- ZIP（Apple Silicon）：<https://github.com/Yaphet2015/learning-atlas/releases/latest/download/Learning-Atlas-arm64.zip>
+- DMG（Apple Silicon）：<https://github.com/Yaphet2015/studyboard/releases/latest/download/Studyboard-arm64.dmg>
+- ZIP（Apple Silicon）：<https://github.com/Yaphet2015/studyboard/releases/latest/download/Studyboard-arm64.zip>
 
-构建未经公证，首次打开时 macOS 会拦截。拖到“应用程序”后，在 Finder 中右键点 Learning Atlas →“打开”，再确认一次即可；或者在终端执行：
+构建未经公证，首次打开时 macOS 会拦截。拖到“应用程序”后，在 Finder 中右键点 Studyboard →“打开”，再确认一次即可；或者在终端执行：
 
 ```sh
-xattr -dr com.apple.quarantine "/Applications/Learning Atlas.app"
+xattr -dr com.apple.quarantine "/Applications/Studyboard.app"
 ```
 
 只对你信任的、来自本仓库 Releases 的构建这样做。

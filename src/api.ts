@@ -1,7 +1,9 @@
 import type { AtlasAPI, Board } from "./shared/types";
 import { safeParseBoard } from "./shared/validation";
-const key = "learning-atlas-preview-boards-v1";
+import { migrateLegacyPreview, PREVIEW_KEY } from "./preview-storage";
+const key = PREVIEW_KEY;
 function read(): Board[] {
+  migrateLegacyPreview();
   const raw = localStorage.getItem(key);
   if (!raw) return [];
   const all: unknown[] = JSON.parse(raw);

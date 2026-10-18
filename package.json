@@ -1,17 +1,17 @@
 {
-  "name": "learning-atlas",
+  "name": "studyboard",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "A visual learning canvas for macOS",
-  "author": "Learning Atlas contributors",
+  "author": "Studyboard contributors",
   "license": "UNLICENSED",
   "main": "dist-electron/electron/main.js",
   "engines": {
     "node": ">=22.19.0"
   },
   "scripts": {
-    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://127.0.0.1:5173 dist-electron/electron/main.js && cross-env ATLAS_DEV_SERVER=http://127.0.0.1:5173 electron .\"",
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://127.0.0.1:5173 dist-electron/electron/main.js && cross-env STUDYBOARD_DEV_SERVER=http://127.0.0.1:5173 electron .\"",
     "dev:web": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "build": "tsc --noEmit && vite build && tsc -p tsconfig.electron.json",
@@ -50,8 +50,8 @@
     "wait-on": "9.0.3"
   },
   "build": {
-    "appId": "app.learningatlas.desktop",
-    "productName": "Learning Atlas",
+    "appId": "app.studyboard.desktop",
+    "productName": "Studyboard",
     "directories": {
       "output": "release"
     },
@@ -81,8 +81,13 @@
       "gatekeeperAssess": false,
       "identity": "-",
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "icon": "build/icon.icns"
     },
-    "artifactName": "Learning-Atlas-${version}-${arch}.${ext}"
+    "artifactName": "Studyboard-${version}-${arch}.${ext}"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yaphet2015/studyboard.git"
   }
 }

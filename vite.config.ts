@@ -9,13 +9,13 @@ export default defineConfig(({ command }) => ({
         return command === "serve"
           ? html.replace(
               "script-src 'self'",
-              "script-src 'self' 'nonce-learning-atlas-dev'",
+              "script-src 'self' 'nonce-studyboard-dev'",
             )
           : html;
       },
     },
   ],
-  html: command === "serve" ? { cspNonce: "learning-atlas-dev" } : undefined,
+  html: command === "serve" ? { cspNonce: "studyboard-dev" } : undefined,
   base: "./",
   test: { include: ["tests/**/*.test.ts"] },
   server: { port: 5173, strictPort: true },

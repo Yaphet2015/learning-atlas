@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { BoardStore } from "./board-store.js";
+import { migrateLegacyUserData } from "./legacy-data.js";
 import { AIRuntime, smokeDurableStorage } from "./ai-runtime.js";
 import { z } from "zod";
 import {
@@ -12,19 +13,32 @@ import {
   settingsSchema,
 } from "../src/shared/validation.js";
 const here = path.dirname(fileURLToPath(import.meta.url));
-const developmentURL = process.env.ATLAS_DEV_SERVER;
+// Packaged builds use build/icon.icns; dev runs show the PNG in the dock.
+const devIcon = path.join(here, "../../build/icon.png");
+const developmentURL = process.env.STUDYBOARD_DEV_SERVER;
 let window: BrowserWindow | null = null;
 let runtime: AIRuntime;
 let quitting = false;
 let closePending = false;
 let rendererReady = false;
 function traceClose(stage: string): void {
-  if (process.env.ATLAS_E2E === "1") console.info(`[close] ${stage}`);
+  if (process.env.STUDYBOARD_E2E === "1") console.info(`[close] ${stage}`);
 }
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
-app.setName("Learning Atlas");
-if (process.env.ATLAS_E2E === "1" && process.env.ATLAS_TEST_USERDATA)
-  app.setPath("userData", path.resolve(process.env.ATLAS_TEST_USERDATA));
+app.setName("Studyboard");
+if (process.env.STUDYBOARD_E2E === "1" && process.env.STUDYBOARD_TEST_USERDATA)
+  app.setPath("userData", path.resolve(process.env.STUDYBOARD_TEST_USERDATA));
+else if (process.env.STUDYBOARD_SMOKE_TEST !== "1")
+  try {
+    // The app used to be "Learning Atlas"; bring old boards across once.
+    migrateLegacyUserData(
+      app.getPath("appData"),
+      app.getPath("userData"),
+      console.info,
+    );
+  } catch (error) {
+    console.error("[migrate] could not copy Learning Atlas data", error);
+  }
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => {
   if (window) {
@@ -34,10 +48,10 @@ app.on("second-instance", () => {
 });
 // Electron does not emit ready until the ESM entry module finishes evaluating.
 // Await readiness in a callback, never as a top-level await in this entry point.
-if (process.env.ATLAS_SMOKE_TEST === "1")
+if (process.env.STUDYBOARD_SMOKE_TEST === "1")
   console.info("[smoke] entry module loaded; waiting for Electron ready");
 async function bootstrap(): Promise<void> {
-  if (process.env.ATLAS_SMOKE_TEST === "1") {
+  if (process.env.STUDYBOARD_SMOKE_TEST === "1") {
     console.info(
       `[smoke] Electron ready: Electron ${process.versions.electron}, Node ${process.versions.node}`,
     );
@@ -46,9 +60,7 @@ async function bootstrap(): Promise<void> {
     const result = db.prepare("SELECT 42 AS answer").get();
     db.close();
     console.info("[smoke] node:sqlite verified");
-    const smokeDir = await mkdtemp(
-      path.join(tmpdir(), "learning-atlas-smoke-"),
-    );
+    const smokeDir = await mkdtemp(path.join(tmpdir(), "studyboard-smoke-"));
     try {
       console.info(
         "[smoke] opening durable SQLite, committing, closing and reopening",
@@ -69,12 +81,13 @@ async function bootstrap(): Promise<void> {
     console.info("[smoke] complete; quitting Electron");
     app.quit();
   } else {
+    if (!app.isPackaged) app.dock?.setIcon(devIcon);
     const store = new BoardStore(path.join(app.getPath("userData"), "boards"));
     runtime = new AIRuntime(
       path.join(app.getPath("userData"), "ai"),
       (update) => {
         if (window && !window.isDestroyed())
-          window.webContents.send("atlas:ai-update", update);
+          window.webContents.send("studyboard:ai-update", update);
       },
     );
     function assertSender(event: Electron.IpcMainInvokeEvent) {
@@ -94,25 +107,25 @@ async function bootstrap(): Promise<void> {
         return fn(...args);
       });
     }
-    handle("atlas:list", () => store.list());
-    handle("atlas:load", (value) => store.load(id.parse(value)));
-    handle("atlas:save", (value) => store.save(boardSchema.parse(value)));
-    handle("atlas:delete", (value) => store.delete(id.parse(value)));
-    handle("atlas:ai-settings", () => runtime.getSettings());
-    handle("atlas:configure-ai", (value) =>
+    handle("studyboard:list", () => store.list());
+    handle("studyboard:load", (value) => store.load(id.parse(value)));
+    handle("studyboard:save", (value) => store.save(boardSchema.parse(value)));
+    handle("studyboard:delete", (value) => store.delete(id.parse(value)));
+    handle("studyboard:ai-settings", () => runtime.getSettings());
+    handle("studyboard:configure-ai", (value) =>
       runtime.setSettings(settingsSchema.parse(value)),
     );
-    handle("atlas:test-ai", (value) =>
+    handle("studyboard:test-ai", (value) =>
       runtime.testConnection(settingsSchema.parse(value)),
     );
-    handle("atlas:ask", (value) => {
+    handle("studyboard:ask", (value) => {
       if (closePending) throw new Error("App is preparing to close");
       return runtime.ask(aiRequestSchema.parse(value));
     });
-    handle("atlas:stop", (board, sticky) =>
+    handle("studyboard:stop", (board, sticky) =>
       runtime.stop(id.parse(board), id.parse(sticky)),
     );
-    handle("atlas:history", (board, sticky) =>
+    handle("studyboard:history", (board, sticky) =>
       runtime.getHistory(id.parse(board), id.parse(sticky)),
     );
     async function requestClose() {
@@ -130,7 +143,7 @@ async function bootstrap(): Promise<void> {
       try {
         await runtime.quiesce();
         traceClose("AI quiesced; requesting renderer save");
-        window?.webContents.send("atlas:before-close");
+        window?.webContents.send("studyboard:before-close");
       } catch {
         closePending = false;
         await dialog.showMessageBox(window!, {
@@ -141,11 +154,11 @@ async function bootstrap(): Promise<void> {
         });
       }
     }
-    handle("atlas:renderer-ready", () => {
+    handle("studyboard:renderer-ready", () => {
       rendererReady = true;
       traceClose("renderer save handler ready");
     });
-    handle("atlas:close-ready", async (saved) => {
+    handle("studyboard:close-ready", async (saved) => {
       traceClose(`renderer save acknowledged: ${saved === true}`);
       if (saved !== true) {
         closePending = false;
@@ -169,7 +182,8 @@ async function bootstrap(): Promise<void> {
         minWidth: 1060,
         minHeight: 720,
         backgroundColor: "#f6f7f3",
-        title: "Learning Atlas",
+        title: "Studyboard",
+        icon: app.isPackaged ? undefined : devIcon,
         titleBarStyle: "hiddenInset",
         trafficLightPosition: { x: 20, y: 20 },
         webPreferences: {
@@ -186,7 +200,7 @@ async function bootstrap(): Promise<void> {
         ["leave-full-screen", false],
       ] as const)
         window.on(event as "enter-full-screen", () =>
-          window?.webContents.send("atlas:fullscreen", value),
+          window?.webContents.send("studyboard:fullscreen", value),
         );
       window.webContents.on("render-process-gone", () => {
         rendererReady = false;
