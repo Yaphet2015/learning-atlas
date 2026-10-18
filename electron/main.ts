@@ -1,4 +1,11 @@
-import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  Menu,
+  safeStorage,
+} from "electron";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -93,6 +100,8 @@ async function bootstrap(): Promise<void> {
         if (window && !window.isDestroyed())
           window.webContents.send("studyboard:ai-update", update);
       },
+      // The API key is encrypted at rest with safeStorage (macOS: Keychain-backed).
+      safeStorage,
     );
     function assertSender(event: Electron.IpcMainInvokeEvent) {
       const url = event.senderFrame?.url;
@@ -179,6 +188,62 @@ async function bootstrap(): Promise<void> {
       quitting = true;
       app.quit();
     });
+    /** App menu with 「Settings…」 on ⌘. as asked, plus the macOS-standard ⌘, (hidden item). */
+    function installMenu() {
+      const openSettings = () =>
+        window?.webContents.send("studyboard:open-settings");
+      const settingsItems: Electron.MenuItemConstructorOptions[] = [
+        {
+          label: "Settings…",
+          accelerator: "CmdOrCtrl+.",
+          click: openSettings,
+        },
+        {
+          label: "Settings…",
+          accelerator: "CmdOrCtrl+,",
+          visible: false,
+          acceleratorWorksWhenHidden: true,
+          click: openSettings,
+        },
+      ];
+      const mac = process.platform === "darwin";
+      Menu.setApplicationMenu(
+        Menu.buildFromTemplate([
+          ...(mac
+            ? [
+                {
+                  label: app.name,
+                  submenu: [
+                    { role: "about" },
+                    { type: "separator" },
+                    ...settingsItems,
+                    { type: "separator" },
+                    { role: "services" },
+                    { type: "separator" },
+                    { role: "hide" },
+                    { role: "hideOthers" },
+                    { role: "unhide" },
+                    { type: "separator" },
+                    { role: "quit" },
+                  ],
+                } as Electron.MenuItemConstructorOptions,
+              ]
+            : [
+                {
+                  label: "File",
+                  submenu: [
+                    ...settingsItems,
+                    { type: "separator" },
+                    { role: "quit" },
+                  ],
+                } as Electron.MenuItemConstructorOptions,
+              ]),
+          { role: "editMenu" },
+          { role: "viewMenu" },
+          { role: "windowMenu" },
+        ]),
+      );
+    }
     function createWindow() {
       window = new BrowserWindow({
         width: 1512,
@@ -234,6 +299,7 @@ async function bootstrap(): Promise<void> {
       else void window.loadFile(path.join(here, "../../dist/index.html"));
     }
     createWindow();
+    installMenu();
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

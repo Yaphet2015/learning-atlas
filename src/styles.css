@@ -2765,3 +2765,263 @@ kbd,
 .session .sm > span:last-child {
   flex: none;
 }
+
+/* ---- settings page: a full view over the canvas (⌘. / Ctrl+.) */
+.settings-page {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  outline: none;
+  animation: settings-in 160ms var(--ease-out);
+}
+@keyframes settings-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-page {
+    animation: none;
+  }
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 14px 0 var(--chrome-inset-left, 20px);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+.settings-head > * {
+  -webkit-app-region: no-drag;
+}
+.settings-head h1 {
+  margin: 0;
+  font: 700 19px var(--kai);
+}
+.settings-head .lab {
+  flex: 1;
+}
+.settings-main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 12px;
+  border-right: 1px solid var(--border);
+}
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  font: 700 15px var(--kai);
+  color: var(--ink-2);
+  text-align: left;
+}
+.settings-nav button:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink);
+}
+.settings-nav button.on {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.settings-body {
+  overflow: auto;
+  padding: 28px 40px 60px;
+}
+.settings-section {
+  max-width: 620px;
+}
+.settings-section h2 {
+  margin: 0 0 8px;
+  font: 700 22px var(--kai);
+}
+.sec-lede {
+  margin: 0 0 18px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.7;
+}
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.settings-form label,
+.key-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.key-label {
+  font: 400 12px var(--kai-mono);
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+.settings-form input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--card);
+  color: var(--ink);
+  font: 400 15px var(--kai);
+  outline: none;
+}
+.settings-form input:focus-visible {
+  border-color: var(--border-strong);
+}
+.settings-form input:disabled {
+  opacity: 0.6;
+}
+.key-saved {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--card);
+}
+.key-saved .ico {
+  color: var(--ink-3);
+  flex: none;
+}
+.key-saved .mask {
+  font: 400 14px var(--kai-mono);
+  letter-spacing: 0.04em;
+}
+.key-saved .where {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.key-acts {
+  display: flex;
+  gap: 6px;
+}
+.key-warn {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent-ink);
+}
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-actions .connection-status {
+  flex: 1;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.settings-actions .connection-status[data-state="failure"] {
+  color: var(--accent-ink);
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.setting-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.setting-row b {
+  font: 700 15.5px var(--kai);
+}
+.setting-row small {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.setting-row .seg {
+  padding: 3px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.shortcut-group {
+  margin: 18px 0 0;
+}
+.shortcut-group h3 {
+  margin: 0 0 6px;
+}
+.shortcut-group dl {
+  margin: 0;
+}
+.shortcut {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14.5px;
+}
+.shortcut dd {
+  margin: 0;
+}
+.shortcut .kbd {
+  font-size: 12px;
+  padding: 2px 7px;
+}
+.settings-section .licenses pre {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 400 12px/1.6 var(--kai-mono);
+  color: var(--ink-2);
+}
+.settings-section .licenses summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.settings-page .privacy-note,
+.settings-page .setup-notice,
+.settings-page .inline-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--ink) 3%, var(--card));
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.settings-page .setup-notice {
+  margin-bottom: 16px;
+}
+.settings-page .inline-error {
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.settings-page .settings-foot {
+  margin: 0 !important;
+  text-align: left;
+  font-size: 12.5px !important;
+  color: var(--ink-3) !important;
+}
+.mac-titlebar .settings-page {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}

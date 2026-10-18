@@ -1,6 +1,14 @@
 import ofl from "lxgw-wenkai-webfont/OFL.txt?raw";
-import { useState } from "react";
-import { KeyRound, LockKeyhole, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Info,
+  Keyboard,
+  KeyRound,
+  LockKeyhole,
+  Palette as PaletteIcon,
+  Sparkles,
+  X,
+} from "lucide-react";
 import type {
   AIConnectionResult,
   AISettings,
@@ -11,24 +19,128 @@ import {
   connectionStatusText,
   type ConnectionTestState,
 } from "../model/connection";
+import { SHORTCUTS, MOD } from "../model/shortcuts";
+import pkg from "../../package.json";
 
+/**
+ * The API key row. A saved key is shown only masked; the plaintext never comes back from the
+ * main process. "更换" reveals an input, "清除" removes the saved copy.
+ */
+export function ApiKeyField({
+  settings,
+  value,
+  onChange,
+  onClear,
+  disabled,
+}: {
+  settings: AISettings;
+  value: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
+  disabled?: boolean;
+}) {
+  const hasKey = settings.source === "saved" || settings.source === "session";
+  const [replacing, setReplacing] = useState(!hasKey);
+  // After saving or clearing, show the saved state again.
+  useEffect(() => setReplacing(!hasKey), [hasKey, settings.keyHint]);
+  const where =
+    settings.source === "saved"
+      ? "已加密保存在本机钥匙串"
+      : settings.source === "session"
+        ? "仅本次运行，退出后需重新输入"
+        : settings.source === "environment"
+          ? "使用环境变量 OPENAI_API_KEY"
+          : "";
+  return (
+    <div className="key-field">
+      <span className="key-label">API 密钥</span>
+      {hasKey || settings.source === "environment" ? (
+        <div className="key-saved" data-source={settings.source}>
+          <KeyRound size={15} className="ico" />
+          <span className="mask" aria-label="已保存的密钥（已遮盖）">
+            {settings.keyHint ?? "••••"}
+          </span>
+          <span className="where">{where}</span>
+          {hasKey && !disabled && (
+            <span className="key-acts">
+              {!replacing && (
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() => setReplacing(true)}
+                >
+                  更换
+                </button>
+              )}
+              <button type="button" className="btn sm" onClick={onClear}>
+                清除
+              </button>
+            </span>
+          )}
+        </div>
+      ) : null}
+      {(replacing || !hasKey) && (
+        <input
+          type="password"
+          aria-label="API 密钥"
+          autoComplete="off"
+          spellCheck={false}
+          value={value}
+          placeholder={
+            hasKey ? "输入新的 API key 替换当前密钥" : "输入你的 API key"
+          }
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+        />
+      )}
+      {settings.keyStorage === "unavailable" && (
+        <p className="key-warn" role="note">
+          这台电脑的系统钥匙串不可用，无法加密保存密钥：密钥只保留到退出应用。
+        </p>
+      )}
+    </div>
+  );
+}
+
+type Section = "ai" | "appearance" | "shortcuts" | "about";
+const SECTIONS: [Section, string, React.ReactNode][] = [
+  ["ai", "AI 服务", <Sparkles size={16} className="ico" />],
+  ["appearance", "外观", <PaletteIcon size={16} className="ico" />],
+  ["shortcuts", "快捷键", <Keyboard size={16} className="ico" />],
+  ["about", "关于与许可", <Info size={16} className="ico" />],
+];
+
+/** The settings page: a full view over the canvas, opened with ⌘. / Ctrl+. or from ⌘K. Esc closes. */
 export function Settings({
   settings,
+  dark,
+  onTheme,
   onClose,
   onSave,
   onTest,
+  initial = "ai",
 }: {
   settings: AISettings;
+  dark: boolean;
+  onTheme: (dark: boolean) => void;
   onClose: () => void;
   onSave: (s: AISettingsInput) => Promise<void>;
   onTest: (s: AISettingsInput) => Promise<AIConnectionResult>;
+  initial?: Section;
 }) {
+  const [section, setSection] = useState<Section>(initial);
   const [model, setModel] = useState(settings.model),
     [endpoint, setEndpoint] = useState(settings.baseUrl),
     [key, setKey] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [saved, setSaved] = useState(""),
     [test, setTest] = useState<ConnectionTestState>({ phase: "idle" });
+  const body = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLElement>(null);
+  useEffect(() => {
+    root.current?.focus();
+  }, []);
   const draft = (): AISettingsInput => ({
     model,
     baseUrl: endpoint,
@@ -39,6 +151,7 @@ export function Settings({
     <T,>(set: (value: T) => void) =>
     (value: T) => {
       set(value);
+      setSaved("");
       setTest({ phase: "idle" });
     };
   const runTest = async () => {
@@ -59,150 +172,239 @@ export function Settings({
       });
     }
   };
+  const save = async (input: AISettingsInput, done: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      await onSave(input);
+      setKey("");
+      setSaved(done);
+    } catch (error) {
+      setError(String(error instanceof Error ? error.message : error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const groups = [...new Set(SHORTCUTS.map((s) => s.group))];
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+    <section
+      ref={root}
+      tabIndex={-1}
+      className="settings-page"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-title"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
       }}
     >
-      <section
-        className="modal settings-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-      >
+      <header className="settings-head">
+        <h1 id="settings-title">设置</h1>
+        <span className="lab">{MOD}. 打开 · Esc 关闭</span>
         <button
-          className="modal-close icon-button"
+          className="ib"
           aria-label="关闭设置"
+          data-tip="关闭设置 Esc"
           onClick={onClose}
         >
-          <X size={19} />
+          <X size={18} />
         </button>
-        <div className="modal-icon">
-          <KeyRound size={24} />
-        </div>
-        <span className="eyebrow">真实模型 · PI-DURABLE</span>
-        <h2 id="settings-title">为你的问题连接 AI</h2>
-        <p>
-          内置演练可以离线使用。探索其他主题、展开概念和批注问答，需要你自己的模型
-          API。
-        </p>
-        {!isDesktop && (
-          <div className="setup-notice">
-            这是浏览器预览。API 设置在 macOS
-            桌面客户端中可用；这里不会接收密钥。
-          </div>
-        )}
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            setError("");
-            try {
-              await onSave(draft());
-              setKey("");
-              onClose();
-            } catch (error) {
-              setError(String(error instanceof Error ? error.message : error));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <label>
-            API 地址
-            <input
-              type="url"
-              required
-              value={endpoint}
-              onChange={(e) => edited(setEndpoint)(e.target.value)}
-              disabled={!isDesktop}
-            />
-          </label>
-          <label>
-            模型 ID
-            <input
-              value={model}
-              required
-              placeholder="gpt-4o-mini"
-              onChange={(e) => edited(setModel)(e.target.value)}
-              disabled={!isDesktop}
-            />
-          </label>
-          <label>
-            API 密钥{" "}
-            <span>
-              {settings.configured
-                ? "已配置 · 留空保持当前密钥"
-                : "仅本次应用会话"}
-            </span>
-            <input
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              value={key}
-              placeholder="输入你的 API key"
-              onChange={(e) => edited(setKey)(e.target.value)}
-              disabled={!isDesktop}
-            />
-          </label>
-          <div className="privacy-note">
-            <LockKeyhole size={16} />
-            <span>
-              密钥只交给桌面主进程，本版不保存到磁盘。提问时，你的问题、当前批注的对话历史和列出的上下文会发送到上方
-              API 服务商，可能产生费用。其他白板不会一并发送。
-            </span>
-          </div>
-          {error && <div className="inline-error">{error}</div>}
-          <div className="connection-test">
+      </header>
+      <div className="settings-main">
+        <nav className="settings-nav" aria-label="设置分区">
+          {SECTIONS.map(([id, label, icon]) => (
             <button
-              type="button"
-              className="secondary-button"
-              disabled={!isDesktop || busy || test.phase === "testing"}
-              onClick={() => void runTest()}
+              key={id}
+              className={section === id ? "on" : ""}
+              aria-current={section === id ? "page" : undefined}
+              onClick={() => {
+                setSection(id);
+                body.current?.scrollTo({ top: 0 });
+              }}
             >
-              {test.phase === "testing" ? "测试中…" : "测试连接"}
+              {icon}
+              {label}
             </button>
-            <span
-              className="connection-status"
-              data-state={
-                test.phase === "done"
-                  ? test.result.ok
-                    ? "success"
-                    : "failure"
-                  : test.phase
-              }
-              role="status"
-              aria-live="polite"
-            >
-              {connectionStatusText(test)}
-            </span>
-          </div>
-          <button
-            className="primary-button"
-            type="submit"
-            disabled={!isDesktop || busy}
-          >
-            {busy
-              ? "保存设置…"
-              : settings.configured
-                ? "更新连接设置"
-                : "连接模型"}
-          </button>
-        </form>
-        <p className="settings-foot">
-          保存不会调用模型；「测试连接」会用上面填写的设置发一次极短的请求（可能产生极少费用），不会保存。
-        </p>
-        <details className="licenses">
-          <summary>关于 · 开源许可</summary>
-          <p>
-            字体：霞鹜文楷 LXGW WenKai / LXGW WenKai Mono（随应用离线打包），以
-            SIL Open Font License 1.1 授权。
-          </p>
-          <pre>{ofl}</pre>
-        </details>
-      </section>
-    </div>
+          ))}
+        </nav>
+        <div className="settings-body" ref={body}>
+          {section === "ai" && (
+            <div className="settings-section" aria-labelledby="sec-ai">
+              <h2 id="sec-ai">AI 服务</h2>
+              <p className="sec-lede">
+                内置演练可以离线使用。探索其他主题、展开概念、批注问答和画布上的灰色提示，需要你自己的模型
+                API。
+              </p>
+              {!isDesktop && (
+                <div className="setup-notice">
+                  这是浏览器预览：API
+                  设置只在桌面客户端中可用，这里不会接收或保存密钥。
+                </div>
+              )}
+              <form
+                className="settings-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void save(draft(), "已保存。发出提问时才会调用模型。");
+                }}
+              >
+                <label>
+                  <span className="key-label">API 地址</span>
+                  <input
+                    type="url"
+                    required
+                    value={endpoint}
+                    onChange={(e) => edited(setEndpoint)(e.target.value)}
+                    disabled={!isDesktop}
+                  />
+                </label>
+                <label>
+                  <span className="key-label">模型 ID</span>
+                  <input
+                    value={model}
+                    required
+                    placeholder="gpt-4o-mini"
+                    onChange={(e) => edited(setModel)(e.target.value)}
+                    disabled={!isDesktop}
+                  />
+                </label>
+                <ApiKeyField
+                  settings={settings}
+                  value={key}
+                  onChange={edited(setKey)}
+                  disabled={!isDesktop}
+                  onClear={() =>
+                    void save(
+                      { model, baseUrl: endpoint, apiKey: "" },
+                      "已清除保存的密钥。",
+                    )
+                  }
+                />
+                <div className="privacy-note">
+                  <LockKeyhole size={16} />
+                  <span>
+                    密钥只交给桌面主进程，用系统钥匙串（safeStorage）加密后保存在本机，界面只显示末四位。提问时，你的问题、当前批注的对话历史和列出的上下文会发送到上方
+                    API 服务商，可能产生费用。
+                  </span>
+                </div>
+                {error && <div className="inline-error">{error}</div>}
+                <div className="settings-actions">
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!isDesktop || busy || test.phase === "testing"}
+                    onClick={() => void runTest()}
+                  >
+                    {test.phase === "testing" ? "测试中…" : "测试连接"}
+                  </button>
+                  <span
+                    className="connection-status"
+                    data-state={
+                      test.phase === "done"
+                        ? test.result.ok
+                          ? "success"
+                          : "failure"
+                        : test.phase
+                    }
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {connectionStatusText(test) || saved}
+                  </span>
+                  <button
+                    className="btn primary"
+                    type="submit"
+                    disabled={!isDesktop || busy}
+                  >
+                    {busy ? "保存中…" : "保存"}
+                  </button>
+                </div>
+                <p className="settings-foot">
+                  保存不会调用模型；「测试连接」会用上面填写的设置发一次极短的请求（可能产生极少费用），不会保存。
+                </p>
+              </form>
+            </div>
+          )}
+          {section === "appearance" && (
+            <div className="settings-section">
+              <h2>外观</h2>
+              <div className="setting-row">
+                <span>
+                  <b>主题</b>
+                  <small>也可以在画布上按 D 切换</small>
+                </span>
+                <div className="seg" role="radiogroup" aria-label="主题">
+                  {(
+                    [
+                      [false, "浅色"],
+                      [true, "深色"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={label}
+                      role="radio"
+                      aria-checked={dark === value}
+                      className={dark === value ? "on" : ""}
+                      onClick={() => onTheme(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="setting-row">
+                <span>
+                  <b>字体</b>
+                  <small>霞鹜文楷 LXGW WenKai，随应用离线打包</small>
+                </span>
+              </div>
+            </div>
+          )}
+          {section === "shortcuts" && (
+            <div className="settings-section">
+              <h2>快捷键</h2>
+              {groups.map((g) => (
+                <div key={g} className="shortcut-group">
+                  <h3 className="lab">{g}</h3>
+                  <dl>
+                    {SHORTCUTS.filter((s) => s.group === g).map((s) => (
+                      <div key={s.label} className="shortcut">
+                        <dt>{s.label}</dt>
+                        <dd>
+                          <kbd className="kbd">{s.keys}</kbd>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          )}
+          {section === "about" && (
+            <div className="settings-section">
+              <h2>关于与许可</h2>
+              <div className="setting-row">
+                <span>
+                  <b>Studyboard</b>
+                  <small>版本 {pkg.version} · 白板保存在这台设备上</small>
+                </span>
+              </div>
+              <p className="sec-lede">
+                字体：霞鹜文楷 LXGW WenKai / LXGW WenKai
+                Mono（随应用离线打包），以 SIL Open Font License 1.1
+                授权。图标：Lucide（ISC 许可）。
+              </p>
+              <details className="licenses">
+                <summary>SIL Open Font License 1.1 全文</summary>
+                <pre>{ofl}</pre>
+              </details>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

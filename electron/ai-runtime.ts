@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { maskKey, SavedKeyStore, type SecretCipher } from "./secret-store.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   createModels,
@@ -401,13 +402,19 @@ function classifyConnectionFailureConfig(): AIConnectionResult {
   return { ok: false, kind: "config", message: CONNECTION_MESSAGES.config };
 }
 
-/** Main-process only. Credentials are kept in memory and never written to settings, SQLite or IPC results. */
+/**
+ * Main-process only. The key is never written to settings, SQLite or IPC results; with a usable
+ * safeStorage it is kept encrypted at rest in ai/key.json, otherwise only in memory.
+ */
 export class AIRuntime {
   private readonly directory: string;
   private readonly settingsPath: string;
   private model = DEFAULT_MODEL;
   private baseUrl = OFFICIAL_URL;
   private sessionKey: string | undefined;
+  /** True when sessionKey came from (or was written to) the encrypted store. */
+  private keySaved = false;
+  private readonly savedKeys: SavedKeyStore;
   private readonly credentials = new InMemoryCredentialStore();
   private readonly models: MutableModels;
   private readonly owners = new Map<string, Promise<Harness>>();
@@ -419,6 +426,7 @@ export class AIRuntime {
   constructor(
     userDataDir: string,
     private readonly emit: (update: AIUpdate) => void,
+    cipher: SecretCipher | null = null,
   ) {
     this.directory = join(userDataDir, "ai");
     this.settingsPath = join(this.directory, "settings.json");
@@ -451,6 +459,19 @@ export class AIRuntime {
         fileExists: async () => false,
       },
     });
+    this.savedKeys = new SavedKeyStore(
+      join(this.directory, "key.json"),
+      cipher,
+    );
+    const saved = this.savedKeys.load();
+    // A saved key belongs to the endpoint it was saved for; never forward it elsewhere.
+    if (saved && normalizeUrl(saved.baseUrl) === normalizeUrl(this.baseUrl)) {
+      this.sessionKey = saved.key;
+      this.keySaved = true;
+      this.settingsWrite = this.credentials
+        .modify("openai", async () => ({ type: "api_key", key: saved.key }))
+        .then(() => undefined);
+    }
     this.installProvider();
   }
 
@@ -461,16 +482,22 @@ export class AIRuntime {
     return `${idSchema.parse(boardId)}:${idSchema.parse(stickyId)}`;
   }
   getSettings(): AISettings {
+    const env = this.isOfficial() ? process.env.OPENAI_API_KEY?.trim() : "";
     const source = this.sessionKey
-      ? "session"
-      : this.isOfficial() && process.env.OPENAI_API_KEY?.trim()
+      ? this.keySaved
+        ? "saved"
+        : "session"
+      : env
         ? "environment"
         : "none";
+    const inUse = this.sessionKey ?? env;
     return {
       model: this.model,
       baseUrl: this.baseUrl,
       configured: source !== "none",
       source,
+      ...(inUse ? { keyHint: maskKey(inUse) } : {}),
+      keyStorage: this.savedKeys.available() ? "encrypted" : "unavailable",
     };
   }
 
@@ -507,6 +534,14 @@ export class AIRuntime {
         { mode: 0o600 },
       );
       await rename(nextFile, this.settingsPath);
+      // A new key is saved encrypted (when possible); a cleared key or a new destination
+      // without one removes the saved copy.
+      if (parsed.apiKey !== undefined || destinationChanged) {
+        await this.savedKeys.clear();
+        this.keySaved = key
+          ? await this.savedKeys.save({ key, baseUrl: parsed.baseUrl })
+          : false;
+      }
       this.model = parsed.model;
       this.baseUrl = parsed.baseUrl;
       this.sessionKey = key;

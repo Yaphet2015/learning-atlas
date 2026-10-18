@@ -20,6 +20,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import type { BoardSummary, ConceptNode } from "../shared/types";
+import { MOD } from "../model/shortcuts";
 
 function Compass() {
   return (
@@ -137,8 +138,8 @@ export function Palette({
       },
       {
         key: "+ai",
-        label: "AI 设置",
-        hint: "",
+        label: "设置",
+        hint: `${MOD}.`,
         run: onSettings,
         current: false,
       },
@@ -300,8 +301,8 @@ export function Dock({
       </button>
       <button
         className="b small"
-        title="AI 设置"
-        aria-label="AI 设置"
+        title="设置"
+        aria-label="设置"
         onClick={onSettings}
       >
         <Settings2 size={16} className="ico" />

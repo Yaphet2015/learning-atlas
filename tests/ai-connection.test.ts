@@ -261,3 +261,107 @@ describe("connection status line", () => {
     ).toBe("鉴权失败：…");
   });
 });
+
+describe("saved API key (safeStorage)", () => {
+  // A stand-in for Electron's safeStorage: reversible, but never the plaintext on disk.
+  const cipher = (available = true, backend?: string) => ({
+    isEncryptionAvailable: vi.fn(() => available),
+    encryptString: vi.fn((plain: string) =>
+      Buffer.from(`ENC(${[...plain].reverse().join("")})`),
+    ),
+    decryptString: vi.fn((data: Buffer) => {
+      const text = data.toString();
+      if (!text.startsWith("ENC(")) throw new Error("bad ciphertext");
+      return [...text.slice(4, -1)].reverse().join("");
+    }),
+    ...(backend ? { getSelectedStorageBackend: () => backend } : {}),
+  });
+  const withCipher = (c: ReturnType<typeof cipher> | null) => {
+    const runtime = new AIRuntime(directory, () => {}, c);
+    runtimes.push(runtime);
+    return runtime;
+  };
+  const KEY = "sk-proj-SECRET1234abcd";
+  const keyFile = () => join(directory, "ai/key.json");
+
+  it("encrypts the key at rest and restores it after a restart, masked in settings", async () => {
+    const c = cipher();
+    const first = withCipher(c);
+    const settings = await first.setSettings({ ...official, apiKey: KEY });
+    expect(settings).toMatchObject({
+      source: "saved",
+      configured: true,
+      keyHint: "sk-••••abcd",
+      keyStorage: "encrypted",
+    });
+    expect(JSON.stringify(settings)).not.toContain("SECRET1234");
+    const onDisk = await readFile(keyFile(), "utf8");
+    expect(onDisk).not.toContain("SECRET1234");
+    expect(JSON.parse(onDisk)).toMatchObject({
+      v: 1,
+      baseUrl: official.baseUrl,
+    });
+    const settingsFile = await readFile(
+      join(directory, "ai/settings.json"),
+      "utf8",
+    );
+    expect(settingsFile).not.toContain("SECRET1234");
+    await first.close();
+
+    const second = withCipher(c);
+    expect(second.getSettings()).toMatchObject({
+      source: "saved",
+      configured: true,
+      keyHint: "sk-••••abcd",
+    });
+    // The restored key is the one used for requests.
+    await second.testConnection(official);
+    expect(probe.calls.at(-1)?.apiKey).toBe(KEY);
+  });
+
+  it("clearing the key removes the saved copy", async () => {
+    const c = cipher();
+    const runtime = withCipher(c);
+    await runtime.setSettings({ ...official, apiKey: KEY });
+    const cleared = await runtime.setSettings({ ...official, apiKey: "" });
+    expect(cleared).toMatchObject({ configured: false, source: "none" });
+    expect(cleared.keyHint).toBeUndefined();
+    await expect(readFile(keyFile(), "utf8")).rejects.toThrow();
+    expect(withCipher(c).getSettings().configured).toBe(false);
+  });
+
+  it("keeps the saved key when other settings change, and drops it for a new endpoint", async () => {
+    const c = cipher();
+    const runtime = withCipher(c);
+    await runtime.setSettings({ ...official, apiKey: KEY });
+    await runtime.setSettings({ ...official, model: "gpt-4o" });
+    expect(runtime.getSettings()).toMatchObject({ source: "saved" });
+    await runtime.setSettings(local);
+    expect(runtime.getSettings()).toMatchObject({ source: "none" });
+    await expect(readFile(keyFile(), "utf8")).rejects.toThrow();
+  });
+
+  it("falls back to this session only when safeStorage is unavailable", async () => {
+    for (const c of [cipher(false), cipher(true, "basic_text"), null]) {
+      const runtime = withCipher(c);
+      const settings = await runtime.setSettings({ ...official, apiKey: KEY });
+      expect(settings).toMatchObject({
+        source: "session",
+        keyStorage: "unavailable",
+        configured: true,
+      });
+      await expect(readFile(keyFile(), "utf8")).rejects.toThrow();
+      if (c) expect(c.encryptString).not.toHaveBeenCalled();
+      await runtime.setSettings({ ...official, apiKey: "" });
+    }
+  });
+
+  it("ignores an unreadable saved key instead of failing to start", async () => {
+    const c = cipher();
+    await withCipher(c).setSettings({ ...official, apiKey: KEY });
+    c.decryptString.mockImplementation(() => {
+      throw new Error("keychain reset");
+    });
+    expect(withCipher(c).getSettings()).toMatchObject({ configured: false });
+  });
+});

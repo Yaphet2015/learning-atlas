@@ -8,6 +8,12 @@ const api: AtlasAPI = {
     ipcRenderer.on("studyboard:fullscreen", listener);
     return () => ipcRenderer.removeListener("studyboard:fullscreen", listener);
   },
+  onOpenSettings: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("studyboard:open-settings", listener);
+    return () =>
+      ipcRenderer.removeListener("studyboard:open-settings", listener);
+  },
   onBeforeClose: (callback) => {
     const listener = () => {
       void callback()

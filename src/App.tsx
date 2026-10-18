@@ -775,6 +775,15 @@ export default function App() {
   }, [dark]);
   const [fullscreen, setFullscreen] = useState(false);
   useEffect(() => api.onFullscreenChange(setFullscreen), []);
+  // Electron app menu: Settings… (⌘. and ⌘,).
+  useEffect(
+    () =>
+      api.onOpenSettings?.(() => {
+        setPalette(false);
+        setShowSettings(true);
+      }),
+    [],
+  );
   const chromeClasses = windowChromeClasses(api.platform, fullscreen);
   useEffect(() => {
     const root = document.documentElement.classList;
@@ -790,6 +799,13 @@ export default function App() {
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette((p) => !p);
+        return;
+      }
+      // ⌘. as asked, plus the macOS-standard ⌘, (Ctrl+. / Ctrl+, elsewhere).
+      if (mod && (e.key === "." || e.key === ",")) {
+        e.preventDefault();
+        setPalette(false);
+        setShowSettings(true);
         return;
       }
       if (e.key === "Escape") {
@@ -1613,10 +1629,11 @@ export default function App() {
       {showSettings && (
         <Settings
           settings={settings}
+          dark={dark}
+          onTheme={setDark}
           onClose={() => setShowSettings(false)}
           onSave={async (input) => {
             setSettings(await api.setAISettings(input));
-            showToast("AI 设置已更新。发出提问时才会调用模型。");
           }}
           onTest={(input) => api.testAIConnection(input)}
         />

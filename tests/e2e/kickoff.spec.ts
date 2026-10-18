@@ -78,7 +78,8 @@ test("without an AI provider the kickoff leads to settings", async ({
   await page.getByLabel("关闭设置").click();
   await page.getByRole("button", { name: "让 AI 带我开始" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.locator("#settings-title")).toHaveText("为你的问题连接 AI");
+  await expect(page.locator("#settings-title")).toHaveText("设置");
+  await expect(page.getByRole("heading", { name: "AI 服务" })).toBeVisible();
 });
 
 test("「测试连接」 shows success with model and latency, then a readable failure", async ({
@@ -86,7 +87,7 @@ test("「测试连接」 shows success with model and latency, then a readable f
 }) => {
   await installFakeAtlas(page, false);
   await gotoApp(page);
-  await page.getByRole("button", { name: "AI 设置", exact: true }).click();
+  await page.getByRole("button", { name: "设置", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel(/API 密钥/).fill("good");
   await dialog.getByRole("button", { name: "测试连接" }).click();

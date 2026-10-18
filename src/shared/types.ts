@@ -102,7 +102,12 @@ export interface AISettings {
   model: string;
   baseUrl: string;
   configured: boolean;
-  source: "session" | "environment" | "none";
+  /** saved: encrypted at rest (safeStorage); session: in memory until the app quits. */
+  source: "saved" | "session" | "environment" | "none";
+  /** A masked form of the key in use ("sk-••••a1b2"); never the key itself. */
+  keyHint?: string;
+  /** Whether a key can be saved encrypted on this machine; "web" in the browser preview. */
+  keyStorage?: "encrypted" | "unavailable" | "web";
 }
 export interface AISettingsInput {
   model: string;
@@ -150,6 +155,8 @@ export interface AtlasAPI {
   platform: string;
   /** Native fullscreen changes (macOS hides the traffic lights there). */
   onFullscreenChange(callback: (fullscreen: boolean) => void): () => void;
+  /** The app menu's 「Settings…」 item (desktop only). */
+  onOpenSettings?(callback: () => void): () => void;
   onBeforeClose(callback: () => Promise<void>): () => void;
   listBoards(): Promise<BoardSummary[]>;
   loadBoard(id: string): Promise<Board | null>;
