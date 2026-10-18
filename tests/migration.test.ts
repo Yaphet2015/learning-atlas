@@ -147,3 +147,38 @@ describe("migrateV1toV2", () => {
     expect(() => parseBoard(cycle)).toThrow(/cycle/);
   });
 });
+
+describe("hidden per-card prediction (走一遍)", () => {
+  const v2 = (node: Record<string, unknown>) => ({
+    ...v1([], []),
+    version: 2,
+    nodes: [
+      {
+        id: "q",
+        kind: "concept",
+        title: "Q",
+        body: "",
+        parentId: null,
+        order: 0,
+        status: "unseen",
+        ...node,
+      },
+    ],
+    relations: [],
+  });
+  it("round-trips through save/load", () => {
+    const board = parseBoard(v2({ prediction: "我猜会产出 DOM 树" }));
+    const reloaded = parseBoard(JSON.parse(JSON.stringify(board)));
+    expect(reloaded.nodes[0].prediction).toBe("我猜会产出 DOM 树");
+    expect(reloaded.nodes[0].hand).toBeUndefined();
+  });
+  it("is optional: old boards without it still load", () => {
+    const board = parseBoard(v2({}));
+    expect(board.nodes[0].prediction).toBeUndefined();
+    expect(boardSchema.safeParse(board).success).toBe(true);
+  });
+  it("v1 boards still migrate without a prediction", () => {
+    const board = migrateV1toV2(v1([v1node("a", 0, 0)], []));
+    expect(board.nodes[0]).not.toHaveProperty("prediction");
+  });
+});

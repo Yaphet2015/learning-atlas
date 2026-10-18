@@ -62,7 +62,12 @@ import { RoughBox, SketchDefs } from "./components/sketch/RoughBox";
 import { Settings } from "./components/Settings";
 
 /** Fit padding that keeps the bottom row (and cross-link labels) clear of the dock. */
-const FIT_PADDING = { top: "8%", left: "8%", right: "8%", bottom: "132px" } as const;
+const FIT_PADDING = {
+  top: "8%",
+  left: "8%",
+  right: "8%",
+  bottom: "132px",
+} as const;
 const nodeTypes = { concept: ConceptCard, root: RootCard, ghost: GhostCard };
 const edgeTypes = { tree: TreeEdge, seq: SeqEdge, cross: CrossEdge };
 const GHOST = "ghost-slot";
@@ -224,7 +229,10 @@ export default function App() {
         setSettings(settings);
         await refreshList();
         setLoaded(true);
-        setTimeout(() => flow.fitView({ padding: FIT_PADDING, duration: 500 }), 160);
+        setTimeout(
+          () => flow.fitView({ padding: FIT_PADDING, duration: 500 }),
+          160,
+        );
       } catch (error) {
         if (!cancelled) {
           showToast(errorText(error));
@@ -562,7 +570,10 @@ export default function App() {
       setPast([]);
       setSelection(null);
       setDrawer(null);
-      setTimeout(() => flow.fitView({ padding: FIT_PADDING, duration: 400 }), 60);
+      setTimeout(
+        () => flow.fitView({ padding: FIT_PADDING, duration: 400 }),
+        60,
+      );
     } catch (e) {
       showToast(errorText(e));
     } finally {
@@ -614,6 +625,18 @@ export default function App() {
         nodes: b.nodes.map((n) =>
           n.id === id ? { ...n, status, ...(hand ? { hand } : {}) } : n,
         ),
+      })),
+    [edit],
+  );
+  const setPrediction = useCallback(
+    (id: string, prediction: string) =>
+      edit((b) => ({
+        ...b,
+        nodes: b.nodes.map((n) => {
+          if (n.id !== id) return n;
+          const { prediction: _old, ...rest } = n;
+          return prediction.trim() ? { ...rest, prediction } : rest;
+        }),
       })),
     [edit],
   );
@@ -1184,6 +1207,7 @@ export default function App() {
           board={board}
           startId={study.startId}
           onRate={setStatus}
+          onPredict={setPrediction}
           onAskAI={(id, text) => {
             setStudy(null);
             addNote({ kind: "node", id }, text);

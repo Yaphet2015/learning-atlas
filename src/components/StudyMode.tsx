@@ -17,12 +17,15 @@ export function StudyMode({
   board,
   startId,
   onRate,
+  onPredict,
   onAskAI,
   onClose,
 }: {
   board: Board;
   startId?: string;
   onRate: (id: string, status: Understanding, hand?: string) => void;
+  /** Persist the step-① prediction on the card (hidden field). */
+  onPredict: (id: string, prediction: string) => void;
   onAskAI: (id: string, explanation: string) => void;
   onClose: () => void;
 }) {
@@ -68,7 +71,10 @@ export function StudyMode({
   if (!node) return null;
   const level = levels.get(node.id)!;
   const row = steps.filter((s) => levels.get(s.id) === level);
-  const draft = drafts[node.id] ?? { predict: "", explain: "" };
+  const draft = drafts[node.id] ?? {
+    predict: node.prediction ?? "",
+    explain: "",
+  };
   const set = (patch: Partial<typeof draft>) =>
     setDrafts((d) => ({ ...d, [node.id]: { ...draft, ...patch } }));
   const prev = steps[index - 1],
@@ -126,6 +132,10 @@ export function StudyMode({
             <textarea
               value={draft.predict}
               onChange={(e) => set({ predict: e.target.value })}
+              onBlur={() => {
+                if (draft.predict !== (node.prediction ?? ""))
+                  onPredict(node.id, draft.predict);
+              }}
               placeholder="我猜……"
             />
           </label>

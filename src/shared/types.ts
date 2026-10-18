@@ -21,6 +21,8 @@ export interface ConceptNode {
   status: Understanding;
   /** Handwritten margin remark shown under the body. */
   hand?: string;
+  /** 走一遍 prediction (step ①). Hidden: persisted, never rendered on the card. */
+  prediction?: string;
   expanded?: boolean;
   visual?: VisualDiagram;
 }

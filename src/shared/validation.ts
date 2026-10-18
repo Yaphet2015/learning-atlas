@@ -55,6 +55,7 @@ export const conceptNodeSchema = z
     order: z.number().int().min(0).max(LIMITS.nodes),
     status: understandingSchema,
     hand: z.string().max(200).optional(),
+    prediction: z.string().max(2_000).optional(),
     expanded: z.boolean().optional(),
     visual: visualDiagramSchema.optional(),
   })
