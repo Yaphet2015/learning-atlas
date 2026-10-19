@@ -722,7 +722,10 @@ kbd,
     background-color 150ms var(--ease-out),
     color 150ms var(--ease-out);
 }
-.workspace-action:hover {
+.workspace-action:hover,
+.workspace-board:hover,
+.workspace-disclosure:hover,
+.workspace-session:hover {
   background: color-mix(in srgb, var(--ink) 6%, transparent);
   color: var(--ink);
 }
@@ -791,14 +794,63 @@ kbd,
   padding: 0;
   margin: 0;
 }
-.workspace-hover {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 40px;
+.workspace-board-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.workspace-board-row .workspace-board {
+  flex: 1;
+  min-width: 0;
+}
+.workspace-disclosure {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 32px;
+  border-radius: var(--r-xs);
+  color: var(--ink-3);
+}
+.workspace-disclosure svg {
+  transition: transform 150ms var(--ease-out);
+}
+.workspace-disclosure[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.workspace-board-list .workspace-sessions {
+  margin: 4px 0 8px 30px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+  gap: 2px;
+}
+.workspace-sessions[hidden] {
+  display: none;
+}
+.workspace-session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
   border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-  pointer-events: none;
-  transition: transform 180ms var(--ease-out);
+  color: var(--ink-2);
+  text-align: left;
+  font-size: 13px;
+}
+.workspace-session > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-session[aria-current="true"] {
+  color: var(--accent-ink);
+  background: var(--accent-wash);
+}
+.workspace-new-session {
+  color: var(--ink-3);
 }
 .workspace-board-title {
   flex: 1;
@@ -835,12 +887,15 @@ kbd,
   color: var(--ink-3);
   font: 400 11px var(--kai-mono);
 }
-.workspace-transfer {
+.workspace-settings {
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 .board-export .export-board-title {
   overflow-wrap: anywhere;
+}
+.modal-backdrop.board-export-backdrop {
+  z-index: 70;
 }
 .export-options {
   display: grid;
@@ -947,7 +1002,6 @@ kbd,
 @media (prefers-reduced-motion: reduce) {
   .workspace-sidebar,
   .workspace-copy,
-  .workspace-hover,
   .workspace-action,
   .workspace-board,
   .react-flow {
@@ -1085,6 +1139,9 @@ kbd,
   color: var(--accent-ink);
   font: 700 14px var(--kai);
   border-radius: var(--r-sm);
+}
+.dock .ask:hover {
+  background: var(--accent-wash);
 }
 .map-unit {
   position: fixed;
@@ -3186,7 +3243,7 @@ kbd,
 
 /* Keep the sidebar below the macOS traffic lights, including when collapsed. */
 .mac-titlebar {
-  --sidebar-top: 56px;
+  --sidebar-top: 40px;
 }
 .titlebar-drag {
   position: fixed;
@@ -3242,145 +3299,6 @@ kbd,
   display: none;
 }
 
-/* ---- drawer: session strip (one tab per conversation) */
-.session-strip {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 14px 8px 14px;
-}
-.session-strip .tabs {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  mask-image: linear-gradient(
-    90deg,
-    transparent,
-    #000 8px,
-    #000 calc(100% - 16px),
-    transparent
-  );
-  padding: 0 8px;
-}
-.session-strip .tabs::-webkit-scrollbar {
-  display: none;
-}
-.ib.sm {
-  width: 28px;
-  height: 28px;
-}
-.stab {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 168px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  font: 500 13px var(--kai);
-  color: var(--ink-2);
-  background: transparent;
-}
-.stab:hover {
-  color: var(--ink);
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
-}
-.stab.on {
-  color: var(--paper);
-  background: var(--ink);
-  border-color: var(--ink);
-}
-.stab .st {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.stab .n {
-  flex: none;
-  font: 500 11px var(--kai);
-  font-variant-numeric: tabular-nums;
-  opacity: 0.6;
-}
-
-/* ---- drawer: this board's conversations */
-.sessions {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 10px 14px 14px;
-  border-top: 1px solid var(--border);
-}
-.sessions-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 2px 6px 10px;
-}
-.session-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.session {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  width: 100%;
-  padding: 9px 10px;
-  border-radius: var(--r-md);
-  text-align: left;
-  color: var(--ink);
-}
-.session:hover {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
-}
-.session.on {
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-}
-.session .st {
-  font: 700 15px var(--kai);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.session .sm {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font: 400 12.5px var(--kai);
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-.session .sm .an {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--ink-2);
-}
-.session .sm .dot {
-  width: 3px;
-  height: 3px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--ink-3);
-}
-.session .sm time,
-.session .sm > span:last-child {
-  flex: none;
-}
-
 /* ---- settings page: a full view over the canvas (⌘. / Ctrl+.) */
 .settings-page {
   position: fixed;
@@ -3412,6 +3330,10 @@ kbd,
   padding: 0 14px 0 var(--chrome-inset-left, 20px);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
+  flex-shrink: 0;
+}
+.mac-titlebar .settings-head {
+  padding-left: 94px;
 }
 .settings-head > * {
   -webkit-app-region: no-drag;

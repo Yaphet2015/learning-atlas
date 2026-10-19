@@ -32,7 +32,11 @@ async function seed(page: Page) {
 }
 
 async function exportFile(page: Page, label: string) {
-  await page.getByRole("button", { name: "导出当前画板", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "设置", exact: true });
+  if (!(await settings.isVisible()))
+    await page.getByRole("button", { name: "设置", exact: true }).click();
+  await settings.getByRole("button", { name: "画板数据", exact: true }).click();
+  await settings.getByRole("button", { name: "导出画板", exact: true }).click();
   const downloaded = page.waitForEvent("download");
   await page
     .getByRole("dialog", { name: "导出当前画板" })
@@ -63,7 +67,7 @@ test("a shared file restores complete conversations as a new board, survives rel
     mimeType: "application/json",
     buffer: file.data,
   });
-  await expect(page.getByRole("status")).toContainText("画板已导入");
+  await expect(page.locator(".toast")).toContainText("画板已导入");
   const imported = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("studyboard-preview-boards-v1")!).at(-1),
   );
@@ -95,13 +99,11 @@ test("invalid data leaves the current board and stored boards intact", async ({
   page,
 }) => {
   const original = await seed(page);
-  await page
-    .getByLabel("选择学习数据文件")
-    .setInputFiles({
-      name: "broken.json",
-      mimeType: "application/json",
-      buffer: Buffer.from('{"version":99}'),
-    });
+  await page.getByLabel("选择学习数据文件").setInputFiles({
+    name: "broken.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"version":99}'),
+  });
   await expect(page.getByRole("status")).toContainText("无法导入");
   const boards = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("studyboard-preview-boards-v1")!),

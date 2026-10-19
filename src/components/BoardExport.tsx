@@ -47,7 +47,7 @@ export function BoardExport({
   const [error, setError] = useState("");
   return (
     <div
-      className="modal-backdrop"
+      className="modal-backdrop board-export-backdrop"
       onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}
     >
       <section

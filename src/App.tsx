@@ -769,6 +769,24 @@ export default function App() {
       setSwitchingBoardId(null);
     }
   }
+  async function openSession(
+    boardId: string,
+    sessionId: string,
+  ): Promise<void> {
+    if (editingLocked.current) return;
+    if (boardRef.current?.id !== boardId) await switchBoard(boardId);
+    const current = boardRef.current;
+    if (current?.id !== boardId) return;
+    const target = current.notes.find((note) => note.id === sessionId);
+    if (!target) return;
+    openDrawer(sessionId);
+    const at = target.attachedTo;
+    if (at) setSelection(at);
+    if (at?.kind === "node") {
+      // Let React Flow render the selected board before locating its card.
+      setTimeout(() => frameFamily(at.id, true), 80);
+    }
+  }
   async function createBoard(walkthrough = false) {
     if (editingLocked.current || (!walkthrough && !topic.trim())) return;
     editingLocked.current = true;
@@ -1047,7 +1065,10 @@ export default function App() {
           setHistoryNoteId(null);
           return;
         }
-        if (!transferBusy) setShowExport(false);
+        if (showExport) {
+          if (!transferBusy) setShowExport(false);
+          return;
+        }
         setShowNew(false);
         setShowSettings(false);
         setPromote(null);
@@ -1764,9 +1785,13 @@ export default function App() {
             onPick={(id) => void switchBoard(id)}
             onNew={() => setShowNew(true)}
             onSearch={() => setPalette(true)}
-            onImport={() => importInput.current?.click()}
-            onExport={() => setShowExport(true)}
-            transferBusy={transferBusy}
+            onSettings={() => setShowSettings(true)}
+            sessions={listSessions(board)}
+            currentSessionId={drawer?.id}
+            onOpenSession={(boardId, sessionId) =>
+              void openSession(boardId, sessionId)
+            }
+            onNewSession={() => addNote(undefined, { fresh: true })}
           />
           <Progress
             nodes={board.nodes}
@@ -1781,7 +1806,6 @@ export default function App() {
             }}
             onNote={openNotes}
             onAsk={ask}
-            onSettings={() => setShowSettings(true)}
           />
           {tool === "link" && (
             <div className="hint lab">
@@ -1932,19 +1956,6 @@ export default function App() {
             showToast("已删除这张批注。⌘Z 可以撤销。");
           }}
           onClose={closeDrawer}
-          sessions={listSessions(board)}
-          onOpenSession={(id) => {
-            const target = board.notes.find((n) => n.id === id);
-            if (!target) return;
-            openDrawer(id);
-            const at = target.attachedTo;
-            if (at?.kind === "node") {
-              setSelection({ kind: "node", id: at.id });
-              frameFamily(at.id, true);
-            } else if (at?.kind === "relation") {
-              setSelection({ kind: "relation", id: at.id });
-            }
-          }}
           onNewSession={() => addNote(drawerNote.attachedTo, { fresh: true })}
         />
       )}
@@ -1982,14 +1993,6 @@ export default function App() {
             setPalette(false);
             setShowSettings(true);
           }}
-          onImport={() => {
-            setPalette(false);
-            importInput.current?.click();
-          }}
-          onExport={() => {
-            setPalette(false);
-            setShowExport(true);
-          }}
         />
       )}
       {toast && (
@@ -2003,6 +2006,10 @@ export default function App() {
       {showSettings && (
         <Settings
           settings={settings}
+          boardTitle={board?.title}
+          transferBusy={transferBusy || switchingBoardId !== null}
+          onImport={() => importInput.current?.click()}
+          onExport={() => setShowExport(true)}
           dark={dark}
           onTheme={setDark}
           onClose={() => setShowSettings(false)}

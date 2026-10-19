@@ -28,24 +28,22 @@ test("the sidebar switches the whole canvas, saves edits and clears the previous
   await installFakeAtlas(page, true, "web", boards());
   await gotoApp(page);
   const nav = sidebar(page).getByRole("navigation", { name: "知识画布" });
-  await expect(nav.getByRole("button", { name: "重疾险条款" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    nav.getByRole("button", { name: "重疾险条款", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
 
   await card(page, "c-what").click();
   await page.getByLabel("批注内容").fill("切换前写下的理解");
   await page.getByRole("button", { name: "查看全图" }).click();
   await card(page, "c-how").click({ modifiers: ["Shift"] });
   await expect(page.getByRole("toolbar", { name: "多选" })).toBeVisible();
-  await nav.getByRole("button", { name: "光的折射" }).click();
+  await nav.getByRole("button", { name: "光的折射", exact: true }).click();
   await expect(page.locator(".react-flow__node-root h2")).toHaveText(
     "光为什么会折射？",
   );
-  await expect(nav.getByRole("button", { name: "光的折射" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    nav.getByRole("button", { name: "光的折射", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("toolbar", { name: "多选" })).toHaveCount(0);
   await expect(page.locator(".drawer")).toHaveCount(0);
   await expect(page.locator(".title-input")).toHaveCount(0);
@@ -63,7 +61,7 @@ test("the sidebar switches the whole canvas, saves edits and clears the previous
   expect(asks[0].context.topic).toBe("光为什么会折射？");
   expect(JSON.stringify(asks[0].context)).not.toContain("重疾险");
 
-  await nav.getByRole("button", { name: "重疾险条款" }).click();
+  await nav.getByRole("button", { name: "重疾险条款", exact: true }).click();
   await card(page, "c-what").click();
   await expect(page.getByLabel("批注内容")).toHaveValue("切换前写下的理解");
 });
@@ -137,17 +135,19 @@ test("search filters canvases; keyboard selection and creating a canvas stay acc
   const nav = panel.getByRole("navigation", { name: "知识画布" });
   const search = panel.getByRole("textbox", { name: "搜索知识画布" });
   await search.fill("光");
-  await expect(nav.getByRole("button")).toHaveCount(1);
-  await expect(nav.getByRole("button", { name: "光的折射" })).toBeVisible();
+  await expect(nav.locator(".workspace-board")).toHaveCount(1);
+  await expect(
+    nav.getByRole("button", { name: "光的折射", exact: true }),
+  ).toBeVisible();
   await search.fill("不存在的画布");
   await expect(nav).toContainText("没有找到画布");
   await search.press("Escape");
   await expect(search).toHaveValue("");
-  await expect(nav.getByRole("button")).toHaveCount(2);
+  await expect(nav.locator(".workspace-board")).toHaveCount(2);
 
   // Enter in navigation activates a canvas instead of adding a sibling card.
   await card(page, "c-what").click();
-  await nav.getByRole("button", { name: "光的折射" }).focus();
+  await nav.getByRole("button", { name: "光的折射", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.locator(".react-flow__node-root h2")).toHaveText(
     "光为什么会折射？",
@@ -157,7 +157,7 @@ test("search filters canvases; keyboard selection and creating a canvas stay acc
   await page.getByLabel("新白板问题").fill("树为什么长高？");
   await page.getByRole("button", { name: "开始探索", exact: true }).click();
   await expect(
-    nav.getByRole("button", { name: "树为什么长高？" }),
+    nav.getByRole("button", { name: "树为什么长高？", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await expect(page.locator(".react-flow__node-root h2")).toHaveText(
     "树为什么长高？",
