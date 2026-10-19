@@ -99,13 +99,14 @@ test("single clicks follow the selected card and keep canvas shortcuts usable", 
   await expect(content.getByRole("heading")).toHaveText("保什么");
   await page.keyboard.press("/");
   await expect(drawer.getByLabel("向 AI 提问")).toBeFocused();
-  await drawer.getByRole("button", { name: "对话列表" }).click();
   await expect(
-    page.getByLabel("这张白板的对话").locator(".session"),
+    page.locator(".workspace-session:not(.workspace-new-session)"),
   ).toHaveCount(3);
   await card("c-what").click();
   await expect(content.getByRole("heading")).toHaveText("保什么");
-  await expect(page.getByLabel("这张白板的对话")).toHaveCount(0);
+  await expect(
+    page.locator('.workspace-session[aria-current="true"]'),
+  ).toContainText("保什么");
 });
 
 test("an answer renders as blocks, never as raw markdown", async ({ page }) => {

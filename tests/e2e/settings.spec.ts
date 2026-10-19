@@ -6,7 +6,18 @@ test("⌘. opens the settings page; Esc closes it; ⌘K reaches it too", async (
   page,
 }) => {
   await gotoApp(page);
-  await page.keyboard.press("ControlOrMeta+.");
+  await expect(
+    page.locator(".dock").getByRole("button", { name: "设置", exact: true }),
+  ).toHaveCount(0);
+  const ask = page.locator(".dock .ask");
+  const background = await ask.evaluate(
+    (el) => getComputedStyle(el).backgroundColor,
+  );
+  await ask.hover();
+  await expect
+    .poll(() => ask.evaluate((el) => getComputedStyle(el).backgroundColor))
+    .not.toBe(background);
+  await page.getByRole("button", { name: "设置", exact: true }).click();
   const settings = page.getByRole("dialog", { name: "设置" });
   await expect(settings).toBeVisible();
   await expect(

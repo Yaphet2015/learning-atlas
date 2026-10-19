@@ -196,7 +196,8 @@ test("selected cards come along: the dock's 问一问 and the drawer's new conve
   await card(page, "c-how").click();
   await card(page, "c-when-not").click({ modifiers: ["Shift"] });
   await card(page, "c-money").click({ modifiers: ["Shift"] });
-  await drawer.getByRole("button", { name: "新对话" }).click();
+  await drawer.getByRole("button", { name: "更多操作" }).click();
+  await page.getByRole("menuitem", { name: "在这张卡上新开对话" }).click();
   await expect(drawer.locator(".dhead .extra")).toHaveText("+2 张卡");
   await expect
     .poll(async () => (await notes(page)).at(-1))

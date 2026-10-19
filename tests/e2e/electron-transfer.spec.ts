@@ -51,7 +51,7 @@ test("desktop import restores SQLite histories; native exports and reopening pre
     const page = await app.firstWindow();
     await waitForApp(page);
     await page.getByLabel("选择学习数据文件").setInputFiles(input);
-    await expect(page.getByRole("status")).toContainText("画板已导入");
+    await expect(page.locator(".toast")).toContainText("画板已导入");
     const imported = await page.evaluate(async (title) => {
       const boards = await window.atlas!.listBoards();
       return window.atlas!.loadBoard(boards.find((b) => b.title === title)!.id);
@@ -64,14 +64,15 @@ test("desktop import restores SQLite histories; native exports and reopening pre
     expect(fullHistory.messages).toHaveLength(242);
     expect(fullHistory.running).toBe(false);
 
+    await page.getByRole("button", { name: "设置", exact: true }).click();
+    await page.getByRole("button", { name: "画板数据", exact: true }).click();
+
     // Only the OS file chooser is replaced; the real bridge, serializers and file writes run.
     const output = join(directory, "export.studyboard.json");
     await app.evaluate(({ dialog }, filePath) => {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath });
     }, output);
-    await page
-      .getByRole("button", { name: "导出当前画板", exact: true })
-      .click();
+    await page.getByRole("button", { name: "导出画板", exact: true }).click();
     await page
       .getByRole("dialog", { name: "导出当前画板" })
       .getByRole("button", { name: "学习数据" })
@@ -84,9 +85,7 @@ test("desktop import restores SQLite histories; native exports and reopening pre
     await app.evaluate(({ dialog }) => {
       dialog.showSaveDialog = async () => ({ canceled: true, filePath: "" });
     });
-    await page
-      .getByRole("button", { name: "导出当前画板", exact: true })
-      .click();
+    await page.getByRole("button", { name: "导出画板", exact: true }).click();
     await page
       .getByRole("dialog", { name: "导出当前画板" })
       .getByRole("button", { name: "Markdown 文档" })
@@ -111,9 +110,7 @@ test("desktop import restores SQLite histories; native exports and reopening pre
     await app.evaluate(({ dialog }, filePath) => {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath });
     }, png);
-    await page
-      .getByRole("button", { name: "导出当前画板", exact: true })
-      .click();
+    await page.getByRole("button", { name: "导出画板", exact: true }).click();
     await page
       .getByRole("dialog", { name: "导出当前画板" })
       .getByRole("button", { name: "PNG 全图截图" })

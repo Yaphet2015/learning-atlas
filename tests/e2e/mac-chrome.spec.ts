@@ -13,10 +13,10 @@ test("macOS keeps the sidebar below the traffic lights and drops the inset in fu
     exact: true,
   });
   await expect(sidebar).toBeVisible();
-  expect((await sidebar.boundingBox())!.y).toBe(56);
+  expect((await sidebar.boundingBox())!.y).toBe(40);
   await sidebar.getByRole("button", { name: "收起左侧边栏" }).click();
   await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(56);
-  expect((await sidebar.boundingBox())!.y).toBe(56);
+  expect((await sidebar.boundingBox())!.y).toBe(40);
   const strip = page.locator(".titlebar-drag");
   await expect(strip).toHaveCount(1);
   expect(
@@ -29,11 +29,15 @@ test("macOS keeps the sidebar below the traffic lights and drops the inset in fu
       getComputedStyle(el).getPropertyValue("-webkit-app-region"),
     ),
   ).toBe("no-drag");
+  await sidebar.getByRole("button", { name: "设置", exact: true }).click();
+  const heading = page.getByRole("heading", { name: "设置", exact: true });
+  expect((await heading.boundingBox())!.x).toBeGreaterThanOrEqual(94);
+  await page.getByRole("button", { name: "关闭设置" }).click();
   await page.evaluate(() => (window as any).__setFullscreen(true));
   await expect(strip).toHaveCount(0);
   await expect.poll(async () => (await sidebar.boundingBox())!.y).toBe(12);
   await page.evaluate(() => (window as any).__setFullscreen(false));
-  await expect.poll(async () => (await sidebar.boundingBox())!.y).toBe(56);
+  await expect.poll(async () => (await sidebar.boundingBox())!.y).toBe(40);
 });
 
 test("web preview and other platforms keep the sidebar at the window gutter", async ({

@@ -1,37 +1,216 @@
-import { useState, type ReactElement } from "react";
 import {
-  BookOpen,
-  Check,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
+import {
+  ChevronRight,
   Compass,
-  Download,
-  HardDrive,
   LoaderCircle,
+  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   Search,
-  Upload,
-  Waypoints,
+  Settings2,
 } from "lucide-react";
 import type { BoardSummary } from "../shared/types";
+import { api } from "../api";
+import {
+  listSessions,
+  sessionClock,
+  type SessionEntry,
+} from "../model/sessions";
 import { MOD } from "../model/shortcuts";
 import { tip } from "./Tooltip";
+
+export const SIDEBAR_DEFAULT_WIDTH = 244;
+export const SIDEBAR_MIN_WIDTH = 200;
+export const SIDEBAR_MAX_WIDTH = 400;
+
+export function clampSidebarWidth(width: number): number {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+}
 
 type WorkspaceSidebarProps = {
   boards: BoardSummary[];
   currentId: string;
   collapsed: boolean;
   switchingId: string | null;
-  saveStatus: "saved" | "saving" | "error";
-  desktop: boolean;
+  width: number;
+  onWidthChange: (width: number) => void;
+  onResizingChange: (resizing: boolean) => void;
   onToggle: () => void;
   onPick: (id: string) => void;
   onNew: () => void;
   onSearch: () => void;
-  onImport: () => void;
-  onExport: () => void;
-  transferBusy: boolean;
+  onSettings: () => void;
+  sessions: SessionEntry[];
+  currentSessionId?: string;
+  onOpenSession: (boardId: string, sessionId: string) => void;
+  onNewSession: () => void;
 };
+
+type BoardGroupProps = {
+  board: BoardSummary;
+  current: boolean;
+  collapsed: boolean;
+  switchingId: string | null;
+  sessions: SessionEntry[];
+  currentSessionId?: string;
+  onPick: () => void;
+  onOpenSession: (sessionId: string) => void;
+  onNewSession: () => void;
+};
+
+type SessionLoadState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; entries: SessionEntry[] };
+
+function BoardGroup({
+  board,
+  current,
+  collapsed,
+  switchingId,
+  sessions,
+  currentSessionId,
+  onPick,
+  onOpenSession,
+  onNewSession,
+}: BoardGroupProps): ReactElement {
+  const [expanded, setExpanded] = useState(current);
+  const [savedSessions, setSavedSessions] = useState<SessionLoadState>({
+    status: "loading",
+  });
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (current) setExpanded(true);
+  }, [current, currentSessionId]);
+  useEffect(() => {
+    if (current || !expanded || collapsed) return;
+    let cancelled = false;
+    setSavedSessions({ status: "loading" });
+    void api.loadBoard(board.id).then(
+      (value) => {
+        if (cancelled) return;
+        if (value) {
+          setSavedSessions({ status: "ready", entries: listSessions(value) });
+        } else {
+          setSavedSessions({ status: "error", message: "画布不存在" });
+        }
+      },
+      () => {
+        if (!cancelled)
+          setSavedSessions({ status: "error", message: "无法读取对话" });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [board.id, board.updatedAt, current, expanded, collapsed, retry]);
+  const sessionState: SessionLoadState = current
+    ? { status: "ready", entries: sessions }
+    : savedSessions;
+  const disabled = switchingId !== null;
+  const activeSessionId = current ? currentSessionId : undefined;
+  let sessionItems: ReactNode;
+  if (sessionState.status === "error") {
+    sessionItems = (
+      <li className="workspace-empty" role="alert">
+        {sessionState.message}。
+        <button onClick={() => setRetry((value) => value + 1)}>重试</button>
+      </li>
+    );
+  } else if (sessionState.status === "loading") {
+    sessionItems = (
+      <li className="workspace-empty" role="status">
+        正在读取对话…
+      </li>
+    );
+  } else if (!sessionState.entries.length) {
+    sessionItems = <li className="workspace-empty">还没有对话</li>;
+  } else {
+    sessionItems = sessionState.entries.map((session) => (
+      <li key={session.id}>
+        <button
+          className="workspace-session"
+          title={`${session.title} · ${session.anchorTitle} · ${sessionClock(session.time)}`}
+          aria-current={session.id === activeSessionId ? "true" : undefined}
+          disabled={disabled}
+          onClick={() => onOpenSession(session.id)}
+        >
+          <MessageSquare size={14} className="ico" />
+          <span>{session.title}</span>
+        </button>
+      </li>
+    ));
+  }
+  return (
+    <li>
+      <div className="workspace-board-row">
+        {!collapsed && (
+          <button
+            className="workspace-disclosure"
+            aria-label={`${expanded ? "收起" : "展开"}${board.title}的对话`}
+            aria-expanded={expanded}
+            aria-controls={`board-sessions-${board.id}`}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            <ChevronRight size={14} />
+          </button>
+        )}
+        <button
+          className="workspace-board"
+          aria-label={board.title}
+          title={board.title}
+          data-tip={collapsed ? board.title : undefined}
+          aria-current={current ? "page" : undefined}
+          disabled={disabled}
+          onClick={() => {
+            setExpanded(true);
+            onPick();
+          }}
+        >
+          {switchingId === board.id && (
+            <LoaderCircle size={14} className="ico spin" />
+          )}
+          {collapsed && switchingId !== board.id && (
+            <span aria-hidden="true">{Array.from(board.title)[0]}</span>
+          )}
+          <span className="workspace-copy workspace-board-title">
+            {board.title}
+          </span>
+          {current && <span className="workspace-current" aria-hidden="true" />}
+        </button>
+      </div>
+      {!collapsed && (
+        <ul
+          id={`board-sessions-${board.id}`}
+          className="workspace-sessions"
+          aria-label={`${board.title}的对话`}
+          hidden={!expanded}
+        >
+          {sessionItems}
+          {current && (
+            <li>
+              <button
+                className="workspace-session workspace-new-session"
+                disabled={disabled}
+                onClick={onNewSession}
+              >
+                <Plus size={14} className="ico" />
+                新对话
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+    </li>
+  );
+}
 
 /** Each entry selects the whole knowledge canvas and its conversations. */
 export function WorkspaceSidebar({
@@ -39,32 +218,37 @@ export function WorkspaceSidebar({
   currentId,
   collapsed,
   switchingId,
-  saveStatus,
-  desktop,
+  width,
+  onWidthChange,
+  onResizingChange,
   onToggle,
   onPick,
   onNew,
   onSearch,
-  onImport,
-  onExport,
-  transferBusy,
+  onSettings,
+  sessions,
+  currentSessionId,
+  onOpenSession,
+  onNewSession,
 }: WorkspaceSidebarProps): ReactElement {
   const [query, setQuery] = useState("");
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const resizeOrigin = useRef<{ x: number; width: number } | null>(null);
+  function stopResizing(): void {
+    if (!resizeOrigin.current) return;
+    resizeOrigin.current = null;
+    onResizingChange(false);
+  }
+  useEffect(() => {
+    if (collapsed) {
+      resizeOrigin.current = null;
+      onResizingChange(false);
+    }
+    return () => onResizingChange(false);
+  }, [collapsed, onResizingChange]);
   const search = query.trim().toLocaleLowerCase();
   const visibleBoards = collapsed
     ? boards
     : boards.filter((b) => b.title.toLocaleLowerCase().includes(search));
-  const hoveredIndex = visibleBoards.findIndex((b) => b.id === hoveredId);
-  let savedLabel = desktop ? "已保存在这台 Mac" : "已保存在此浏览器";
-  let StatusIcon = Check;
-  if (saveStatus === "saving") {
-    savedLabel = "正在保存…";
-    StatusIcon = LoaderCircle;
-  } else if (saveStatus === "error") {
-    savedLabel = "保存失败";
-    StatusIcon = HardDrive;
-  }
 
   return (
     <aside
@@ -141,80 +325,83 @@ export function WorkspaceSidebar({
         aria-label="知识画布"
         aria-busy={switchingId !== null}
       >
-        <div
-          className="workspace-board-list"
-          onPointerLeave={() => setHoveredId(null)}
-        >
-          {hoveredIndex >= 0 && (
-            <span
-              className="workspace-hover"
-              aria-hidden="true"
-              style={{ transform: `translateY(${hoveredIndex * 44}px)` }}
-            />
-          )}
+        <div className="workspace-board-list">
           <ul>
-            {visibleBoards.map((b) => {
-              const Icon = b.kind === "walkthrough" ? BookOpen : Waypoints;
-              return (
-                <li key={b.id}>
-                  <button
-                    className="workspace-board"
-                    aria-label={b.title}
-                    title={b.title}
-                    data-tip={collapsed ? b.title : undefined}
-                    aria-current={b.id === currentId ? "page" : undefined}
-                    disabled={switchingId !== null}
-                    onPointerEnter={() => setHoveredId(b.id)}
-                    onClick={() => onPick(b.id)}
-                  >
-                    {switchingId === b.id ? (
-                      <LoaderCircle size={17} className="ico spin" />
-                    ) : (
-                      <Icon size={17} className="ico" />
-                    )}
-                    <span className="workspace-copy workspace-board-title">
-                      {b.title}
-                    </span>
-                    {b.id === currentId && (
-                      <span className="workspace-current" aria-hidden="true" />
-                    )}
-                  </button>
-                </li>
-              );
-            })}
+            {visibleBoards.map((b) => (
+              <BoardGroup
+                key={b.id}
+                board={b}
+                current={b.id === currentId}
+                collapsed={collapsed}
+                switchingId={switchingId}
+                sessions={sessions}
+                currentSessionId={currentSessionId}
+                onPick={() => onPick(b.id)}
+                onOpenSession={(id) => onOpenSession(b.id, id)}
+                onNewSession={onNewSession}
+              />
+            ))}
           </ul>
         </div>
         {!visibleBoards.length && (
           <p className="workspace-empty">没有找到画布，换个词试试。</p>
         )}
       </nav>
-      <div className="workspace-transfer">
+      <div className="workspace-settings">
         <button
           className="workspace-action"
-          {...tip("导入画板")}
-          disabled={transferBusy || switchingId !== null}
-          onClick={onImport}
+          {...tip("设置", `${MOD}.`)}
+          onClick={onSettings}
         >
-          <Upload size={17} className="ico" />
-          <span className="workspace-copy">导入画板</span>
-        </button>
-        <button
-          className="workspace-action"
-          {...tip("导出当前画板")}
-          disabled={transferBusy || switchingId !== null}
-          onClick={onExport}
-        >
-          <Download size={17} className="ico" />
-          <span className="workspace-copy">导出当前画板</span>
+          <Settings2 size={17} className="ico" />
+          <span className="workspace-copy">设置</span>
         </button>
       </div>
-      <footer className="workspace-footer" data-tip={savedLabel}>
-        <StatusIcon
-          size={16}
-          className={`ico ${saveStatus === "saving" ? "spin" : ""}`}
+      {!collapsed && (
+        <div
+          className="workspace-resizer"
+          role="separator"
+          tabIndex={0}
+          aria-label="调整左侧栏宽度"
+          aria-orientation="vertical"
+          aria-valuemin={SIDEBAR_MIN_WIDTH}
+          aria-valuemax={SIDEBAR_MAX_WIDTH}
+          aria-valuenow={width}
+          onPointerDown={(e) => {
+            if (e.button !== 0 || !e.isPrimary) return;
+            e.preventDefault();
+            resizeOrigin.current = { x: e.clientX, width };
+            e.currentTarget.setPointerCapture(e.pointerId);
+            onResizingChange(true);
+          }}
+          onPointerMove={(e) => {
+            const origin = resizeOrigin.current;
+            if (origin)
+              onWidthChange(
+                clampSidebarWidth(origin.width + e.clientX - origin.x),
+              );
+          }}
+          onPointerUp={(e) => {
+            stopResizing();
+            if (e.currentTarget.hasPointerCapture(e.pointerId))
+              e.currentTarget.releasePointerCapture(e.pointerId);
+          }}
+          onPointerCancel={stopResizing}
+          onLostPointerCapture={stopResizing}
+          onDoubleClick={() => onWidthChange(SIDEBAR_DEFAULT_WIDTH)}
+          onKeyDown={(e) => {
+            let next = width;
+            if (e.key === "ArrowLeft") next -= 10;
+            else if (e.key === "ArrowRight") next += 10;
+            else if (e.key === "Home") next = SIDEBAR_MIN_WIDTH;
+            else if (e.key === "End") next = SIDEBAR_MAX_WIDTH;
+            else return;
+            e.preventDefault();
+            e.stopPropagation();
+            onWidthChange(clampSidebarWidth(next));
+          }}
         />
-        <span className="workspace-copy">{savedLabel}</span>
-      </footer>
+      )}
     </aside>
   );
 }

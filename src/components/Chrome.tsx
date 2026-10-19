@@ -13,7 +13,6 @@ import {
   MousePointer2,
   Plus,
   Scan,
-  Settings2,
   Sparkles,
   SquarePen,
   StickyNote,
@@ -30,8 +29,6 @@ export function Palette({
   onNew,
   onWalkthrough,
   onSettings,
-  onImport,
-  onExport,
   onClose,
 }: {
   boards: BoardSummary[];
@@ -41,8 +38,6 @@ export function Palette({
   onNew: () => void;
   onWalkthrough: () => void;
   onSettings: () => void;
-  onImport: () => void;
-  onExport: () => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -73,20 +68,6 @@ export function Palette({
         current: false,
       },
       {
-        key: "+import",
-        label: "导入画板",
-        hint: "学习数据",
-        run: onImport,
-        current: false,
-      },
-      {
-        key: "+export",
-        label: "导出当前画板",
-        hint: "数据 / Markdown / 截图",
-        run: onExport,
-        current: false,
-      },
-      {
         key: "+ai",
         label: "设置",
         hint: `${MOD}.`,
@@ -94,17 +75,7 @@ export function Palette({
         current: false,
       },
     ],
-    [
-      boards,
-      q,
-      currentId,
-      onPick,
-      onNew,
-      onWalkthrough,
-      onSettings,
-      onImport,
-      onExport,
-    ],
+    [boards, q, currentId, onPick, onNew, onWalkthrough, onSettings],
   );
   useEffect(() => setCursor(0), [q]);
   return (
@@ -206,14 +177,12 @@ export function Dock({
   onAddConcept,
   onNote,
   onAsk,
-  onSettings,
 }: {
   tool: Tool;
   setTool: (t: Tool) => void;
   onAddConcept: () => void;
   onNote: () => void;
   onAsk: () => void;
-  onSettings: () => void;
 }) {
   const b = (t: Tool, label: string, key: string, icon: React.ReactNode) => (
     <button
@@ -241,9 +210,6 @@ export function Dock({
       <button className="ask" onClick={onAsk}>
         <Sparkles size={15} className="ico" />
         问一问 <kbd>/</kbd>
-      </button>
-      <button className="b" {...tip("设置", `${MOD}.`)} onClick={onSettings}>
-        <Settings2 size={15} className="ico" />
       </button>
     </nav>
   );

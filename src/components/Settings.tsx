@@ -1,6 +1,9 @@
 import ofl from "lxgw-wenkai-webfont/OFL.txt?raw";
 import { useEffect, useRef, useState } from "react";
 import {
+  Download,
+  HardDrive,
+  Upload,
   Info,
   Keyboard,
   KeyRound,
@@ -103,10 +106,11 @@ export function ApiKeyField({
   );
 }
 
-type Section = "ai" | "appearance" | "shortcuts" | "about";
+type Section = "ai" | "appearance" | "data" | "shortcuts" | "about";
 const SECTIONS: [Section, string, React.ReactNode][] = [
   ["ai", "AI 服务", <Sparkles size={16} className="ico" />],
   ["appearance", "外观", <PaletteIcon size={16} className="ico" />],
+  ["data", "画板数据", <HardDrive size={16} className="ico" />],
   ["shortcuts", "快捷键", <Keyboard size={16} className="ico" />],
   ["about", "关于与许可", <Info size={16} className="ico" />],
 ];
@@ -119,6 +123,10 @@ export function Settings({
   onClose,
   onSave,
   onTest,
+  boardTitle,
+  transferBusy,
+  onImport,
+  onExport,
   initial = "ai",
 }: {
   settings: AISettings;
@@ -127,6 +135,10 @@ export function Settings({
   onClose: () => void;
   onSave: (s: AISettingsInput) => Promise<void>;
   onTest: (s: AISettingsInput) => Promise<AIConnectionResult>;
+  boardTitle?: string;
+  transferBusy: boolean;
+  onImport: () => void;
+  onExport: () => void;
   initial?: Section;
 }) {
   const [section, setSection] = useState<Section>(initial);
@@ -356,6 +368,43 @@ export function Settings({
                   <b>字体</b>
                   <small>霞鹜文楷 LXGW WenKai，随应用离线打包</small>
                 </span>
+              </div>
+            </div>
+          )}
+          {section === "data" && (
+            <div className="settings-section" aria-labelledby="sec-data">
+              <h2 id="sec-data">画板数据</h2>
+              <p className="sec-lede">
+                导入画板可恢复学习记录和对话。导出时可选择画板数据、Markdown
+                或截图。
+              </p>
+              <div className="setting-row">
+                <span>
+                  <b>导入画板</b>
+                  <small>从之前导出的画板数据文件恢复</small>
+                </span>
+                <button
+                  className="btn"
+                  disabled={transferBusy}
+                  onClick={onImport}
+                >
+                  <Upload size={16} className="ico" />
+                  导入画板
+                </button>
+              </div>
+              <div className="setting-row">
+                <span>
+                  <b>导出当前画板</b>
+                  <small>{boardTitle ?? "请先打开一张画板"}</small>
+                </span>
+                <button
+                  className="btn"
+                  disabled={transferBusy || !boardTitle}
+                  onClick={onExport}
+                >
+                  <Download size={16} className="ico" />
+                  导出画板
+                </button>
               </div>
             </div>
           )}
