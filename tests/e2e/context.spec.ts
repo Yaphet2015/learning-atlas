@@ -12,7 +12,7 @@ async function open(page: Page) {
   await expect(page.locator(".react-flow__node-concept")).toHaveCount(6);
 }
 
-/** The card's box once the opening fit has settled (two equal reads in a row). */
+/** The card's box once viewport movement has settled (two equal reads in a row). */
 async function box(page: Page, id: string) {
   let last = "";
   await expect
@@ -30,6 +30,17 @@ async function box(page: Page, id: string) {
     width: number;
     height: number;
   };
+}
+
+async function fitWithDrawer(page: Page, anchorId: string) {
+  await expect(page.locator(".drawer")).toBeVisible();
+  // Opening the drawer resizes the canvas, then frames its anchor. A full fit
+  // requested during that sequence can be overwritten, hiding the next card.
+  await page.locator(".react-flow").evaluate(async (canvas) => {
+    await Promise.all(canvas.getAnimations().map((a) => a.finished));
+  });
+  await box(page, anchorId);
+  await page.getByRole("button", { name: "查看全图" }).click();
 }
 
 test("a marquee on empty canvas picks cards and 问 AI sends them all", async ({
@@ -75,8 +86,7 @@ test("Shift/⌘-click toggles cards; a plain click or Esc goes back to one", asy
   await open(page);
   const bar = page.getByRole("toolbar", { name: "多选" });
   await card(page, "c-what").click();
-  // The drawer now opens on selection; fit the cards inside the narrower canvas.
-  await page.getByRole("button", { name: "查看全图" }).click();
+  await fitWithDrawer(page, "c-what");
   await card(page, "c-how").click({ modifiers: ["Shift"] });
   await card(page, "c-money").click({ modifiers: ["ControlOrMeta"] });
   await expect(bar).toContainText("已选 3 张卡");
@@ -174,7 +184,7 @@ test("selected cards come along: the dock's 问一问 and the drawer's new conve
   const drawer = page.locator(".drawer");
   // Two picked cards, then the dock's 问一问: one conversation carrying both.
   await card(page, "c-how").click();
-  await page.getByRole("button", { name: "查看全图" }).click();
+  await fitWithDrawer(page, "c-how");
   await card(page, "c-money").click({ modifiers: ["Shift"] });
   await page.getByRole("button", { name: "问一问" }).click();
   await expect(drawer).toBeVisible();
