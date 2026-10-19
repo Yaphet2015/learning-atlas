@@ -95,10 +95,10 @@ test("roots side by side: a new root beside, its own tree, 走一遍 and the out
   expect(outline).toContain("§B1 L1 免赔额");
   await page.keyboard.press("Escape");
   // 走一遍 walks the cards of both trees.
+  // Clear the selected card with Escape: a fixed pane coordinate can hit a
+  // ghost add-card hint while the closing drawer moves the viewport.
   await page.keyboard.press("Escape");
-  await page
-    .locator(".react-flow__pane")
-    .click({ position: { x: 30, y: 600 } });
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
   await page.getByRole("button", { name: /走一遍/ }).click();
   const study = page.getByRole("dialog", { name: "走一遍" });
   await expect(study).toBeVisible();
