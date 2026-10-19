@@ -108,13 +108,12 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     await expect(nextPage.getByLabel("批注内容")).toHaveValue(
       "Close immediately: this edit must survive.",
     );
-    // The reopened board lists that conversation in the drawer's session list.
-    await nextPage.getByRole("button", { name: "对话列表" }).click();
+    // The reopened board lists and selects that conversation in the sidebar.
     const current = nextPage
-      .getByLabel("这张白板的对话")
-      .locator('.session[aria-current="true"]');
+      .getByRole("complementary", { name: "学习空间", exact: true })
+      .locator('.workspace-session[aria-current="true"]');
     await expect(current).toContainText("Close immediately");
-    await expect(current).toContainText("自由批注");
+    await expect(current).toHaveAttribute("title", /自由批注/);
     await nextPage.screenshot({
       path: "test-results/atlas-macos-sticky-reopened.png",
       fullPage: true,

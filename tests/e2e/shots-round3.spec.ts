@@ -40,19 +40,20 @@ async function ask(page: Page, text: string, answers: number) {
 }
 
 for (const mode of ["light", "dark"] as const) {
-  test(`2 · session strip in the drawer · ${mode}`, async ({ page }) => {
+  test(`2 · conversations in the sidebar · ${mode}`, async ({ page }) => {
     await open(page, mode);
     await card(page, "c-how").click();
     await page.keyboard.press("/");
     await ask(page, "赔付次数怎么算？", 1);
     await page
       .locator(".drawer")
-      .getByRole("button", { name: "新对话" })
+      .getByRole("button", { name: "更多操作" })
       .click();
+    await page.getByRole("menuitem", { name: "在这张卡上新开对话" }).click();
     await ask(page, "间隔期是多久？", 1);
     await page.mouse.move(10, 600);
     await page.waitForTimeout(300);
-    await shot(page, "02-session-strip", mode);
+    await shot(page, "02-sidebar-sessions", mode);
     await page.keyboard.press("Escape");
     await page.keyboard.press("ControlOrMeta+k");
     await page.waitForTimeout(300);

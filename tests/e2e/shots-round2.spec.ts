@@ -87,16 +87,17 @@ for (const mode of ["light", "dark"] as const) {
     await card(page, "c-how").click();
     await page.keyboard.press("/");
     await ask(page, "赔付次数怎么算？", 1);
-    await drawer.getByRole("button", { name: "对话列表" }).click();
-    await drawer.getByRole("button", { name: "新对话" }).click();
+    await drawer.getByRole("button", { name: "更多操作" }).click();
+    await page.getByRole("menuitem", { name: "在这张卡上新开对话" }).click();
     await ask(page, "间隔期是多久？", 1);
     await card(page, "c-when-not").click();
     await card(page, "c-wait").click({ modifiers: ["Shift"] });
     await page.getByRole("button", { name: /问 AI/ }).click();
     await ask(page, "等待期内确诊怎么办？", 1);
-    await drawer.getByRole("button", { name: "对话列表" }).click();
     await page.waitForTimeout(400);
-    await drawer.screenshot({ path: `${dir}/sessions-${mode}.png` });
+    await page
+      .locator(".workspace-sidebar")
+      .screenshot({ path: `${dir}/sessions-${mode}.png` });
     await page.screenshot({ path: `${dir}/sessions-full-${mode}.png` });
   });
 }
