@@ -142,6 +142,7 @@ kbd,
   inset: 0;
   --canvas-left: 0px;
   --canvas-right: 0px;
+  --sidebar-w: var(--sidebar-expanded-w, 244px);
 }
 .with-sidebar {
   --canvas-left: calc(var(--sidebar-w) + 2 * var(--gutter));
@@ -669,6 +670,38 @@ kbd,
     width 280ms var(--ease-out),
     top 280ms var(--ease-out);
 }
+.workspace-resizer {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  bottom: 12px;
+  width: 8px;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+  border-radius: var(--r-xs);
+  outline-offset: -2px;
+}
+.workspace-resizer:hover,
+.workspace-resizer:focus-visible,
+.sidebar-resizing .workspace-resizer {
+  background: var(--accent-wash);
+}
+.sidebar-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+.sidebar-resizing .workspace-sidebar,
+.sidebar-resizing .react-flow,
+.sidebar-resizing .dock,
+.sidebar-resizing .progress,
+.sidebar-resizing .map-unit,
+.sidebar-resizing .toast,
+.sidebar-resizing .hint,
+.sidebar-resizing .map-progress,
+.sidebar-resizing .relation-bar {
+  transition: none;
+}
 .workspace-header {
   display: flex;
   align-items: center;
@@ -797,11 +830,11 @@ kbd,
 .workspace-board-row {
   display: flex;
   align-items: center;
-  gap: 2px;
 }
 .workspace-board-row .workspace-board {
   flex: 1;
   min-width: 0;
+  padding-left: 2px;
 }
 .workspace-disclosure {
   flex: none;
@@ -819,7 +852,7 @@ kbd,
   transform: rotate(90deg);
 }
 .workspace-board-list .workspace-sessions {
-  margin: 4px 0 8px 30px;
+  margin: 4px 0 8px 20px;
   padding-left: 8px;
   border-left: 1px solid var(--border);
   gap: 2px;
@@ -861,9 +894,6 @@ kbd,
   color: var(--ink);
   background: var(--accent-wash);
 }
-.workspace-board[aria-current="page"] > .ico {
-  color: var(--accent-ink);
-}
 .workspace-current {
   flex: none;
   width: 5px;
@@ -876,16 +906,6 @@ kbd,
   padding: 8px 10px;
   color: var(--ink-3);
   font-size: 12px;
-}
-.workspace-footer {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 14px 10px 6px;
-  border-top: 1px solid var(--border);
-  color: var(--ink-3);
-  font: 400 11px var(--kai-mono);
 }
 .workspace-settings {
   padding-top: 8px;
@@ -986,8 +1006,7 @@ kbd,
   padding: 12px 0 0;
 }
 .sidebar-collapsed .workspace-action,
-.sidebar-collapsed .workspace-board,
-.sidebar-collapsed .workspace-footer {
+.sidebar-collapsed .workspace-board {
   gap: 0;
   padding-left: 10px;
   padding-right: 10px;

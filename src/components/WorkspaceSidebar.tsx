@@ -1,10 +1,13 @@
-import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import {
-  BookOpen,
-  Check,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
+import {
   ChevronRight,
   Compass,
-  HardDrive,
   LoaderCircle,
   MessageSquare,
   PanelLeftClose,
@@ -12,7 +15,6 @@ import {
   Plus,
   Search,
   Settings2,
-  Waypoints,
 } from "lucide-react";
 import type { BoardSummary } from "../shared/types";
 import { api } from "../api";
@@ -24,13 +26,22 @@ import {
 import { MOD } from "../model/shortcuts";
 import { tip } from "./Tooltip";
 
+export const SIDEBAR_DEFAULT_WIDTH = 244;
+export const SIDEBAR_MIN_WIDTH = 200;
+export const SIDEBAR_MAX_WIDTH = 400;
+
+export function clampSidebarWidth(width: number): number {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+}
+
 type WorkspaceSidebarProps = {
   boards: BoardSummary[];
   currentId: string;
   collapsed: boolean;
   switchingId: string | null;
-  saveStatus: "saved" | "saving" | "error";
-  desktop: boolean;
+  width: number;
+  onWidthChange: (width: number) => void;
+  onResizingChange: (resizing: boolean) => void;
   onToggle: () => void;
   onPick: (id: string) => void;
   onNew: () => void;
@@ -137,7 +148,6 @@ function BoardGroup({
       </li>
     ));
   }
-  const Icon = board.kind === "walkthrough" ? BookOpen : Waypoints;
   return (
     <li>
       <div className="workspace-board-row">
@@ -164,10 +174,11 @@ function BoardGroup({
             onPick();
           }}
         >
-          {switchingId === board.id ? (
-            <LoaderCircle size={17} className="ico spin" />
-          ) : (
-            <Icon size={17} className="ico" />
+          {switchingId === board.id && (
+            <LoaderCircle size={14} className="ico spin" />
+          )}
+          {collapsed && switchingId !== board.id && (
+            <span aria-hidden="true">{Array.from(board.title)[0]}</span>
           )}
           <span className="workspace-copy workspace-board-title">
             {board.title}
@@ -207,8 +218,9 @@ export function WorkspaceSidebar({
   currentId,
   collapsed,
   switchingId,
-  saveStatus,
-  desktop,
+  width,
+  onWidthChange,
+  onResizingChange,
   onToggle,
   onPick,
   onNew,
@@ -220,19 +232,23 @@ export function WorkspaceSidebar({
   onNewSession,
 }: WorkspaceSidebarProps): ReactElement {
   const [query, setQuery] = useState("");
+  const resizeOrigin = useRef<{ x: number; width: number } | null>(null);
+  function stopResizing(): void {
+    if (!resizeOrigin.current) return;
+    resizeOrigin.current = null;
+    onResizingChange(false);
+  }
+  useEffect(() => {
+    if (collapsed) {
+      resizeOrigin.current = null;
+      onResizingChange(false);
+    }
+    return () => onResizingChange(false);
+  }, [collapsed, onResizingChange]);
   const search = query.trim().toLocaleLowerCase();
   const visibleBoards = collapsed
     ? boards
     : boards.filter((b) => b.title.toLocaleLowerCase().includes(search));
-  let savedLabel = desktop ? "已保存在这台 Mac" : "已保存在此浏览器";
-  let StatusIcon = Check;
-  if (saveStatus === "saving") {
-    savedLabel = "正在保存…";
-    StatusIcon = LoaderCircle;
-  } else if (saveStatus === "error") {
-    savedLabel = "保存失败";
-    StatusIcon = HardDrive;
-  }
 
   return (
     <aside
@@ -341,13 +357,51 @@ export function WorkspaceSidebar({
           <span className="workspace-copy">设置</span>
         </button>
       </div>
-      <footer className="workspace-footer" data-tip={savedLabel}>
-        <StatusIcon
-          size={16}
-          className={`ico ${saveStatus === "saving" ? "spin" : ""}`}
+      {!collapsed && (
+        <div
+          className="workspace-resizer"
+          role="separator"
+          tabIndex={0}
+          aria-label="调整左侧栏宽度"
+          aria-orientation="vertical"
+          aria-valuemin={SIDEBAR_MIN_WIDTH}
+          aria-valuemax={SIDEBAR_MAX_WIDTH}
+          aria-valuenow={width}
+          onPointerDown={(e) => {
+            if (e.button !== 0 || !e.isPrimary) return;
+            e.preventDefault();
+            resizeOrigin.current = { x: e.clientX, width };
+            e.currentTarget.setPointerCapture(e.pointerId);
+            onResizingChange(true);
+          }}
+          onPointerMove={(e) => {
+            const origin = resizeOrigin.current;
+            if (origin)
+              onWidthChange(
+                clampSidebarWidth(origin.width + e.clientX - origin.x),
+              );
+          }}
+          onPointerUp={(e) => {
+            stopResizing();
+            if (e.currentTarget.hasPointerCapture(e.pointerId))
+              e.currentTarget.releasePointerCapture(e.pointerId);
+          }}
+          onPointerCancel={stopResizing}
+          onLostPointerCapture={stopResizing}
+          onDoubleClick={() => onWidthChange(SIDEBAR_DEFAULT_WIDTH)}
+          onKeyDown={(e) => {
+            let next = width;
+            if (e.key === "ArrowLeft") next -= 10;
+            else if (e.key === "ArrowRight") next += 10;
+            else if (e.key === "Home") next = SIDEBAR_MIN_WIDTH;
+            else if (e.key === "End") next = SIDEBAR_MAX_WIDTH;
+            else return;
+            e.preventDefault();
+            e.stopPropagation();
+            onWidthChange(clampSidebarWidth(next));
+          }}
         />
-        <span className="workspace-copy">{savedLabel}</span>
-      </footer>
+      )}
     </aside>
   );
 }

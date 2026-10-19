@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   ReactFlow,
   ConnectionMode,
@@ -95,7 +102,11 @@ import {
   Progress,
   type Tool,
 } from "./components/Chrome";
-import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
+import {
+  WorkspaceSidebar,
+  SIDEBAR_DEFAULT_WIDTH,
+  clampSidebarWidth,
+} from "./components/WorkspaceSidebar";
 import { Drawer } from "./components/Drawer";
 import { StudyMode } from "./components/StudyMode";
 import { Outline } from "./components/Outline";
@@ -197,6 +208,24 @@ export default function App() {
       () => matchMedia("(prefers-color-scheme: dark)").matches,
     ),
     mobile = useMedia("(max-width: 720px)");
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem("studyboard-sidebar-width"));
+      if (Number.isFinite(saved) && saved > 0) return clampSidebarWidth(saved);
+    } catch {
+      // Use the default when browser preference storage is unavailable.
+    }
+    return SIDEBAR_DEFAULT_WIDTH;
+  });
+  const [sidebarResizing, setSidebarResizing] = useState(false);
+  useEffect(() => {
+    if (sidebarResizing) return;
+    try {
+      localStorage.setItem("studyboard-sidebar-width", String(sidebarWidth));
+    } catch {
+      // Resizing still works when browser preference storage is unavailable.
+    }
+  }, [sidebarWidth, sidebarResizing]);
   const [closing, setClosing] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [historyNoteId, setHistoryNoteId] = useState<string | null>(null);
@@ -1637,7 +1666,8 @@ export default function App() {
     );
   return (
     <main
-      className={`app tool-${tool} ${!mobile ? "with-sidebar" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${drawerNote ? "with-drawer" : ""} ${spacePan ? "space-pan" : ""} ${panning ? "is-panning" : ""}`}
+      style={{ "--sidebar-expanded-w": `${sidebarWidth}px` } as CSSProperties}
+      className={`app tool-${tool} ${sidebarResizing ? "sidebar-resizing" : ""} ${!mobile ? "with-sidebar" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${drawerNote ? "with-drawer" : ""} ${spacePan ? "space-pan" : ""} ${panning ? "is-panning" : ""}`}
     >
       <div className="grain" />
       <input
@@ -1779,8 +1809,9 @@ export default function App() {
             currentId={board.id}
             collapsed={sidebarCollapsed}
             switchingId={switchingBoardId}
-            saveStatus={saveStatus}
-            desktop={isDesktop}
+            width={sidebarWidth}
+            onWidthChange={setSidebarWidth}
+            onResizingChange={setSidebarResizing}
             onToggle={() => setSidebarCollapsed((value) => !value)}
             onPick={(id) => void switchBoard(id)}
             onNew={() => setShowNew(true)}
