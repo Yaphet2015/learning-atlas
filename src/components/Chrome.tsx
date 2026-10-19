@@ -227,27 +227,23 @@ export function Dock({
   );
   return (
     <nav className="chrome dock" aria-label="工具">
-      {b("select", "选择", "V", <MousePointer2 size={18} className="ico" />)}
-      {b("hand", "平移", "H", <Hand size={18} className="ico" />)}
+      {b("select", "选择", "V", <MousePointer2 size={15} className="ico" />)}
+      {b("hand", "平移", "H", <Hand size={15} className="ico" />)}
       <span className="sep" />
       <button className="b" {...tip("加概念", "Tab")} onClick={onAddConcept}>
-        <SquarePen size={18} className="ico" />
+        <SquarePen size={15} className="ico" />
       </button>
-      {b("link", "连线", "L", <Link2 size={18} className="ico" />)}
+      {b("link", "连线", "L", <Link2 size={15} className="ico" />)}
       <button className="b" {...tip("批注", "N")} onClick={onNote}>
-        <StickyNote size={18} className="ico" />
+        <StickyNote size={15} className="ico" />
       </button>
       <span className="sep" />
       <button className="ask" onClick={onAsk}>
-        <Sparkles size={17} className="ico" />
+        <Sparkles size={15} className="ico" />
         问一问 <kbd>/</kbd>
       </button>
-      <button
-        className="b small"
-        {...tip("设置", `${MOD}.`)}
-        onClick={onSettings}
-      >
-        <Settings2 size={16} className="ico" />
+      <button className="b" {...tip("设置", `${MOD}.`)} onClick={onSettings}>
+        <Settings2 size={15} className="ico" />
       </button>
     </nav>
   );

@@ -1045,44 +1045,46 @@ kbd,
   gap: 6px;
   border-radius: var(--r-sm);
 }
+.dock,
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 38px;
+  padding: 5px;
+  border-radius: var(--r-lg);
+}
+.dock .b,
+.zoom button {
+  width: 28px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+}
 .dock {
   left: 50%;
   bottom: var(--gutter);
   transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 5px;
-  height: 52px;
-}
-.dock .b {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--r-md);
-  color: var(--ink-2);
-}
-.dock .b.small {
-  width: 32px;
 }
 .dock .b.on {
   color: var(--paper);
   background: var(--ink);
 }
 .dock .sep {
-  height: 22px;
-  margin: 0 5px;
+  height: 18px;
+  margin: 0 4px;
 }
 .dock .ask {
   display: flex;
   align-items: center;
-  gap: 7px;
-  height: 40px;
-  padding: 0 12px 0 10px;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
   color: var(--accent-ink);
-  font: 700 16px var(--kai);
-  border-radius: var(--r-md);
+  font: 700 14px var(--kai);
+  border-radius: var(--r-sm);
 }
 .map-unit {
   position: fixed;
@@ -1213,38 +1215,33 @@ kbd,
   border-radius: var(--r-sm);
 }
 .mini-node {
-  fill: var(--card);
-  stroke: var(--border-strong);
-  stroke-width: 5;
+  fill: var(--ink-2);
+  stroke: var(--ink);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 .mini-node.s-unseen {
-  fill: transparent;
-  stroke: var(--dash);
-  stroke-dasharray: 14 14;
+  fill: var(--ink-3);
+  stroke: var(--ink-2);
+  stroke-dasharray: 3 2;
 }
 .mini-node.s-explained {
-  fill: var(--tint-warm);
-  stroke: var(--border-strong);
-  stroke-width: 8;
+  fill: var(--accent);
+  stroke: var(--accent-ink);
+  stroke-width: 1.25;
 }
 .mini-node.ghost {
-  fill: none;
+  fill: var(--accent-wash);
   stroke: var(--accent);
+  stroke-width: 1.25;
 }
 .zoom {
   position: static;
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 5px 8px;
 }
-.zoom button {
-  width: 28px;
-  height: 26px;
-  display: grid;
-  place-items: center;
+.zoom .lab {
   color: var(--ink-2);
-  border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums;
 }
 .zoom button:hover {
   background: color-mix(in srgb, var(--ink) 6%, transparent);
