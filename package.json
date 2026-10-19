@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A visual learning canvas for macOS",
+  "description": "A local-first AI learning canvas for macOS with concept maps, contextual conversations, and Markdown / PNG export.",
   "author": "Studyboard contributors",
   "license": "UNLICENSED",
   "main": "dist-electron/electron/main.js",
@@ -89,5 +89,20 @@
     "type": "git",
     "url": "https://github.com/Yaphet2015/studyboard.git"
   },
-  "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6"
+  "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6",
+  "homepage": "https://github.com/Yaphet2015/studyboard#readme",
+  "bugs": {
+    "url": "https://github.com/Yaphet2015/studyboard/issues"
+  },
+  "keywords": [
+    "studyboard",
+    "visual-learning",
+    "ai-learning",
+    "concept-map",
+    "knowledge-map",
+    "whiteboard",
+    "local-first",
+    "macos",
+    "electron"
+  ]
 }

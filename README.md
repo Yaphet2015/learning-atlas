@@ -1,175 +1,125 @@
-# Studyboard
+# Studyboard — macOS AI 视觉学习白板
 
-把一个问题拆成一棵概念树，在卡片上带着上下文向 AI 提问的 macOS 学习白板。
+把一个问题展开成知识地图，在概念旁提问，逐步记录自己的理解。
 
-A local-first visual learning canvas for macOS. The interface is in Chinese. It is not a hosted service.
+Studyboard 是面向 macOS 的本地优先 AI 学习白板（visual learning canvas）。它把概念卡片、关系连线和 AI 对话放在同一张无限画布上，适合拆解复杂概念、梳理知识关系和复习学习过程。界面以中文为主，目前处于早期预览阶段。
+
+**[下载 macOS 版](https://github.com/Yaphet2015/studyboard/releases/tag/latest)** · [使用指南](docs/user-guide.md) · [本地开发](#本地开发) · [反馈问题](https://github.com/Yaphet2015/studyboard/issues)
+
+> Studyboard is a local-first AI learning canvas for macOS. Build concept maps, ask questions with selected context, and export your learning as JSON, Markdown, or PNG. The interface is primarily Chinese. Bring your own API key for AI features.
 
 <picture>
 	<source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.png">
 	<img alt="Studyboard：左侧是画布列表，中间是从起点问题展开的概念树，右侧抽屉里是一段针对「怎么赔」这张卡的 AI 对话" src="docs/images/hero-light.png">
 </picture>
 
-## 能做什么
+## 你可以用它做什么
 
-- **概念树。** 每张白板从一个起点问题开始，向下拆子概念，向右加并列概念，卡片按 §1、§1.2 自动编号。起点之上还能加一个更大的问题，旁边也能再放几个并列的起点问题，编号为 §B、§B1。
-- **理解进度。** 每张卡标记为待探索、探索中或我能解释。「走一遍」按顺序逐张复习整张白板。
-- **AI 提示。** 鼠标在卡片上停留约 0.6 秒，`+` 旁会出现一个淡色的下一步建议，点一下就生成那张卡。每张卡只请求一次，结果缓存在卡片上。没有配置 AI 时不出现提示，也不发请求。
-- **带上下文的对话。** 在卡片上按 `/` 开一段对话。选中的卡片会一起作为上下文发给 AI，AI 实际参考了哪些内容会显示在对话里。每段对话是右侧抽屉里的一个标签，一张卡可以有多段对话。
-- **答案不会自动改地图。** AI 的回答留在对话里，只有你点「把回答加进地图」才会变成卡片。
-- **结构化图示。** 过程、组成和对照图由应用内置的 React 组件绘制，不执行模型生成的代码。
-- **导入与导出。** 可导出可重新导入的学习数据（`.studyboard.json`，含完整对话），也可导出 Markdown 和整张图的 PNG。
-- **本地优先。** 自动保存、撤销、深浅色主题和设置页（`⌘.`）都在本地完成。只有你提问时才会联网，而且只连你配置的 AI 服务商。
+| 学习动作        | Studyboard 提供的功能                                        |
+| --------------- | ------------------------------------------------------------ |
+| 拆解一个问题    | 保留起始问题，逐层展开概念卡片，在无限画布上平移、缩放和整理 |
+| 理清概念关系    | 拖动卡片、连接概念、编辑关系标签，查看层级大纲               |
+| 带着上下文问 AI | 选择一张或多张卡片提问，发送前查看引用范围，每段对话独立保存 |
+| 整理回答        | AI 回答保留在批注中，选取需要的内容后再加入知识地图          |
+| 检查自己的理解  | 标记「待探索 / 探索中 / 我能解释」，记录预测与解释           |
+| 保存与分享      | 本地自动保存，支持撤销；导出学习数据、Markdown 和整图 PNG    |
 
-首次启动会打开一张内置演练白板：通过真实修改 CSS 宽度和背景色，观察布局、换行与绘制的区别。演练用的是简化的浏览器流水线示意，不是浏览器的性能跟踪工具。AI 生成的内容可能出错，重要结论请向可靠来源核对。
+内置浏览器渲染演练可以离线使用：调整 CSS 宽度和背景色，观察布局、换行与绘制的区别。其他主题的 AI 探索需要自己的模型 API 密钥。
 
-## 下载
+## 下载与安装
 
-每次合并到 `main` 且检查通过后，GitHub Actions 会更新滚动发布 [`latest`](https://github.com/Yaphet2015/studyboard/releases/tag/latest)。下载链接保持不变：
+当前提供 **macOS Apple Silicon（M 系列芯片）** 预览版：
 
-- [Studyboard-arm64.dmg](https://github.com/Yaphet2015/studyboard/releases/latest/download/Studyboard-arm64.dmg)（Apple Silicon）
-- [Studyboard-arm64.zip](https://github.com/Yaphet2015/studyboard/releases/latest/download/Studyboard-arm64.zip)（Apple Silicon）
+- [下载 DMG](https://github.com/Yaphet2015/studyboard/releases/latest/download/Studyboard-arm64.dmg)：打开后将 Studyboard 拖入「应用程序」。
+- [下载 ZIP](https://github.com/Yaphet2015/studyboard/releases/latest/download/Studyboard-arm64.zip)：解压后将应用移入「应用程序」。
+- [查看发布记录与构建信息](https://github.com/Yaphet2015/studyboard/releases/tag/latest)。
 
-构建只做了 ad-hoc 签名，没有 Developer ID 签名，也没有经过 Apple 公证，所以首次打开时 macOS 会拦截。把 Studyboard 拖进「应用程序」后，先打开一次，再到「系统设置 → 隐私与安全性」点「仍要打开」。也可以在终端里移除隔离标记：
+预览版使用 ad-hoc 签名，尚未配置 Developer ID 签名或 Apple 公证。首次打开若被 macOS 拦截，可在 Finder 中右键点击 Studyboard →「打开」；若仍被拦截，可在「系统设置 → 隐私与安全性」中查看「仍要打开」。只对你信任的本仓库构建执行此操作。
 
-```sh
-xattr -dr com.apple.quarantine "/Applications/Studyboard.app"
-```
+每次 `main` 分支构建且全部检查通过后，GitHub Actions 会更新滚动发布 `latest`。PR 预览产物在对应 [Actions 运行记录](https://github.com/Yaphet2015/studyboard/actions/workflows/macos.yml) 的 Artifacts 中。
 
-只对来自本仓库 Releases 的构建这样做。
+## 第一次使用
 
-## 连接 AI
+1. **先试内置演练**：不填密钥也可以操作画布，体验视觉学习流程。
+2. **连接 AI**：按 `⌘.` 打开「设置 → AI 服务」，填写 API 地址、模型 ID 和密钥。默认地址为 `https://api.openai.com/v1`，默认模型为 `gpt-4o-mini`；也支持兼容 OpenAI Chat Completions 的 HTTPS 服务。
+3. **从问题开始**：新建白板，输入想弄懂的问题，例如「浏览器为什么会重新布局？」。让 AI 带你开始，再逐层展开。
+4. **沿着概念追问**：选中卡片后按 `/` 提问，也可以多选卡片，把它们一起作为上下文。查看引用，再发送问题。
+5. **留下学习记录**：整理卡片和关系，标记理解进度，按需导出。
 
-按 `⌘.` 打开设置页（其他系统为 `Ctrl+.`，也可以用 `⌘K` 或 macOS 应用菜单里的「Settings…」），在「AI 服务」中填写 API 地址、模型 ID 和你自己的 API 密钥，再点「测试连接」。
+保存设置不会调用模型。「测试连接」、主动提问和已配置 AI 后的卡片悬停或选中提示会请求服务商，可能产生 API 费用。卡片提示会缓存，相关状态未变时复用结果。测试连接不会保存当前表单配置。
 
-- 默认地址为 `https://api.openai.com/v1`，默认模型为 `gpt-4o-mini`。任何兼容 OpenAI Chat Completions 的 HTTPS 服务都可以用，能否用通取决于服务商。
-- 密钥只需输入一次。主进程用 Electron `safeStorage` 加密后写入 `ai/key.json`，加密用的密钥由 macOS 钥匙串保管。界面上只显示遮盖后的末四位，例如 `sk-••••a1b2`，可以「更换」或「清除」。
-- 如果系统钥匙串不可用，设置页会明确提示。这时密钥只保留到退出应用，不会以明文写入磁盘。
-- 换成另一个 API 地址时，需要重新填写该地址的密钥，旧密钥不会被带过去。
-- 启动应用的环境变量里有 `OPENAI_API_KEY` 时，应用会使用它，但只用于官方 OpenAI 地址。
-- 保存设置不会调用模型。只有「测试连接」和你主动提问会请求服务商，可能产生 API 费用。
+## 数据与隐私
 
-提问时，服务商会收到：这个问题、当前对话的历史、白板的起点问题、选中和关联的卡片或关系，以及它们附近的分支和整张白板的提纲。其他白板和其他对话不会被发送。
+- **白板与对话保存在本机**：macOS 通常位于 `~/Library/Application Support/Studyboard/`，不提供云同步。正常关闭前会保存；强制结束进程仍可能丢失未提交的编辑。
+- **密钥加密保存**：桌面主进程通过 Electron `safeStorage` 加密 API 密钥，界面只显示末四位。系统加密不可用时，只在内存中保留到退出。
+- **AI 请求发送相关内容**：服务商会收到当前问题、该段对话历史、原始主题、选定概念或附近分支，以及整张白板的精简提纲。发送前可查看引用；其他白板和其他批注的对话不会自动加入。
+- **导出可携带完整对话**：`.studyboard.json` 可导入后继续学习，不包含 API 密钥或服务商配置。Markdown 和 PNG 用于阅读与展示。
 
-AI 运行时精确锁定 `@earendil-works/pi-durable`、`@earendil-works/pi-ai` 和 `@earendil-works/chord` 的 1.3.0 版本。模型没有 Shell、文件、浏览器或执行代码的工具。
+白板和对话文件不提供本地静态加密。数据目录、恢复行为与导出边界见[使用指南](docs/user-guide.md)。
 
-## 快捷键
+## 常用快捷键
 
-设置页的「快捷键」一节列出同一份清单，来源是 `src/model/shortcuts.ts`。下表中的 `⌘` 在其他系统上是 `Ctrl`。
+| 快捷键        | 操作                |
+| ------------- | ------------------- |
+| `⌘N`          | 新建白板            |
+| `/`           | 带着所选卡片问 AI   |
+| `N`           | 放置自由批注        |
+| `0`           | 查看全图            |
+| `F`           | 走一遍              |
+| `空格` + 拖动 | 临时平移画布        |
+| `⌘Z` / `⌘S`   | 撤销编辑 / 立即保存 |
+| `⌘Enter`      | 发送批注问题        |
+| `⌘.`          | 打开设置            |
+| `⌘K`          | 打开命令面板        |
 
-| 按键                  | 作用                             |
-| --------------------- | -------------------------------- |
-| `V` / `H`             | 选择工具 / 平移工具              |
-| 按住 `空格` 拖动      | 临时平移                         |
-| `L`                   | 连线工具                         |
-| `0`                   | 查看全图                         |
-| `Shift` 或 `⌘` + 点击 | 多选卡片                         |
-| `Tab`                 | 加子概念                         |
-| `Enter`               | 加并列概念                       |
-| `F2`                  | 改标题                           |
-| `1` / `2` / `3`       | 标记为待探索 / 探索中 / 我能解释 |
-| `⌫`                   | 删除选中                         |
-| `F`                   | 走一遍                           |
-| `/`                   | 问 AI，带上选中的卡片            |
-| `N`                   | 批注                             |
-| `⌘Enter`              | 发送提问                         |
-| `⌘K`                  | 切换白板，搜索命令               |
-| `⌘\`                  | 展开或收起左侧边栏               |
-| `⌘N`                  | 新白板                           |
-| `⌘Z`                  | 撤销                             |
-| `⌘S`                  | 立即保存                         |
-| `⌘.`                  | 设置                             |
-| `D`                   | 切换深浅色                       |
-| `Esc`                 | 关闭面板，取消选择               |
-
-在空白处拖动可以框选。双指滚动、中键或右键拖动都可以平移画布。
-
-## 数据保存在哪里
-
-桌面版的数据在 Electron 的 `userData` 目录，在 macOS 上是 `~/Library/Application Support/Studyboard/`：
-
-- `boards/`：经过校验的 JSON 白板文件，按顺序原子写入。
-- `ai/`：每段对话一个 SQLite 数据库，保存完整的 durable 历史，以及加密后的密钥 `key.json`。
-
-正常退出前，应用会先保存当前白板。保存失败时，退出会被取消并提示。断电或强制结束进程仍可能丢失最后一次未保存的编辑。白板文件里只缓存每段对话最近 200 条消息，完整历史在 SQLite 中。重新打开应用会恢复对话，但不会自动重发之前未完成的请求。数据只在本机，没有云同步。
-
-**从 Learning Atlas 升级。** 应用以前叫 Learning Atlas。如果新目录里还没有数据，首次启动时会把 `~/Library/Application Support/Learning Atlas/` 中的 `boards/` 和 `ai/` 复制过来，旧目录保持不动。代码在 `electron/legacy-data.ts`。
-
-**导入与导出。** 左侧边栏底部有「导入画板」和「导出当前画板」，`⌘K` 里也能搜到。只有 `.studyboard.json` 可以重新导入：导入会新建一张白板，并把对话历史恢复到新的 SQLite 数据库，不包含 API 密钥。Markdown 和 PNG 用于阅读和展示。导入文件最大 64 MB。
-
-`pnpm dev:web` 的网页预览把白板存在浏览器本地存储里，不接收 API 密钥，也不调用 AI。
+多选、连线、对话管理和其他快捷键见[完整操作说明](docs/user-guide.md#快捷键)。
 
 ## 本地开发
 
-需要 Node.js 22.19.0 或更新版本。包管理器是 pnpm，版本锁定在 `package.json` 的 `packageManager` 字段，运行 `corepack enable` 即可启用。
+需要 Node.js **22.19.0 或更新版本**，CI 使用 Node **24.19.0**。pnpm 版本由 [`package.json`](package.json) 的 `packageManager` 字段锁定，可通过 `corepack enable` 启用。
 
 ```sh
+git clone https://github.com/Yaphet2015/studyboard.git
+cd studyboard
 pnpm install
 pnpm dev
 ```
 
-`pnpm dev` 会同时启动 Vite、TypeScript 监听编译和 Electron。只想看界面时，运行 `pnpm dev:web`，然后打开 <http://127.0.0.1:5173>。
+技术栈：Electron 44.8.0、React 19、TypeScript、React Flow、Vite；真实 AI 运行时使用 `pi-durable`，对话存储使用 SQLite。Electron 内嵌 Node 24.22.0，支持 `node:sqlite`。
 
-| 脚本             | 作用                                                 |
-| ---------------- | ---------------------------------------------------- |
-| `pnpm dev`       | 启动桌面版开发环境                                   |
-| `pnpm dev:web`   | 只启动浏览器预览，不接 AI                            |
-| `pnpm typecheck` | 检查界面和 Electron 两套 TypeScript 配置             |
-| `pnpm build`     | 构建界面到 `dist/`，构建主进程到 `dist-electron/`    |
-| `pnpm test`      | 运行 Vitest 单元测试                                 |
-| `pnpm test:e2e`  | 运行 Playwright 端到端测试                           |
-| `pnpm dist:mac`  | 打包 Apple Silicon 的 `.dmg` 和 `.zip` 到 `release/` |
-| `pnpm format`    | 用 Prettier 格式化代码和文档                         |
+`pnpm dev:web` 只启动浏览器界面预览：白板存入浏览器本地存储，不接收 API 密钥，也不调用 AI。
 
-## 测试
+| 命令             | 用途                         |
+| ---------------- | ---------------------------- |
+| `pnpm typecheck` | 检查渲染进程与主进程类型     |
+| `pnpm test`      | 运行单元测试                 |
+| `pnpm build`     | 构建界面与 Electron 主进程   |
+| `pnpm test:e2e`  | 运行 Playwright 交互测试     |
+| `pnpm dist:dir`  | 生成未压缩的应用包           |
+| `pnpm dist:mac`  | 生成 Apple Silicon DMG / ZIP |
 
-```sh
-pnpm typecheck
-pnpm test
-pnpm exec playwright install chromium
-pnpm test:e2e
-```
+UI 测试先安装 Chromium：`pnpm exec playwright install chromium`；也可通过 `PLAYWRIGHT_CHROMIUM_PATH` 指定已安装的浏览器。
 
-`tests/*.test.ts` 是 Vitest 单元测试，覆盖布局、编辑、上下文、迁移和 AI 运行时等模块。`tests/e2e/` 是 Playwright 测试，用 `tests/e2e/fake-atlas.ts` 模拟主进程和 AI，在浏览器预览中运行。已安装 Chromium 时，可以用 `PLAYWRIGHT_CHROMIUM_PATH` 指定它的路径。`electron.spec.ts` 和 `electron-transfer.spec.ts` 启动真实的 Electron，只在 macOS 上运行，其他系统会跳过。
+主进程的外部 HTTP(S) 请求必须使用全局 `fetch` 或 Electron `net.fetch`，以跟随系统代理。修改前请阅读 [AGENTS.md](AGENTS.md) 中的网络规则与验证要求。
 
-GitHub Actions 的「macOS preview」工作流在 macOS 上运行类型检查、单元测试和构建，再验证 Electron 内置的 Node、SQLite 和 durable 历史在重启后能恢复，运行画布交互测试，最后打包并验证 `.dmg` 和 `.zip`。
+## 当前边界
 
-## 技术栈
+- 目前面向 macOS Apple Silicon；Windows、Linux 和 Intel Mac 尚未提供支持承诺。
+- 没有上传材料、网页检索、多人协作、云同步或 OAuth 登录。
+- 结构化图示由受信任组件绘制，不执行模型生成的代码；AI 内容仍需核对。
+- 内置渲染演练是简化示意，不是浏览器内部性能跟踪器。
+- 无障碍与触控板体验仍需真实 Mac 验证；浏览器预览不能替代桌面验收。
 
-- Electron 44（内置 Node 24，用 `node:sqlite` 保存对话）
-- React 19、TypeScript 5.9、Vite 7
-- `@xyflow/react` 12 绘制画布
-- `@earendil-works/pi-durable`、`pi-ai` 和 `chord` 1.3.0 负责 AI 对话和可恢复的历史
-- zod 4 校验白板文件和进程间消息
-- Vitest 4、Playwright 1.58
-- electron-builder 26 打包
-- 字体 LXGW WenKai（霞鹜文楷），图标 Lucide
+## 文档与反馈
 
-## 项目结构
-
-```text
-electron/          主进程：窗口与菜单、白板存储、AI 运行时、密钥加密、旧数据迁移
-src/
-	App.tsx          应用状态、快捷键和 AI 请求
-	components/      画布卡片、抽屉、设置页、走一遍、导出等界面组件
-	model/           不依赖界面的逻辑：布局、编辑、编号、上下文、对话、AI 提示
-	shared/          两个进程共用的类型、zod 校验和导入导出格式
-tests/             Vitest 单元测试
-tests/e2e/         Playwright 端到端测试
-docs/              架构与安全说明、设计记录、README 图片
-```
-
-实现细节和安全边界见 [架构与安全说明](docs/architecture.md)。对话抽屉动效的来源见 [docs/drawer-streaming.md](docs/drawer-streaming.md)。
-
-## 已知限制
-
-- 只支持 macOS Apple Silicon，没有在 Windows 或 Linux 上测试过。
-- 不支持上传资料、网页检索、多人协作或云同步。
-- 只能用 API 密钥连接模型，没有 OAuth 登录。
-- 无障碍和触控板细节需要在真机上试用，浏览器预览不能代替 macOS 验收。
+- [使用指南](docs/user-guide.md)：AI 配置、保存恢复、导入导出与画布操作。
+- [架构说明](docs/architecture.md)：进程边界、数据校验、AI 上下文与持久化。
+- [仓库搜索与分享配置](docs/discoverability.md)：GitHub 简介、Topics 与网页元数据的维护方式。
+- [提交问题或建议](https://github.com/Yaphet2015/studyboard/issues)：请附应用版本、macOS 版本、复现步骤与截图，移除密钥和私人对话。
 
 ## 许可
 
-本项目没有选择开源许可。仓库里没有 LICENSE 文件，`package.json` 中写的是 `UNLICENSED`。代码公开可读，但不授予任何额外权利。
+目前未选择开源许可证，`package.json` 标记为 `UNLICENSED`。代码公开可阅读，不自动授予额外的使用、修改或分发许可。
 
 随应用打包的第三方资源：
 
