@@ -16,12 +16,14 @@ export function StudyMode({
   board,
   startId,
   onRate,
+  onPredict,
   onAskAI,
   onClose,
 }: {
   board: Board;
   startId?: string;
   onRate: (id: string, status: Understanding, hand?: string) => void;
+  onPredict: (id: string, prediction: string) => void;
   onAskAI: (id: string, explanation: string) => void;
   onClose: () => void;
 }) {
@@ -48,9 +50,7 @@ export function StudyMode({
       steps.findIndex((s) => s.id === startId),
     ),
   );
-  const [drafts, setDrafts] = useState<
-    Record<string, { predict: string; explain: string }>
-  >({});
+  const [drafts, setDrafts] = useState<Record<string, { explain: string }>>({});
   const node = steps[Math.min(index, steps.length - 1)];
   const go = (d: number) =>
     setIndex((i) => Math.max(0, Math.min(steps.length - 1, i + d)));
@@ -67,7 +67,7 @@ export function StudyMode({
   if (!node) return null;
   const level = levels.get(node.id)!;
   const row = steps.filter((s) => levels.get(s.id) === level);
-  const draft = drafts[node.id] ?? { predict: "", explain: "" };
+  const draft = drafts[node.id] ?? { explain: "" };
   const set = (patch: Partial<typeof draft>) =>
     setDrafts((d) => ({ ...d, [node.id]: { ...draft, ...patch } }));
   const prev = steps[index - 1],
@@ -121,8 +121,9 @@ export function StudyMode({
               还没细看之前，猜一猜：「{node.title}」要解决什么？会产出什么？
             </span>
             <textarea
-              value={draft.predict}
-              onChange={(e) => set({ predict: e.target.value })}
+              value={node.prediction ?? ""}
+              maxLength={2_000}
+              onChange={(e) => onPredict(node.id, e.target.value)}
               placeholder="我猜……"
             />
           </label>

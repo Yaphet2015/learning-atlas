@@ -159,3 +159,23 @@ describe("migrateV1toV2", () => {
     expect(() => parseBoard(cycle)).toThrow(/cycle/);
   });
 });
+
+describe("per-card prediction", () => {
+  const board = () => migrateV1toV2(v1([v1node("root", 0, 0)], []));
+  it("round trips without changing the handwritten remark", () => {
+    const value = board();
+    value.nodes[0].prediction = "我猜会产出 DOM 树";
+    value.nodes[0].hand = "批注";
+    expect(parseBoard(JSON.parse(JSON.stringify(value)))).toEqual(value);
+  });
+  it("accepts old v2 and migrated v1 boards without predictions", () => {
+    expect(parseBoard(board()).nodes[0]).not.toHaveProperty("prediction");
+  });
+  it("accepts 2000 characters but rejects oversized predictions", () => {
+    const value = board();
+    value.nodes[0].prediction = "猜".repeat(2000);
+    expect(() => parseBoard(value)).not.toThrow();
+    value.nodes[0].prediction += "猜";
+    expect(() => parseBoard(value)).toThrow();
+  });
+});

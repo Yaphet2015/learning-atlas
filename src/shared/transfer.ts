@@ -202,6 +202,7 @@ export function transferMarkdown(transfer: BoardTransfer): string {
           text(n.body),
           "",
         );
+        if (n.prediction) out.push(`我的预测：${text(n.prediction)}`, "");
         if (n.hand) out.push(`我的批注：${text(n.hand)}`, "");
         if (n.visual)
           out.push(
