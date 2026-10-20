@@ -3546,7 +3546,8 @@ kbd,
   letter-spacing: 0.04em;
   color: var(--ink-3);
 }
-.settings-form input {
+.settings-form input,
+.settings-form textarea {
   height: 40px;
   padding: 0 12px;
   border: 1px solid var(--border);
@@ -3556,10 +3557,19 @@ kbd,
   font: 400 15px var(--kai);
   outline: none;
 }
-.settings-form input:focus-visible {
+.settings-form textarea {
+  height: auto;
+  min-height: 120px;
+  padding: 10px 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.settings-form input:focus-visible,
+.settings-form textarea:focus-visible {
   border-color: var(--border-strong);
 }
-.settings-form input:disabled {
+.settings-form input:disabled,
+.settings-form textarea:disabled {
   opacity: 0.6;
 }
 .key-saved {

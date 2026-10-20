@@ -284,6 +284,47 @@ describe("saved API key (safeStorage)", () => {
   const KEY = "sk-proj-SECRET1234abcd";
   const keyFile = () => join(directory, "ai/key.json");
 
+  it("keeps an independently encrypted search key across model destination changes and clears it separately", async () => {
+    const c = cipher();
+    const runtime = withCipher(c);
+    const searchKey = "sk-SEARCH_SECRET_5678";
+    await runtime.setSettings({
+      ...official,
+      apiKey: KEY,
+      deepseekApiKey: searchKey,
+    });
+    expect(runtime.getSettings().searchKey).toMatchObject({
+      source: "saved",
+      keyHint: "sk-••••5678",
+    });
+    const searchFile = join(directory, "ai/search-key.json");
+    expect(await readFile(searchFile, "utf8")).not.toContain(searchKey);
+    expect(
+      await readFile(join(directory, "ai/settings.json"), "utf8"),
+    ).not.toContain(searchKey);
+    await runtime.setSettings(local);
+    await runtime.close();
+    const reopened = withCipher(c);
+    expect(reopened.getSettings()).toMatchObject({
+      source: "none",
+      searchKey: { source: "saved", keyHint: "sk-••••5678" },
+    });
+    await reopened.setSettings({ ...local, deepseekApiKey: "" });
+    expect(reopened.getSettings().searchKey).toEqual({ source: "none" });
+    await expect(readFile(searchFile)).rejects.toThrow();
+  });
+
+  it("keeps a search key only in memory without encryption", async () => {
+    const runtime = withCipher(null);
+    await runtime.setSettings({ ...official, deepseekApiKey: KEY });
+    expect(runtime.getSettings().searchKey?.source).toBe("session");
+    await expect(
+      readFile(join(directory, "ai/search-key.json")),
+    ).rejects.toThrow();
+    await runtime.close();
+    expect(withCipher(null).getSettings().searchKey?.source).toBe("none");
+  });
+
   it("encrypts the key at rest and restores it after a restart, masked in settings", async () => {
     const c = cipher();
     const first = withCipher(c);

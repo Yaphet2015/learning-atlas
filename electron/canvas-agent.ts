@@ -772,6 +772,21 @@ export function createCanvasExtension(
     ],
     hooks: [
       hook(GenerationTask, {
+        async afterResponse(message) {
+          const calls = message.content.filter(
+            (block) => block.type === "toolCall",
+          );
+          // Finish must own its round: the SDK terminates only when every tool terminates.
+          if (
+            calls.length > 1 &&
+            calls.some((call) => call.name === "canvas_finish")
+          ) {
+            message.content = message.content.filter(
+              (block) =>
+                block.type !== "toolCall" || block.name !== "canvas_finish",
+            );
+          }
+        },
         async beforeRequest(request, api, context) {
           const doc = await api.snapshot(
             CanvasDoc,

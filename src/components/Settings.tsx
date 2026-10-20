@@ -38,12 +38,14 @@ export function ApiKeyField({
   onChange,
   onClear,
   disabled,
+  label = "API 密钥",
 }: {
-  settings: AISettings;
+  settings: Pick<AISettings, "source" | "keyHint" | "keyStorage">;
   value: string;
   onChange: (value: string) => void;
   onClear: () => void;
   disabled?: boolean;
+  label?: string;
 }) {
   const hasKey = settings.source === "saved" || settings.source === "session";
   const [replacing, setReplacing] = useState(!hasKey);
@@ -59,7 +61,7 @@ export function ApiKeyField({
           : "";
   return (
     <div className="key-field">
-      <span className="key-label">API 密钥</span>
+      <span className="key-label">{label}</span>
       {hasKey || settings.source === "environment" ? (
         <div className="key-saved" data-source={settings.source}>
           <KeyRound size={15} className="ico" />
@@ -88,7 +90,7 @@ export function ApiKeyField({
       {(replacing || !hasKey) && (
         <input
           type="password"
-          aria-label="API 密钥"
+          aria-label={label}
           autoComplete="off"
           spellCheck={false}
           value={value}
@@ -154,6 +156,10 @@ export function Settings({
   const [model, setModel] = useState(settings.model),
     [endpoint, setEndpoint] = useState(settings.baseUrl),
     [key, setKey] = useState(""),
+    [searchKey, setSearchKey] = useState(""),
+    [customInstructions, setCustomInstructions] = useState(
+      settings.customInstructions ?? "",
+    ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [saved, setSaved] = useState(""),
@@ -166,7 +172,9 @@ export function Settings({
   const draft = (): AISettingsInput => ({
     model,
     baseUrl: endpoint,
+    customInstructions,
     ...(key ? { apiKey: key } : {}),
+    ...(searchKey ? { deepseekApiKey: searchKey } : {}),
   });
   // Edits invalidate an earlier result so it never describes different settings.
   const edited =
@@ -200,6 +208,7 @@ export function Settings({
     try {
       await onSave(input);
       setKey("");
+      setSearchKey("");
       setSaved(done);
     } catch (error) {
       setError(String(error instanceof Error ? error.message : error));
@@ -294,12 +303,48 @@ export function Settings({
                   onChange={edited(setKey)}
                   disabled={!isDesktop}
                   onClear={() =>
+                    void save({ ...draft(), apiKey: "" }, "已清除保存的密钥。")
+                  }
+                />
+                <label>
+                  <span className="key-label">Agent 自定义指令</span>
+                  <textarea
+                    aria-label="Agent 自定义指令"
+                    value={customInstructions}
+                    maxLength={8000}
+                    rows={5}
+                    placeholder="例如：先给结论，每次只解释一个概念，多用生活中的例子。"
+                    onChange={(e) =>
+                      edited(setCustomInstructions)(e.target.value)
+                    }
+                    disabled={!isDesktop}
+                  />
+                  <small className="settings-foot">
+                    保存后用于后续问答和画布 Agent
+                    的系统提示词。留空恢复默认；最多 8000 字。
+                  </small>
+                </label>
+                <ApiKeyField
+                  label="DeepSeek 搜索备用密钥"
+                  settings={{
+                    source: settings.searchKey?.source ?? "none",
+                    keyHint: settings.searchKey?.keyHint,
+                    keyStorage: settings.keyStorage,
+                  }}
+                  value={searchKey}
+                  onChange={edited(setSearchKey)}
+                  disabled={!isDesktop}
+                  onClear={() =>
                     void save(
-                      { model, baseUrl: endpoint, apiKey: "" },
-                      "已清除保存的密钥。",
+                      { ...draft(), deepseekApiKey: "" },
+                      "已清除搜索备用密钥。",
                     )
                   }
                 />
+                <p className="settings-foot">
+                  联网搜索和网页读取优先使用免费 Exa；配置此密钥后，Exa
+                  调用失败时会尝试 DeepSeek，可能产生费用。
+                </p>
                 <div className="privacy-note">
                   <LockKeyhole size={16} />
                   <span>
