@@ -153,7 +153,15 @@ export async function installFakeAtlas(
         getAISettings: async () => ({ ...settings }),
         // Like the desktop runtime with safeStorage: a key is saved encrypted, shown masked.
         setAISettings: async (s: any) => {
-          const { apiKey, ...rest } = s;
+          const { apiKey, deepseekApiKey, ...rest } = s;
+          if (deepseekApiKey !== undefined) {
+            settings.searchKey = deepseekApiKey
+              ? {
+                  source: "saved",
+                  keyHint: `sk-••••${String(deepseekApiKey).slice(-4)}`,
+                }
+              : { source: "none" };
+          }
           if (apiKey === "")
             settings = {
               ...settings,

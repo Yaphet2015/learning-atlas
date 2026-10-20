@@ -71,3 +71,27 @@ test("a saved key shows masked, can be replaced or cleared", async ({
   await expect(settings.locator(".key-saved")).toHaveCount(0);
   await expect(settings.getByLabel("API 密钥")).toBeVisible();
 });
+
+test("custom Agent instructions survive reopening settings and can be cleared", async ({
+  page,
+}) => {
+  await installFakeAtlas(page);
+  await gotoApp(page);
+  await page.keyboard.press("ControlOrMeta+.");
+  const settings = page.getByRole("dialog", { name: "设置" });
+  const instructions = settings.getByRole("textbox", {
+    name: "Agent 自定义指令",
+  });
+  await instructions.fill("先给结论。\n每次只解释一个概念。");
+  await settings.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(settings.getByRole("status")).toContainText("已保存");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+.");
+  await expect(instructions).toHaveValue("先给结论。\n每次只解释一个概念。");
+  await instructions.fill("");
+  await settings.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(settings.getByRole("status")).toContainText("已保存");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+.");
+  await expect(instructions).toHaveValue("");
+});

@@ -150,6 +150,11 @@ export interface CardReview {
 export interface AISettings {
   model: string;
   baseUrl: string;
+  customInstructions?: string;
+  searchKey?: {
+    source: "saved" | "session" | "none";
+    keyHint?: string;
+  };
   configured: boolean;
   /** saved: encrypted at rest (safeStorage); session: in memory until the app quits. */
   source: "saved" | "session" | "environment" | "none";
@@ -162,6 +167,8 @@ export interface AISettingsInput {
   model: string;
   baseUrl: string;
   apiKey?: string;
+  customInstructions?: string;
+  deepseekApiKey?: string;
 }
 /** Outcome of the settings 「测试连接」 probe. Never carries the key or raw provider text. */
 export type AIConnectionResult =

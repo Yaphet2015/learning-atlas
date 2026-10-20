@@ -409,6 +409,19 @@ export const settingsSchema = z
       "Invalid model name",
     ),
     baseUrl: baseUrlSchema,
+    customInstructions: z
+      .string()
+      .max(8_000)
+      .refine(
+        (value) => !value.includes("\u0000"),
+        "Invalid custom instructions",
+      )
+      .optional(),
+    deepseekApiKey: z
+      .string()
+      .max(4_096)
+      .refine((value) => !/[\r\n\u0000]/.test(value), "Invalid API key")
+      .optional(),
     apiKey: z
       .string()
       .max(4_096)

@@ -18,6 +18,12 @@ const transport = vi.hoisted(() => ({
   failure: false,
   abortDelayMs: 0,
   pending: [] as (() => void)[],
+  toolMode: "" as "" | "research" | "loop",
+}));
+const webTransport = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock("../electron/web-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../electron/web-client")>()),
+  requestWeb: webTransport.request,
 }));
 vi.mock("@earendil-works/pi-ai/providers/openai", async (importOriginal) => {
   const actual =
@@ -67,9 +73,30 @@ vi.mock("@earendil-works/pi-ai/providers/openai", async (importOriginal) => {
           },
         });
       } else {
+        const results = context.messages.filter((m) => m.role === "toolResult");
+        const tool =
+          transport.toolMode === "loop" ||
+          (transport.toolMode === "research" && results.length < 2);
         const message: AssistantMessage = {
           ...partial,
-          content: [{ type: "text", text: "先预测，再只改一个变量。" }],
+          stopReason: tool ? "toolUse" : "stop",
+          content: tool
+            ? [
+                { type: "text", text: "我来搜索资料。" },
+                {
+                  type: "toolCall",
+                  id: `web-${results.length}`,
+                  name:
+                    transport.toolMode === "research" && results.length === 1
+                      ? "web_fetch"
+                      : "web_search",
+                  arguments:
+                    transport.toolMode === "research" && results.length === 1
+                      ? { url: "https://example.com/page" }
+                      : { query: "CSS width" },
+                },
+              ]
+            : [{ type: "text", text: "先预测，再只改一个变量。" }],
         };
         events.push({
           type: "text_delta",
@@ -77,7 +104,11 @@ vi.mock("@earendil-works/pi-ai/providers/openai", async (importOriginal) => {
           delta: "先预测，再只改一个变量。",
           partial: message,
         });
-        events.push({ type: "done", reason: "stop", message });
+        events.push({
+          type: "done",
+          reason: message.stopReason === "toolUse" ? "toolUse" : "stop",
+          message,
+        });
       }
     };
     events.push({ type: "start", partial });
@@ -162,6 +193,15 @@ beforeEach(async () => {
   transport.hold = false;
   transport.failure = false;
   transport.abortDelayMs = 0;
+  transport.toolMode = "";
+  webTransport.request
+    .mockReset()
+    .mockResolvedValue({
+      provider: "exa",
+      text: "CSS_SOURCE_FACT",
+      sources: ["https://example.com/page"],
+      truncated: false,
+    });
   directory = await mkdtemp(join(tmpdir(), "atlas-runtime-test-"));
   runtimes = [];
 });
@@ -177,6 +217,149 @@ const configureRuntime = (runtime: AIRuntime) =>
     baseUrl: "https://api.openai.com/v1",
     apiKey: "SECRET_TEST_KEY",
   });
+
+describe("custom system instructions and web tools", () => {
+  it("persists custom instructions, injects a system section, and clears it on the next send", async () => {
+    const runtime = createRuntime();
+    await configureRuntime(runtime);
+    await runtime.setSettings({
+      model: "gpt-4o-mini",
+      baseUrl: "https://api.openai.com/v1",
+      customInstructions: "每次只解释一个概念。\n先用日常例子。",
+    });
+    await runtime.close();
+    const reopened = createRuntime();
+    expect(reopened.getSettings().customInstructions).toBe(
+      "每次只解释一个概念。\n先用日常例子。",
+    );
+    await configureRuntime(reopened);
+    await reopened.ask(request());
+    await vi.waitFor(async () =>
+      expect((await reopened.getHistory("board-one", "note-one")).running).toBe(
+        false,
+      ),
+    );
+    const first = JSON.parse(transport.calls.at(-1)!).messages;
+    expect(
+      first.some(
+        (m: any) =>
+          m.role === "system" &&
+          m.sections?.["atlas-custom-instructions"]?.includes(
+            "每次只解释一个概念",
+          ),
+      ),
+    ).toBe(true);
+    await reopened.setSettings({
+      model: "gpt-4o-mini",
+      baseUrl: "https://api.openai.com/v1",
+      customInstructions: "",
+    });
+    await reopened.ask(request({ requestId: "request-two" }));
+    await vi.waitFor(async () =>
+      expect((await reopened.getHistory("board-one", "note-one")).running).toBe(
+        false,
+      ),
+    );
+    const sections = JSON.parse(transport.calls.at(-1)!)
+      .messages.filter((m: any) => m.role === "system")
+      .map((m: any) => m.sections?.["atlas-custom-instructions"])
+      .filter((s: any) => s !== undefined);
+    expect(sections.at(-1)).not.toContain("每次只解释一个概念");
+  });
+  it("searches, fetches and answers using the real scheduler; reopening hides intermediate tool messages", async () => {
+    const runtime = createRuntime();
+    await configureRuntime(runtime);
+    transport.toolMode = "research";
+    await runtime.ask(request());
+    await vi.waitFor(async () =>
+      expect((await runtime.getHistory("board-one", "note-one")).running).toBe(
+        false,
+      ),
+    );
+    expect(
+      webTransport.request.mock.calls,
+      JSON.stringify(
+        transport.calls.map((call) =>
+          JSON.parse(call).messages.filter((m: any) => m.role === "toolResult"),
+        ),
+      ),
+    ).toHaveLength(2);
+    expect(webTransport.request.mock.calls.map(([r]) => r.kind)).toEqual([
+      "search",
+      "fetch",
+    ]);
+    expect(transport.calls.at(-1)).toContain("CSS_SOURCE_FACT");
+    const history = await runtime.getHistory("board-one", "note-one");
+    expect(history.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(history.messages[1].text).not.toContain("我来搜索");
+    await runtime.close();
+    expect(await createRuntime().getHistory("board-one", "note-one")).toEqual(
+      history,
+    );
+  });
+  it("bounds a model that repeatedly asks to search", async () => {
+    const runtime = createRuntime();
+    await configureRuntime(runtime);
+    transport.toolMode = "loop";
+    await runtime.ask(request());
+    await vi.waitFor(
+      async () =>
+        expect(
+          (await runtime.getHistory("board-one", "note-one")).running,
+        ).toBe(false),
+      { timeout: 10_000 },
+    );
+    expect(webTransport.request).toHaveBeenCalledTimes(8);
+    expect(transport.calls.length).toBeLessThanOrEqual(14);
+  });
+  it("cleans transport errors before they reach SQLite or model context", async () => {
+    const runtime = createRuntime();
+    await configureRuntime(runtime);
+    transport.toolMode = "research";
+    webTransport.request.mockRejectedValue(
+      new Error("Authorization: Bearer WEB_SECRET_ECHO"),
+    );
+    await runtime.ask(request());
+    await vi.waitFor(async () =>
+      expect((await runtime.getHistory("board-one", "note-one")).running).toBe(
+        false,
+      ),
+    );
+    expect(transport.calls.join("\n")).not.toContain("WEB_SECRET_ECHO");
+    await runtime.close();
+    expect(
+      (
+        await readFile(join(directory, "ai/boards/board-one/note-one.sqlite"))
+      ).includes(Buffer.from("WEB_SECRET_ECHO")),
+    ).toBe(false);
+  });
+  it("reopens a request interrupted inside a web tool and resumes without duplicating its user message", async () => {
+    const first = createRuntime();
+    await configureRuntime(first);
+    transport.toolMode = "research";
+    webTransport.request.mockImplementationOnce(
+      async (_request, _key, signal: AbortSignal) =>
+        new Promise((_, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        }),
+    );
+    await first.ask(request());
+    await vi.waitFor(() =>
+      expect(webTransport.request).toHaveBeenCalledTimes(1),
+    );
+    await first.close();
+    const updates: AIUpdate[] = [];
+    const reopened = createRuntime(updates);
+    await configureRuntime(reopened);
+    await reopened.ask(request());
+    await vi.waitFor(() => expect(updates.at(-1)?.status).toBe("done"));
+    const history = await reopened.getHistory("board-one", "note-one");
+    expect(history.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(transport.calls.at(-1)).toContain("CSS_SOURCE_FACT");
+  });
+});
 
 describe("imported conversation continuation", () => {
   it("restores over 200 messages without provider calls and includes old history in the next question after reopening", async () => {
@@ -241,6 +424,7 @@ describe("session-only settings and request boundaries", () => {
     expect(JSON.parse(saved)).toEqual({
       model: "gpt-4o-mini",
       baseUrl: "https://api.openai.com/v1",
+      customInstructions: "",
     });
     expect(transport.calls).toHaveLength(0);
     await runtime.close();
