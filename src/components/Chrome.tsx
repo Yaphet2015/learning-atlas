@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   MiniMap,
+  useEdges,
   useReactFlow,
   useViewport,
   type MiniMapNodeProps,
@@ -13,6 +14,7 @@ import {
   MousePointer2,
   Plus,
   Scan,
+  ListTree,
   Sparkles,
   SquarePen,
   StickyNote,
@@ -20,6 +22,13 @@ import {
 import type { BoardSummary, ConceptNode } from "../shared/types";
 import { MOD } from "../model/shortcuts";
 import { tip } from "./Tooltip";
+import {
+  TreeEdge,
+  SeqEdge,
+  type TreeEdgeType,
+  type SeqEdgeType,
+} from "./TreeEdge";
+import { CrossEdge, type CrossEdgeType } from "./CrossEdge";
 
 export function Palette({
   boards,
@@ -120,13 +129,7 @@ export function Palette({
   );
 }
 
-export function Progress({
-  nodes,
-  onStudy,
-}: {
-  nodes: ConceptNode[];
-  onStudy: () => void;
-}) {
+export function Progress({ nodes }: { nodes: ConceptNode[] }) {
   const concepts = nodes.filter((n) => n.parentId !== null);
   const done = concepts.filter((n) => n.status === "explained").length;
   return (
@@ -155,17 +158,8 @@ export function Progress({
       >
         <b>
           {done} / {concepts.length}
-        </b>{" "}
-        讲清楚
+        </b>
       </span>
-      <button
-        className="btn primary"
-        onClick={onStudy}
-        disabled={!concepts.length}
-      >
-        <Scan size={16} className="ico" />
-        走一遍 <kbd>F</kbd>
-      </button>
     </div>
   );
 }
@@ -177,12 +171,20 @@ export function Dock({
   onAddConcept,
   onNote,
   onAsk,
+  onStudy,
+  canStudy,
+  onOrganize,
+  organizeDisabled,
 }: {
   tool: Tool;
   setTool: (t: Tool) => void;
   onAddConcept: () => void;
   onNote: () => void;
   onAsk: () => void;
+  onStudy: () => void;
+  canStudy: boolean;
+  onOrganize: () => void;
+  organizeDisabled: boolean;
 }) {
   const b = (t: Tool, label: string, key: string, icon: React.ReactNode) => (
     <button
@@ -211,20 +213,59 @@ export function Dock({
         <Sparkles size={15} className="ico" />
         问一问 <kbd>/</kbd>
       </button>
+      <button
+        className="ask"
+        onClick={onOrganize}
+        disabled={organizeDisabled}
+        {...tip("以起点为核心，校对全部卡片的层级、关系和内容")}
+        aria-label="整理画布"
+      >
+        <ListTree size={15} className="ico" />
+        整理画布
+      </button>
+      <button className="ask" onClick={onStudy} disabled={!canStudy}>
+        <Scan size={15} className="ico" />
+        走一遍 <kbd>F</kbd>
+      </button>
     </nav>
   );
 }
 
-function MiniNode({ x, y, width, height, className }: MiniMapNodeProps) {
+// MiniMap only exposes a node renderer. Draw each incoming edge with its target
+// so it shares the map's SVG coordinates and follows the measured node positions.
+function MiniNode({ id, x, y, width, height, className }: MiniMapNodeProps) {
+  const edges = useEdges<TreeEdgeType | SeqEdgeType | CrossEdgeType>();
   return (
-    <rect
-      x={x}
-      y={y}
-      width={width}
-      height={height}
-      rx={20} // ≈ 2px at the minimap’s ~0.1 scale
-      className={`mini-node ${className ?? ""}`}
-    />
+    <>
+      <g
+        className="mini-edges"
+        data-node-id={id}
+        pointerEvents="none"
+        aria-hidden="true"
+      >
+        {edges
+          .filter((edge) => edge.target === id && !edge.hidden)
+          .map((edge) => {
+            switch (edge.type) {
+              case "tree":
+                return <TreeEdge key={edge.id} {...edge} />;
+              case "seq":
+                return <SeqEdge key={edge.id} {...edge} />;
+              case "cross":
+                return <CrossEdge key={edge.id} {...edge} />;
+              default:
+                return null;
+            }
+          })}
+      </g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        className={`mini-node ${className ?? ""}`}
+      />
+    </>
   );
 }
 
@@ -267,8 +308,8 @@ export function MapUnit({ showMap }: { showMap: boolean }) {
           nodeComponent={MiniNode}
           nodeClassName={(n) =>
             n.type === "ghost"
-              ? "ghost"
-              : `s-${(n.data as { concept?: ConceptNode }).concept?.status ?? "exploring"}`
+              ? "mini-ghost"
+              : `${n.type === "root" ? "root" : "concept"} s-${(n.data as { concept?: ConceptNode }).concept?.status ?? "exploring"}`
           }
           maskColor="transparent"
           maskStrokeColor="var(--accent)"

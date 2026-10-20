@@ -4,6 +4,11 @@ import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Board, BoardSummary } from "../src/shared/types.js";
 import {
+  canvasFingerprint,
+  mergeCanvasDraft,
+  type CanvasOperation,
+} from "../src/shared/canvas.js";
+import {
   boardSchema,
   idSchema,
   LIMITS,
@@ -18,7 +23,8 @@ export class BoardStoreError extends Error {
       | "INVALID_BOARD"
       | "CORRUPT_BOARD"
       | "UNSAFE_PATH"
-      | "TOO_LARGE",
+      | "TOO_LARGE"
+      | "CONFLICT",
     options?: ErrorOptions,
   ) {
     super(message, options);
@@ -31,6 +37,7 @@ const isMissing = (error: unknown) =>
 /** Owns one private directory. Writes/deletes/loads for each board are serialized. */
 export class BoardStore {
   private readonly dir: string;
+  private readonly canvasLocks = new Map<string, string>();
   private readonly pending = new Map<string, Promise<void>>();
   constructor(dir: string) {
     this.dir = resolve(dir);
@@ -155,6 +162,7 @@ export class BoardStore {
           title: board.title,
           kind: board.kind,
           updatedAt: board.updatedAt,
+          ...(board.archivedAt ? { archivedAt: board.archivedAt } : {}),
         });
     }
     return result.sort(
@@ -170,6 +178,62 @@ export class BoardStore {
       return this.readBoard(id);
     });
   }
+  async acquireCanvas(
+    boardId: string,
+    runId: string,
+    expected: string,
+  ): Promise<void> {
+    await this.enqueue(boardId, async () => {
+      const current = await this.readBoard(boardId);
+      const owner = this.canvasLocks.get(boardId);
+      if (
+        !current ||
+        canvasFingerprint(current) !== expected ||
+        (owner && owner !== runId)
+      )
+        throw new BoardStoreError(
+          "画布已更新或正在被另一个任务修改，请按最新画布重试。",
+          "CONFLICT",
+        );
+      this.canvasLocks.set(boardId, runId);
+    });
+  }
+  releaseCanvas(boardId: string, runId: string): void {
+    if (this.canvasLocks.get(boardId) === runId)
+      this.canvasLocks.delete(boardId);
+  }
+  async commitCanvas(
+    boardId: string,
+    runId: string,
+    expected: string,
+    operations: CanvasOperation[][],
+  ): Promise<Board> {
+    return this.enqueue(boardId, async () => {
+      const current = await this.readBoard(boardId);
+      if (!current) throw new BoardStoreError("找不到画布。", "CONFLICT");
+      if (current.appliedCanvasRuns?.includes(runId)) return current;
+      if (
+        canvasFingerprint(current) !== expected ||
+        this.canvasLocks.get(boardId) !== runId
+      )
+        throw new BoardStoreError("画布版本冲突，整理结果未应用。", "CONFLICT");
+      const next = mergeCanvasDraft(
+        current,
+        operations,
+        runId,
+        new Date().toISOString(),
+      );
+      next.canvasVersion = runId;
+      next.appliedCanvasRuns = [
+        ...(current.appliedCanvasRuns ?? []).slice(-999),
+        runId,
+      ];
+      next.updatedAt = new Date().toISOString();
+      await this.writeBoard(next);
+      this.releaseCanvas(boardId, runId);
+      return next;
+    });
+  }
   async save(input: Board): Promise<void> {
     const result = boardSchema.safeParse(input);
     if (!result.success)
@@ -179,6 +243,37 @@ export class BoardStore {
         { cause: result.error },
       );
     const board = result.data;
+    this.path(board.id);
+    return this.enqueue(board.id, async () => {
+      await this.ensureDirectory();
+      let current: Board | null;
+      try {
+        current = await this.readBoard(board.id);
+      } catch (error) {
+        if (
+          error instanceof BoardStoreError &&
+          error.code === "CORRUPT_BOARD" &&
+          !board.canvasVersion &&
+          !this.canvasLocks.has(board.id)
+        )
+          current = null;
+        else throw error;
+      }
+      if (
+        current &&
+        (current.canvasVersion !== board.canvasVersion ||
+          (this.canvasLocks.has(board.id) &&
+            canvasFingerprint(current) !== canvasFingerprint(board)))
+      )
+        throw new BoardStoreError(
+          "画布已更新，旧的自动保存未覆盖新结果。",
+          "CONFLICT",
+        );
+      await this.writeBoard(board);
+    });
+  }
+  private async writeBoard(board: Board): Promise<void> {
+    // Callers (save, commitCanvas) have already validated the board.
     const path = this.path(board.id);
     const data = JSON.stringify(board);
     if (Buffer.byteLength(data, "utf8") > LIMITS.boardBytes)
@@ -186,34 +281,32 @@ export class BoardStore {
         "The board exceeds the storage limit.",
         "TOO_LARGE",
       );
-    return this.enqueue(board.id, async () => {
-      await this.ensureDirectory();
-      await this.assertRegularFile(path);
-      const temporary = join(this.dir, `.${board.id}.${randomUUID()}.tmp`);
-      const handle = await open(temporary, "wx", 0o600);
-      try {
-        await handle.writeFile(data, "utf8");
-        await handle.sync();
-      } catch (error) {
-        await handle.close();
-        await unlink(temporary).catch(() => undefined);
-        throw error;
-      }
+    await this.ensureDirectory();
+    await this.assertRegularFile(path);
+    const temporary = join(this.dir, `.${board.id}.${randomUUID()}.tmp`);
+    const handle = await open(temporary, "wx", 0o600);
+    try {
+      await handle.writeFile(data, "utf8");
+      await handle.sync();
+    } catch (error) {
       await handle.close();
+      await unlink(temporary).catch(() => undefined);
+      throw error;
+    }
+    await handle.close();
+    try {
+      await rename(temporary, path);
+      // A file fsync followed by directory fsync makes the rename durable on macOS/Linux.
+      const directory = await open(this.dir, constants.O_RDONLY);
       try {
-        await rename(temporary, path);
-        // A file fsync followed by directory fsync makes the rename durable on macOS/Linux.
-        const directory = await open(this.dir, constants.O_RDONLY);
-        try {
-          await directory.sync();
-        } finally {
-          await directory.close();
-        }
-      } catch (error) {
-        await unlink(temporary).catch(() => undefined);
-        throw error;
+        await directory.sync();
+      } finally {
+        await directory.close();
       }
-    });
+    } catch (error) {
+      await unlink(temporary).catch(() => undefined);
+      throw error;
+    }
   }
   async delete(id: string): Promise<void> {
     const path = this.path(id);

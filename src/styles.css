@@ -42,9 +42,9 @@
   --ring: 0 0 0 1.5px var(--accent), 0 0 0 6px var(--accent-wash);
   --drawer-w: 420px;
   --sidebar-w: 244px;
-  --sidebar-top: var(--gutter);
+  --sidebar-content-top: 4px;
   /* Gap between floating chrome and the window edge. */
-  --gutter: 12px;
+  --gutter: 6px;
   color-scheme: light;
 }
 :root.dark {
@@ -145,7 +145,7 @@ kbd,
   --sidebar-w: var(--sidebar-expanded-w, 244px);
 }
 .with-sidebar {
-  --canvas-left: calc(var(--sidebar-w) + 2 * var(--gutter));
+  --canvas-left: var(--sidebar-w);
 }
 .sidebar-collapsed {
   --sidebar-w: 56px;
@@ -267,6 +267,86 @@ kbd,
 }
 
 /* ---- concept card: mastery is border + fill + seal only (greyscale-safe) */
+.generation-border {
+  position: absolute;
+  inset: -2px;
+  z-index: 7;
+  padding: 2px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    #ed789344,
+    #e9b55f44,
+    #8ccf9144,
+    #65c9d544,
+    #8794ec44,
+    #ca85df44,
+    #ed789344
+  );
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: generation-appear 480ms var(--spring-settle) both;
+}
+
+.generation-beams {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Equal-length strokes retain their shape and brightness through every corner. */
+.border-beam {
+  x: 1px;
+  y: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  rx: calc(var(--generation-radius, var(--r-lg)) - 1px);
+  fill: none;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-dasharray: 2.8 97.2;
+  animation: generation-orbit 3.6s linear infinite;
+}
+
+.origin > .generation-border {
+  --generation-radius: var(--r-xl);
+}
+
+@keyframes generation-orbit {
+  from {
+    stroke-dashoffset: var(--beam-offset);
+  }
+  to {
+    stroke-dashoffset: calc(var(--beam-offset) - 100px);
+  }
+}
+
+@keyframes generation-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-border,
+  .border-beam {
+    animation: none;
+  }
+  .border-beam {
+    display: none;
+  }
+}
+
 .card {
   position: relative;
   width: 100%;
@@ -280,9 +360,19 @@ kbd,
     background-color 200ms ease,
     box-shadow 160ms ease;
 }
+.card-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.card-heading > h3,
+.card-heading > .title-input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
 .card h3 {
-  margin: 0 0 5px;
-  padding-right: 30px;
   font: 700 21px/1.3 var(--kai);
   letter-spacing: 0.01em;
   text-wrap: balance;
@@ -338,9 +428,8 @@ kbd,
   color: var(--ink-3);
 }
 .card .no {
-  position: absolute;
-  right: 14px;
-  top: 13px;
+  flex: none;
+  white-space: nowrap;
   font: 400 12px var(--kai-mono);
   color: var(--ink-3);
 }
@@ -375,6 +464,9 @@ kbd,
 }
 .card.s-explained .no {
   display: none;
+}
+.card.s-explained .card-heading {
+  padding-right: 30px;
 }
 .card.is-selected {
   box-shadow: var(--ring), var(--shadow-1);
@@ -657,25 +749,26 @@ kbd,
   box-shadow: var(--shadow-1);
 }
 .workspace-sidebar {
-  left: var(--gutter);
-  top: var(--sidebar-top);
-  bottom: var(--gutter);
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: var(--sidebar-w);
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  padding: var(--sidebar-content-top) 4px 4px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--paper) 55%, var(--card));
-  transition:
-    width 280ms var(--ease-out),
-    top 280ms var(--ease-out);
+  background: var(--paper-deep);
+  border-right: 1px solid var(--border);
+  transition: width 280ms var(--ease-out);
 }
 .workspace-resizer {
   position: absolute;
-  top: 12px;
+  top: 0;
   right: 0;
-  bottom: 12px;
-  width: 8px;
+  bottom: 0;
+  width: 3px;
   z-index: 2;
   cursor: col-resize;
   touch-action: none;
@@ -707,7 +800,7 @@ kbd,
   align-items: center;
   justify-content: space-between;
   min-height: 44px;
-  padding: 0 2px 6px 8px;
+  padding-left: 8px;
 }
 .workspace-brand {
   display: flex;
@@ -736,7 +829,7 @@ kbd,
 .workspace-actions {
   display: grid;
   gap: 8px;
-  padding-top: 8px;
+  padding: 8px 6px 0;
 }
 .workspace-action,
 .workspace-board {
@@ -815,6 +908,7 @@ kbd,
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  padding: 0 4px;
 }
 .workspace-board-list {
   position: relative;
@@ -908,7 +1002,8 @@ kbd,
   font-size: 12px;
 }
 .workspace-settings {
-  padding-top: 8px;
+  padding-top: 6px;
+  padding-bottom: 2px;
   border-top: 1px solid var(--border);
 }
 .board-export .export-board-title {
@@ -988,7 +1083,6 @@ kbd,
 }
 .sidebar-collapsed .workspace-header {
   justify-content: center;
-  padding: 0 0 6px;
 }
 .sidebar-collapsed .workspace-brand {
   display: none;
@@ -997,19 +1091,16 @@ kbd,
   display: none;
 }
 .sidebar-collapsed .workspace-copy {
-  width: 0;
-  flex: 0;
-  opacity: 0;
-  overflow: hidden;
+  display: none;
 }
 .sidebar-collapsed .workspace-section {
   padding: 12px 0 0;
 }
 .sidebar-collapsed .workspace-action,
 .sidebar-collapsed .workspace-board {
+  justify-content: center;
   gap: 0;
-  padding-left: 10px;
-  padding-right: 10px;
+  padding: 0;
 }
 .sidebar-collapsed .workspace-current {
   position: absolute;
@@ -1036,7 +1127,7 @@ kbd,
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 6px 6px 14px;
+  padding: 10px 14px;
 }
 .progress .bar {
   display: flex;
@@ -1228,15 +1319,18 @@ kbd,
 }
 @media (max-width: 1180px) {
   .with-sidebar.with-drawer .dock .b {
-    max-width: 32px;
+    width: 22px;
   }
   .with-sidebar.with-drawer .dock .sep {
     margin: 0 2px;
   }
   .with-sidebar.with-drawer .dock .ask {
     gap: 4px;
-    padding: 0 8px;
+    padding: 0 5px;
     font-size: 14px;
+  }
+  .with-sidebar.with-drawer .dock kbd {
+    display: none;
   }
   .with-sidebar.with-drawer .map-unit {
     bottom: calc(var(--gutter) + 64px);
@@ -1290,26 +1384,48 @@ kbd,
   overflow: hidden;
   border-radius: var(--r-sm);
 }
+.mini-edges path {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 0.75px;
+}
+.mini-edges .unseen > path:first-child {
+  stroke-dasharray: 2 2;
+}
+.mini-edges .cross-edge > path {
+  stroke-dasharray: 1 2;
+}
+.mini-edges .react-flow__edge-interaction,
+.mini-edges text {
+  display: none;
+}
 .mini-node {
-  fill: var(--ink-2);
-  stroke: var(--ink);
+  rx: var(--r-lg);
+  fill: var(--card);
+  stroke: var(--border);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
-.mini-node.s-unseen {
-  fill: var(--ink-3);
-  stroke: var(--ink-2);
+.mini-node.root {
+  rx: var(--r-xl);
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+.mini-node.concept.s-unseen {
+  fill: var(--card-ghost);
+  stroke: var(--dash);
+  stroke-width: 1.25;
   stroke-dasharray: 3 2;
 }
-.mini-node.s-explained {
-  fill: var(--accent);
-  stroke: var(--accent-ink);
-  stroke-width: 1.25;
+.mini-node.concept.s-explained {
+  fill: var(--tint-warm);
+  stroke: var(--border-strong);
+  stroke-width: 1.75;
 }
-.mini-node.ghost {
-  fill: var(--accent-wash);
+.mini-node.mini-ghost {
+  fill: transparent;
   stroke: var(--accent);
   stroke-width: 1.25;
+  stroke-dasharray: 3 2;
 }
 .zoom {
   position: static;
@@ -1470,7 +1586,7 @@ kbd,
   display: flex;
   align-items: flex-start;
   gap: 4px;
-  padding: 16px 14px 0 20px;
+  padding: 8px 7px 0 10px;
 }
 .dhead .t {
   flex: 1;
@@ -1662,7 +1778,7 @@ kbd,
 }
 /* 参考: one line, opens into a checklist in place */
 .ctx-wrap {
-  margin: 10px 14px 0;
+  margin: 5px 7px 0;
 }
 .ctx {
   width: 100%;
@@ -1812,16 +1928,16 @@ kbd,
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 14px 20px 0;
+  padding: 7px 10px 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 .thread .fadeTop {
   position: sticky;
-  top: -14px;
+  top: -7px;
   height: 18px;
-  margin: -14px -20px -18px;
+  margin: -7px -10px -18px;
   background: linear-gradient(var(--card), transparent);
   z-index: 3;
   flex: none;
@@ -1830,7 +1946,7 @@ kbd,
   position: sticky;
   bottom: 0;
   height: 22px;
-  margin: -22px -20px 0;
+  margin: -22px -10px 0;
   background: linear-gradient(transparent, var(--card));
   z-index: 3;
   flex: none;
@@ -2257,7 +2373,7 @@ kbd,
 }
 /* ---- composer: empty / typing / answering / failed */
 .composer {
-  margin: 10px 14px 14px;
+  margin: 5px 7px 7px;
   padding: 10px 10px 8px 12px;
   min-height: 76px;
   border-radius: var(--r-lg);
@@ -3260,21 +3376,22 @@ kbd,
   animation: spin 2s linear infinite;
 }
 
-/* Keep the sidebar below the macOS traffic lights, including when collapsed. */
+/* Keep sidebar content below the native buttons; its surface fills the window. */
 .mac-titlebar {
-  --sidebar-top: 40px;
+  --sidebar-content-top: 40px;
 }
 .titlebar-drag {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 28px;
+  height: 40px;
   z-index: 15;
   -webkit-app-region: drag;
   app-region: drag;
 }
 /* Anything interactive that overlaps the strip must stay clickable. */
+.mac-titlebar .workspace-sidebar,
 .mac-titlebar .chrome,
 .mac-titlebar .modal-backdrop,
 .mac-titlebar .palette-backdrop,
@@ -3626,6 +3743,250 @@ kbd,
 }
 @media (prefers-reduced-motion: reduce) {
   .tooltip {
+    animation: none;
+  }
+}
+
+.organization-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 75;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--paper) 65%, transparent);
+  backdrop-filter: blur(3px);
+  cursor: progress;
+}
+.organization-status {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 36px;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  border-radius: var(--r-lg);
+}
+.organization-status svg {
+  color: var(--accent-ink);
+}
+.organization-status .spin {
+  animation: spin 1.2s linear infinite;
+}
+.organization-status strong {
+  font-size: 20px;
+}
+.organization-status span,
+.organization-status small {
+  color: var(--ink-2);
+}
+.organization-status button {
+  margin-top: 4px;
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+  .organization-status .spin {
+    animation: none;
+  }
+}
+
+.canvas-interaction {
+  width: 100%;
+  height: 100%;
+}
+
+/* Overview annotations leave the cards visible and interactive. */
+.topic-overviews {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+.topic-overview {
+  position: absolute;
+  background: transparent;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+.topic-overview-outline {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.topic-overview-leader {
+  opacity: 0.5;
+}
+.topic-overview-label {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.topic-overview-content {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  transform-origin: bottom center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: center;
+  text-shadow:
+    0 1px 2px var(--paper),
+    0 -1px 2px var(--paper);
+  cursor: zoom-in;
+  pointer-events: auto;
+}
+.topic-overview-content:disabled {
+  pointer-events: none;
+}
+.topic-overview-content:focus-visible {
+  outline: 2px solid var(--topic-color);
+  outline-offset: 5px;
+  border-radius: 4px;
+}
+.topic-overview-title,
+.topic-overview-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.topic-overview-title {
+  font-family: var(--kai);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+}
+.topic-overview-summary {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  -webkit-line-clamp: 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .topic-overview {
+    transition: none;
+  }
+}
+
+.workspace-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 176px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 8px 28px #0002;
+}
+.workspace-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.workspace-context-menu button:hover,
+.workspace-context-menu button:focus-visible {
+  background: var(--accent-wash);
+}
+
+.canvas-run-progress {
+  position: fixed;
+  z-index: 25;
+  left: calc(var(--canvas-left) + 24px);
+  bottom: 76px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-lg);
+  max-width: calc(100vw - 48px);
+}
+.canvas-run-progress .spin,
+.canvas-activity .spin {
+  animation: spin 1.2s linear infinite;
+}
+.canvas-activity {
+  position: relative;
+  width: min(620px, calc(100vw - 40px));
+  max-height: 80vh;
+  overflow: auto;
+  padding: 24px;
+  border-radius: var(--r-lg);
+}
+.canvas-activity header,
+.canvas-activity li > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.canvas-activity h2 {
+  margin: 0;
+  font-size: 24px;
+}
+.canvas-activity ul {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+}
+.canvas-activity li {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.canvas-activity li > div > span,
+.canvas-activity p {
+  color: var(--ink-2);
+}
+.canvas-activity p {
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+.canvas-activity .btn {
+  margin-right: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-run-progress .spin,
+  .canvas-activity .spin {
+    animation: none;
+  }
+}
+
+.canvas-edit-locked .react-flow__node button,
+.canvas-edit-locked .react-flow__node input,
+.canvas-edit-locked .react-flow__node textarea,
+.canvas-edit-locked .react-flow__node [contenteditable="true"] {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.canvas-drawer-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  color: var(--accent-ink);
+}
+.canvas-drawer-progress .spin {
+  animation: spin 1.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-drawer-progress .spin {
     animation: none;
   }
 }

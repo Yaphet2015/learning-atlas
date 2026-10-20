@@ -75,8 +75,9 @@ test("a marquee on empty canvas picks cards and 问 AI sends them all", async ({
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
   const ids = asks[0].context.references.map((r: any) => r.id);
   expect(ids).toEqual(expect.arrayContaining(["c-how", "c-money"]));
-  expect(asks[0].context.structure).toMatch(/当前卡片：§\d+ (怎么赔|钱和手续)/);
-  expect(asks[0].context.structure).toContain("◀ 已选入");
+  expect(asks[0].canvas).toBe(true);
+  expect(asks[0].context.structure).toBeUndefined();
+  expect(asks[0].context.review).toBeUndefined();
   await expect(bar).toHaveCount(0);
 });
 
@@ -154,7 +155,9 @@ test("「添加卡片」 searches the board and adds or removes context cards", 
   await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
   let asks = await page.evaluate(() => (window as any).__atlasAsks);
   expect(asks[0].context.references.map((r: any) => r.id)).toContain("c-wait");
-  expect(asks[0].context.structure).toContain("等待期是什么 [待探索] ◀ 已选入");
+  expect(asks[0].canvas).toBe(true);
+  expect(asks[0].context.structure).toBeUndefined();
+  expect(asks[0].context.review).toBeUndefined();
   // Unticking takes it out of the next request.
   await picker.getByLabel("搜索卡片").fill("等待期");
   await picker.getByRole("checkbox").uncheck();
@@ -165,6 +168,7 @@ test("「添加卡片」 searches the board and adds or removes context cards", 
   expect(asks[1].context.references.map((r: any) => r.id)).not.toContain(
     "c-wait",
   );
+  expect(asks[1].excludedCardIds).toContain("c-wait");
 });
 
 const notes = (page: Page) =>

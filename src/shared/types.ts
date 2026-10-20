@@ -29,6 +29,8 @@ export interface ConceptNode {
   question?: boolean;
   /** Cached ghost hints for the '+' handles (optional; older boards have none). */
   hints?: CardHints;
+  /** Cached zoom overview; sig covers the subtree's content and structure. */
+  overview?: { summary: string; sig: string };
   /** Position among siblings (0-based, contiguous); also reads as 先→后. */
   order: number;
   /** Derived from the parentId chain; never persisted. */
@@ -76,6 +78,21 @@ export interface SceneState {
   explanation: string;
   changed: "width" | "color" | null;
 }
+export interface CanvasArchive {
+  id: string;
+  runId: string;
+  reason: string;
+  node: ConceptNode;
+  relations: Relation[];
+  children?: Pick<ConceptNode, "id" | "parentId" | "order">[];
+  noteBindings: {
+    id: string;
+    attachedTo?: StickyNote["attachedTo"];
+    contextCards?: string[];
+  }[];
+  mergedInto?: string;
+  createdAt: string;
+}
 export interface Board {
   version: 2;
   id: string;
@@ -84,6 +101,10 @@ export interface Board {
   kind: "walkthrough" | "ai";
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string;
+  canvasVersion?: string;
+  appliedCanvasRuns?: string[];
+  cardArchives?: CanvasArchive[];
   nodes: ConceptNode[];
   relations: Relation[];
   notes: StickyNote[];
@@ -95,6 +116,7 @@ export interface BoardSummary {
   title: string;
   kind: Board["kind"];
   updatedAt: string;
+  archivedAt?: string;
 }
 export type Selection = {
   kind: "node" | "relation" | "note";
@@ -112,6 +134,18 @@ export interface ContextBundle {
   summary: string;
   /** Outline of the whole board (model/structure.ts); optional for older saved contexts. */
   structure?: string;
+  /** Full card contents in the four-level review window; absent in older contexts. */
+  review?: CardReview;
+}
+export interface CardReview {
+  scope?: "all";
+  relations?: Relation[];
+  radius: 4;
+  anchors: string[];
+  nodes: (Pick<
+    ConceptNode,
+    "id" | "parentId" | "order" | "title" | "body" | "visual"
+  > & { level: number; bodyExcluded?: boolean })[];
 }
 export interface AISettings {
   model: string;
@@ -151,7 +185,10 @@ export interface AIRequest {
   requestId: string;
   prompt: string;
   context: ContextBundle;
-  mode: "answer" | "map" | "expand" | "hint";
+  canvas?: boolean;
+  canvasRunId?: string;
+  excludedCardIds?: string[];
+  mode: "answer" | "map" | "expand" | "hint" | "organize";
 }
 export interface AIUpdate {
   boardId: string;
@@ -160,6 +197,41 @@ export interface AIUpdate {
   text: string;
   status: "streaming" | "done" | "error" | "cancelled";
   error?: string;
+}
+export type CanvasRunStatus =
+  | "running"
+  | "paused"
+  | "ready"
+  | "applied"
+  | "cancelled"
+  | "failed"
+  | "conflict";
+export interface CanvasRun {
+  id: string;
+  boardId: string;
+  stickyId: string;
+  origin: "organize" | "chat";
+  status: CanvasRunStatus;
+  phase:
+    | "structure"
+    | "reading"
+    | "locking"
+    | "editing"
+    | "relations"
+    | "validating"
+    | "complete";
+  revision: number;
+  reviewed: number;
+  total: number;
+  changed: boolean;
+  summary: string;
+  error?: string;
+  draft?: Board;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CanvasRunEvent {
+  run: CanvasRun;
 }
 export interface AIHistory {
   messages: ChatMessage[];
@@ -189,6 +261,14 @@ export interface AtlasAPI {
   ask(request: AIRequest): Promise<void>;
   stop(boardId: string, stickyId: string): Promise<void>;
   getHistory(boardId: string, stickyId: string): Promise<AIHistory>;
+  startCanvasRun(boardId: string): Promise<CanvasRun>;
+  listCanvasRuns(boardId: string): Promise<CanvasRun[]>;
+  getCanvasRun(boardId: string, runId: string): Promise<CanvasRun | null>;
+  prepareCanvasRun(boardId: string, runId: string): Promise<void>;
+  resumeCanvasRun(boardId: string, runId: string): Promise<void>;
+  cancelCanvasRun(boardId: string, runId: string): Promise<void>;
+  commitCanvasRun(boardId: string, runId: string): Promise<Board>;
+  onCanvasRun(callback: (event: CanvasRunEvent) => void): () => void;
   onAIUpdate(callback: (update: AIUpdate) => void): () => void;
 }
 declare global {

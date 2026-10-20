@@ -68,6 +68,10 @@ export const conceptNodeSchema = z
       })
       .strict()
       .optional(),
+    overview: z
+      .object({ summary: plainText(120), sig: z.string().max(80) })
+      .strict()
+      .optional(),
   })
   .strict();
 /** v1 node shape, accepted only as migration input. */
@@ -92,6 +96,34 @@ export const relationSchema = z
     target: idSchema,
     label: z.string().max(200),
     kind: z.literal("cross"),
+  })
+  .strict();
+export const canvasArchiveSchema = z
+  .object({
+    id: idSchema,
+    runId: idSchema,
+    reason: z.string().min(1).max(500),
+    node: conceptNodeSchema,
+    relations: z.array(relationSchema).max(LIMITS.relations),
+    children: z
+      .array(conceptNodeSchema.pick({ id: true, parentId: true, order: true }))
+      .max(LIMITS.nodes)
+      .optional(),
+    noteBindings: z
+      .array(
+        z
+          .object({
+            id: idSchema,
+            attachedTo: z
+              .object({ kind: z.enum(["node", "relation"]), id: idSchema })
+              .optional(),
+            contextCards: z.array(idSchema).optional(),
+          })
+          .strict(),
+      )
+      .max(LIMITS.notes),
+    mergedInto: idSchema.optional(),
+    createdAt: timestampSchema,
   })
   .strict();
 const relationV1Schema = z
@@ -174,6 +206,10 @@ export const boardSchema = z
     kind: z.enum(["walkthrough", "ai"]),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
+    archivedAt: timestampSchema.optional(),
+    canvasVersion: idSchema.optional(),
+    appliedCanvasRuns: z.array(idSchema).max(1000).optional(),
+    cardArchives: z.array(canvasArchiveSchema).max(1000).optional(),
     nodes: z.array(conceptNodeSchema).max(LIMITS.nodes),
     relations: z.array(relationSchema).max(LIMITS.relations),
     notes: z.array(stickyNoteSchema).max(LIMITS.notes),
@@ -294,6 +330,36 @@ export const contextBundleSchema = z
     references: z.array(contextReferenceSchema).max(LIMITS.contextReferences),
     summary: z.string().max(LIMITS.contextCharacters),
     structure: z.string().max(LIMITS.structureCharacters).optional(),
+    review: z
+      .object({
+        scope: z.literal("all").optional(),
+        relations: z.array(relationSchema).max(LIMITS.relations).optional(),
+        radius: z.literal(4),
+        anchors: z.array(idSchema).max(LIMITS.nodes),
+        nodes: z
+          .array(
+            conceptNodeSchema
+              .pick({
+                id: true,
+                parentId: true,
+                order: true,
+                title: true,
+                body: true,
+                visual: true,
+              })
+              .extend({
+                level: z
+                  .number()
+                  .int()
+                  .min(0)
+                  .max(LIMITS.nodes - 1),
+                bodyExcluded: z.boolean().optional(),
+              }),
+          )
+          .max(LIMITS.nodes),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .refine(
@@ -311,7 +377,10 @@ export const aiRequestSchema = z
     requestId: idSchema,
     prompt: nonemptyText(LIMITS.prompt),
     context: contextBundleSchema,
-    mode: z.enum(["answer", "map", "expand", "hint"]),
+    canvas: z.boolean().optional(),
+    canvasRunId: idSchema.optional(),
+    excludedCardIds: z.array(idSchema).max(LIMITS.nodes).optional(),
+    mode: z.enum(["answer", "map", "expand", "hint", "organize"]),
   })
   .strict();
 export const baseUrlSchema = z
@@ -353,6 +422,13 @@ export const selectionSchema = z
   .strict()
   .nullable();
 
+// An invalid optional summary must not discard otherwise valid new cards.
+const aiOverviewsSchema = z
+  .array(z.object({ id: idSchema, summary: plainText(120) }).strict())
+  .max(12)
+  .optional()
+  .catch(undefined);
+
 export const aiMapSchema = z
   .object({
     nodes: z
@@ -383,8 +459,21 @@ export const aiMapSchema = z
           .strict(),
       )
       .max(12),
+    overviews: aiOverviewsSchema,
   })
   .strict();
+
+// Expansion may find no useful additions; initial maps must still contain nodes.
+export const aiExpansionSchema = z.union([
+  aiMapSchema,
+  z
+    .object({
+      nodes: z.tuple([]),
+      relations: z.tuple([]),
+      overviews: aiOverviewsSchema,
+    })
+    .strict(),
+]);
 
 type EdgeLike = { id: string; source: string; target: string; label: string };
 /**
@@ -520,3 +609,23 @@ export const safeParseBoard = (input: unknown) => {
     return { success: false as const, error };
   }
 };
+
+/** A whole-board revision must account for every existing card. */
+export const aiOrganizationSchema = z
+  .object({
+    nodes: z
+      .array(
+        conceptNodeSchema.pick({
+          id: true,
+          parentId: true,
+          order: true,
+          title: true,
+          body: true,
+          visual: true,
+        }),
+      )
+      .min(1)
+      .max(LIMITS.nodes),
+    relations: z.array(relationSchema).max(LIMITS.relations),
+  })
+  .strict();

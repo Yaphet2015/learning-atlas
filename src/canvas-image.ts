@@ -34,7 +34,7 @@ export async function canvasImage(nodes: Node[]): Promise<string> {
   });
   clone
     .querySelectorAll(
-      ".react-flow__node-ghost, .react-flow__handle, button, input, textarea, .react-flow__selection, .react-flow__nodesselection",
+      ".topic-overviews, .react-flow__node-toolbar, .react-flow__node-ghost, .react-flow__handle, button, input, textarea, .react-flow__selection, .react-flow__nodesselection",
     )
     .forEach((el) => el.remove());
   clone.style.transform = `translate(${padding - bounds.x}px, ${padding - bounds.y}px)`;

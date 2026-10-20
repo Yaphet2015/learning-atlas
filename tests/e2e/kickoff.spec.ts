@@ -45,9 +45,14 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
   expect(asks.map((a: any) => a.mode)).toEqual(["answer", "answer", "map"]);
   expect(asks[2].prompt).toContain("知道折射，但不懂为什么是弯的");
-  // Every answer request carries the board outline.
-  expect(asks[1].context.structure).toContain("L0 起点 彩虹是怎么形成的？");
-  expect(asks[1].context.structure).toContain("◀ 当前卡片");
+  // Conversation requests read the canvas through tools rather than embedding it.
+  expect(asks[1].canvas).toBe(true);
+  expect(asks[1].context.structure).toBeUndefined();
+  expect(asks[1].context.review).toBeUndefined();
+  expect(asks[2].context.topic).toBe("彩虹是怎么形成的？");
+  expect(asks[2].context.review.radius).toBe(4);
+  expect(asks[2].context.review.nodes).toHaveLength(1);
+  expect(asks[2].context.review.nodes[0].body).toBeTruthy();
   await expect(
     page.locator(".react-flow").getByRole("button", { name: /AI 带我开始/ }),
   ).toHaveCount(0);

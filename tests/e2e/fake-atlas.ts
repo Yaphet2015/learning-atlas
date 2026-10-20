@@ -34,6 +34,13 @@ export async function installFakeAtlas(
       const hints: any[] = [];
       (window as any).__atlasHints = hints;
       const answer = (request: any) => {
+        if (request.mode === "organize")
+          return (window as any).__atlasOrganizationAnswers?.shift() ?? "{}";
+        if (request.mode === "expand")
+          return (
+            (window as any).__atlasExpansionAnswers?.shift() ??
+            JSON.stringify({ nodes: [], relations: [] })
+          );
         if (request.mode === "hint") {
           const i = hints.indexOf(request);
           return JSON.stringify({
@@ -77,6 +84,46 @@ export async function installFakeAtlas(
         keyStorage: "encrypted",
         ...(isConfigured ? { keyHint: "sk-••••7f3a" } : {}),
       };
+      const canvasListeners = new Set<(event: any) => void>();
+      const canvasRuns = new Map<string, any>();
+      const emitCanvas = (run: any) => {
+        canvasRuns.set(run.id, run);
+        canvasListeners.forEach((callback) =>
+          callback({ run: structuredClone(run) }),
+        );
+      };
+      const startCanvas = async (
+        boardId: string,
+        origin = "organize",
+        requestId?: string,
+      ) => {
+        if ((window as any).__atlasOrganizationError)
+          throw new Error("整理请求失败，请重试。");
+        const board = structuredClone(boards.get(boardId));
+        const id = requestId ?? "canvas-" + crypto.randomUUID();
+        const run = {
+          id,
+          boardId,
+          stickyId: origin === "organize" ? "canvas-" + id : "chat-canvas",
+          origin,
+          status: "running",
+          phase: "structure",
+          revision: 0,
+          reviewed: 0,
+          total: board.nodes.length,
+          changed: false,
+          summary: "",
+          draft: board,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        emitCanvas(run);
+        setTimeout(() => {
+          if (canvasRuns.get(id)?.status !== "running") return;
+          emitCanvas({ ...run, phase: "locking" });
+        }, 100);
+        return structuredClone(run);
+      };
       (window as any).atlas = {
         platform: os,
         onFullscreenChange: (callback: (value: boolean) => void) => {
@@ -85,12 +132,15 @@ export async function installFakeAtlas(
         },
         onBeforeClose: () => () => {},
         listBoards: async () =>
-          [...boards.values()].map(({ id, title, kind, updatedAt }) => ({
-            id,
-            title,
-            kind,
-            updatedAt,
-          })),
+          [...boards.values()].map(
+            ({ id, title, kind, updatedAt, archivedAt }) => ({
+              id,
+              title,
+              kind,
+              updatedAt,
+              ...(archivedAt ? { archivedAt } : {}),
+            }),
+          ),
         loadBoard: async (id: string) => boards.get(id) ?? null,
         saveBoard: async (board: any) => {
           boards.set(board.id, board);
@@ -132,8 +182,101 @@ export async function installFakeAtlas(
                 status: 401,
               }
             : { ok: true, model: s.model, latencyMs: 842 },
+        onCanvasRun: (callback: (event: any) => void) => {
+          canvasListeners.add(callback);
+          return () => canvasListeners.delete(callback);
+        },
+        startCanvasRun: async (boardId: string) => {
+          asks.push({
+            mode: "organize",
+            boardId,
+            context: {
+              topic: boards.get(boardId)?.topic,
+              references: [],
+              summary: "整理全画布",
+            },
+          });
+          return startCanvas(boardId);
+        },
+        listCanvasRuns: async (boardId: string) =>
+          [...canvasRuns.values()]
+            .filter((run) => run.boardId === boardId)
+            .map(({ draft, ...run }) => run),
+        getCanvasRun: async (_boardId: string, id: string) =>
+          canvasRuns.get(id) ?? null,
+        prepareCanvasRun: async (_boardId: string, id: string) => {
+          const run = canvasRuns.get(id);
+          if (!run || run.status !== "running") return;
+          const custom = (window as any).__atlasCanvasDraft;
+          const draft = custom
+            ? {
+                ...run.draft,
+                ...structuredClone(custom),
+                nodes: custom.nodes.map((node: any) => ({
+                  ...run.draft.nodes.find((n: any) => n.id === node.id),
+                  ...node,
+                })),
+              }
+            : run.draft;
+          emitCanvas({
+            ...run,
+            draft,
+            changed: true,
+            revision: 1,
+            phase: "editing",
+          });
+          setTimeout(() => {
+            const current = canvasRuns.get(id);
+            if (current?.status !== "running") return;
+            emitCanvas({
+              ...current,
+              status: (window as any).__atlasCanvasFail ? "failed" : "ready",
+              phase: "validating",
+              reviewed: draft.nodes.length,
+              summary: "画布修改已完成，可撤销恢复。",
+              ...((window as any).__atlasCanvasFail
+                ? { error: "本轮校对未完成，修改未提交。" }
+                : {}),
+            });
+          }, 900);
+        },
+        commitCanvasRun: async (boardId: string, id: string) => {
+          const run = canvasRuns.get(id);
+          const current = boards.get(boardId);
+          const result = {
+            ...current,
+            nodes: run.draft.nodes,
+            relations: run.draft.relations,
+            canvasVersion: id,
+          };
+          boards.set(boardId, result);
+          persist();
+          emitCanvas({
+            ...run,
+            status: "applied",
+            phase: "complete",
+            draft: result,
+          });
+          return structuredClone(result);
+        },
+        resumeCanvasRun: async (boardId: string, id: string) => {
+          const run = canvasRuns.get(id);
+          if (run) emitCanvas({ ...run, status: "running", phase: "locking" });
+        },
+        cancelCanvasRun: async (_boardId: string, id: string) => {
+          const run = canvasRuns.get(id);
+          if (run) emitCanvas({ ...run, status: "cancelled" });
+        },
         ask: async (request: any) => {
+          if (
+            request.mode === "organize" &&
+            (window as any).__atlasOrganizationError
+          )
+            throw new Error("整理请求失败，请重试。");
           (request.mode === "hint" ? hints : asks).push(request);
+          if (request.canvas && (window as any).__atlasChatCanvas) {
+            void startCanvas(request.boardId, "chat", request.requestId);
+          }
           const emit = (text: string, status: string) =>
             listeners.forEach((l) =>
               l({
@@ -157,7 +300,10 @@ export async function installFakeAtlas(
             setTimeout(() => emit(full, "done"), slow * 2);
             return;
           }
-          setTimeout(() => emit(answer(request), "done"), 120);
+          setTimeout(
+            () => emit(answer(request), "done"),
+            request.mode === "organize" ? 900 : 120,
+          );
         },
         stop: async () => {},
         getHistory: async () => ({ messages: [], running: false }),

@@ -1,6 +1,7 @@
 import ofl from "lxgw-wenkai-webfont/OFL.txt?raw";
 import { useEffect, useRef, useState } from "react";
 import {
+  Archive,
   Download,
   HardDrive,
   Upload,
@@ -13,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import type {
+  BoardSummary,
   AIConnectionResult,
   AISettings,
   AISettingsInput,
@@ -106,11 +108,12 @@ export function ApiKeyField({
   );
 }
 
-type Section = "ai" | "appearance" | "data" | "shortcuts" | "about";
+type Section = "ai" | "appearance" | "data" | "archive" | "shortcuts" | "about";
 const SECTIONS: [Section, string, React.ReactNode][] = [
   ["ai", "AI 服务", <Sparkles size={16} className="ico" />],
   ["appearance", "外观", <PaletteIcon size={16} className="ico" />],
   ["data", "画板数据", <HardDrive size={16} className="ico" />],
+  ["archive", "已归档画布", <Archive size={16} className="ico" />],
   ["shortcuts", "快捷键", <Keyboard size={16} className="ico" />],
   ["about", "关于与许可", <Info size={16} className="ico" />],
 ];
@@ -123,6 +126,9 @@ export function Settings({
   onClose,
   onSave,
   onTest,
+  archivedBoards,
+  archiveBusy,
+  onRestore,
   boardTitle,
   transferBusy,
   onImport,
@@ -135,6 +141,9 @@ export function Settings({
   onClose: () => void;
   onSave: (s: AISettingsInput) => Promise<void>;
   onTest: (s: AISettingsInput) => Promise<AIConnectionResult>;
+  archivedBoards: BoardSummary[];
+  archiveBusy: boolean;
+  onRestore: (id: string) => void;
   boardTitle?: string;
   transferBusy: boolean;
   onImport: () => void;
@@ -294,8 +303,8 @@ export function Settings({
                 <div className="privacy-note">
                   <LockKeyhole size={16} />
                   <span>
-                    密钥只交给桌面主进程，用系统钥匙串（safeStorage）加密后保存在本机，界面只显示末四位。提问时，你的问题、当前批注的对话历史和列出的上下文会发送到上方
-                    API 服务商，可能产生费用。
+                    密钥只交给桌面主进程，用系统钥匙串（safeStorage）加密后保存在本机，界面只显示末四位。提问或生成卡片时，起点主题、当前对话、选入的资料和生成位置上下各
+                    4 层的卡片内容会发送到上方 API 服务商，可能产生费用。
                   </span>
                 </div>
                 {error && <div className="inline-error">{error}</div>}
@@ -406,6 +415,32 @@ export function Settings({
                   导出画板
                 </button>
               </div>
+            </div>
+          )}
+          {section === "archive" && (
+            <div className="settings-section" aria-labelledby="sec-archive">
+              <h2 id="sec-archive">已归档画布</h2>
+              <p className="sec-lede">
+                归档的画布保留全部卡片和对话。恢复后会重新显示在侧栏。
+              </p>
+              {archivedBoards.length === 0 && <p>还没有归档的画布。</p>}
+              {archivedBoards.map((b) => (
+                <div className="setting-row" key={b.id}>
+                  <span>
+                    <b>{b.title}</b>
+                    <small>
+                      归档于 {new Date(b.archivedAt!).toLocaleString()}
+                    </small>
+                  </span>
+                  <button
+                    className="btn"
+                    disabled={archiveBusy}
+                    onClick={() => onRestore(b.id)}
+                  >
+                    恢复
+                  </button>
+                </div>
+              ))}
             </div>
           )}
           {section === "shortcuts" && (

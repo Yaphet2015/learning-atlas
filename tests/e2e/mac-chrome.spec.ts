@@ -3,7 +3,7 @@ import { installFakeAtlas } from "./fake-atlas";
 import { gotoApp } from "./ready";
 
 // Chromium on Linux cannot draw real traffic lights; this checks the inset logic and drag strip.
-test("macOS keeps the sidebar below the traffic lights and drops the inset in fullscreen", async ({
+test("macOS keeps sidebar content below the traffic lights and drops its padding in fullscreen", async ({
   page,
 }) => {
   await installFakeAtlas(page, true, "darwin");
@@ -13,10 +13,12 @@ test("macOS keeps the sidebar below the traffic lights and drops the inset in fu
     exact: true,
   });
   await expect(sidebar).toBeVisible();
-  expect((await sidebar.boundingBox())!.y).toBe(40);
+  expect((await sidebar.boundingBox())!.y).toBe(0);
+  await expect(sidebar).toHaveCSS("padding-top", "40px");
   await sidebar.getByRole("button", { name: "收起左侧边栏" }).click();
   await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(56);
-  expect((await sidebar.boundingBox())!.y).toBe(40);
+  expect((await sidebar.boundingBox())!.y).toBe(0);
+  await expect(sidebar).toHaveCSS("padding-top", "40px");
   const strip = page.locator(".titlebar-drag");
   await expect(strip).toHaveCount(1);
   expect(
@@ -35,28 +37,28 @@ test("macOS keeps the sidebar below the traffic lights and drops the inset in fu
   await page.getByRole("button", { name: "关闭设置" }).click();
   await page.evaluate(() => (window as any).__setFullscreen(true));
   await expect(strip).toHaveCount(0);
-  await expect.poll(async () => (await sidebar.boundingBox())!.y).toBe(12);
+  await expect(sidebar).toHaveCSS("padding-top", "4px");
   await page.evaluate(() => (window as any).__setFullscreen(false));
-  await expect.poll(async () => (await sidebar.boundingBox())!.y).toBe(40);
+  await expect(sidebar).toHaveCSS("padding-top", "40px");
 });
 
-test("web preview and other platforms keep the sidebar at the window gutter", async ({
+test("web preview and other platforms keep the application sidebar flush to the window", async ({
   page,
 }) => {
   await gotoApp(page);
   const sidebar = page.locator(".workspace-sidebar");
   await expect(sidebar).toBeVisible();
-  expect((await sidebar.boundingBox())!.y).toBe(12);
+  expect((await sidebar.boundingBox())!.y).toBe(0);
   await expect(page.locator(".titlebar-drag")).toHaveCount(0);
   await installFakeAtlas(page, true, "win32");
   await gotoApp(page);
   await expect(sidebar).toBeVisible();
-  expect((await sidebar.boundingBox())!.y).toBe(12);
+  expect((await sidebar.boundingBox())!.y).toBe(0);
   await expect(page.locator(".titlebar-drag")).toHaveCount(0);
 });
 
 for (const scheme of ["light", "dark"] as const)
-  test(`floating chrome sits 12px from the window edges · ${scheme}`, async ({
+  test(`floating chrome sits 6px from the window edges · ${scheme}`, async ({
     page,
   }) => {
     await page.emulateMedia({ colorScheme: scheme });
@@ -73,22 +75,22 @@ for (const scheme of ["light", "dark"] as const)
         cs.getPropertyValue("--edge").trim(),
       ];
     });
-    expect(tokens[0]).toBe("12px");
+    expect(tokens[0]).toBe("6px");
     expect(tokens[1]).toMatch(/^rgba\(/);
     const vw = page.viewportSize()!.width,
       vh = page.viewportSize()!.height;
     const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
     const sw = await box(".workspace-sidebar");
-    expect([sw.x, sw.y]).toEqual([12, 12]);
+    expect([sw.x, sw.y]).toEqual([0, 0]);
     const pr = await box(".progress");
-    expect([Math.round(vw - pr.x - pr.width), pr.y]).toEqual([12, 12]);
+    expect([Math.round(vw - pr.x - pr.width), pr.y]).toEqual([6, 6]);
     const dock = await box(".dock");
-    expect(Math.round(vh - dock.y - dock.height)).toBe(12);
+    expect(Math.round(vh - dock.y - dock.height)).toBe(6);
     const map = await box(".map-unit");
     expect([
       Math.round(vw - map.x - map.width),
       Math.round(vh - map.y - map.height),
-    ]).toEqual([12, 12]);
+    ]).toEqual([6, 6]);
     await page.locator(".react-flow__node-root").click();
     await page.keyboard.press("/");
     const drawer = await box(".drawer");
@@ -96,5 +98,5 @@ for (const scheme of ["light", "dark"] as const)
       Math.round(vw - drawer.x - drawer.width),
       drawer.y,
       Math.round(vh - drawer.y - drawer.height),
-    ]).toEqual([12, 12, 12]);
+    ]).toEqual([6, 6, 6]);
   });

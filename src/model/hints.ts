@@ -1,4 +1,5 @@
 import type { Board, CardHints, ConceptNode } from "../shared/types";
+import { fnv1a } from "../shared/hash";
 
 /** Where a ghost hint sits: under the card (child), to its right (sibling / another root), above (a broader root). */
 export type HintSide = "below" | "right" | "above";
@@ -6,19 +7,29 @@ export const HINT_MAX = 18;
 /** How long a card is hovered or selected before its hints are asked for. */
 export const HINT_DELAY = 600;
 
-/**
- * What a card's hints depend on. A cached hint is reused while this is unchanged: its own
- * title, its parent's title, and how many children and siblings it has.
- */
+const boardSignatures = new WeakMap<Board, string>();
+
+/** Immutable board snapshots share one content hash across all their card hints. */
 export function hintSignature(board: Board, id: string): string {
-  const n = board.nodes.find((x) => x.id === id);
-  if (!n) return "";
-  const parent = n.parentId
-    ? board.nodes.find((x) => x.id === n.parentId)
-    : undefined;
-  const kids = board.nodes.filter((x) => x.parentId === id).length;
-  const sibs = board.nodes.filter((x) => x.parentId === n.parentId).length;
-  return [n.title, parent?.title ?? "", kids, sibs].join("|");
+  if (!board.nodes.some((n) => n.id === id)) return "";
+  let signature = boardSignatures.get(board);
+  if (!signature) {
+    const contents = JSON.stringify([
+      board.topic,
+      board.nodes.map((n) => [
+        n.id,
+        n.parentId,
+        n.order,
+        n.title,
+        n.body,
+        n.visual,
+      ]),
+      board.relations,
+    ]);
+    signature = `review-v1:${fnv1a(contents).toString(16)}`;
+    boardSignatures.set(board, signature);
+  }
+  return `${id}|${signature}`;
 }
 
 /** The card's cached hints if they still fit the card, else undefined (time to ask). */

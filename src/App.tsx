@@ -20,6 +20,7 @@ import type {
   AIRequest,
   AISettings,
   AIUpdate,
+  CanvasRun,
   Board,
   BoardSummary,
   Selection,
@@ -35,6 +36,9 @@ import {
   expandWalkthrough,
   buildMapFromAI,
 } from "./model/boards";
+import { reconcileCanvasResult } from "./model/canvas-result";
+import { CanvasRunProgress } from "./components/CanvasRunProgress";
+import { CanvasActivity } from "./components/CanvasActivity";
 import { contextForNote } from "./model/context";
 import {
   HINT_DELAY,
@@ -63,6 +67,7 @@ import {
   learnerAnswers,
   isQuestionRoot,
   needsKickoff,
+  questionId,
   rootOf,
   rootsOf,
 } from "./model/kickoff";
@@ -95,6 +100,7 @@ import {
 import { TreeEdge, SeqEdge } from "./components/TreeEdge";
 import { CrossEdge } from "./components/CrossEdge";
 import { LevelGuides } from "./components/LevelGuides";
+import { TopicOverviews } from "./components/TopicOverviews";
 import {
   Dock,
   MapUnit,
@@ -241,13 +247,42 @@ export default function App() {
       // The sidebar still works if browser preference storage is unavailable.
     }
   }, [sidebarCollapsed]);
+  const [canvasRuns, setCanvasRuns] = useState<CanvasRun[]>([]);
+  const [canvasPreview, setCanvasPreview] = useState<Board | null>(null);
+  const canvasPreviewRunId = useRef<string | null>(null);
+  const [showCanvasActivity, setShowCanvasActivity] = useState(false);
+  const canvasWriteLocked = useRef(false);
+  const canvasPreparing = useRef(new Set<string>());
+  const canvasCommitting = useRef(new Set<string>());
+  const appliedCanvas = useRef(new Set<string>());
+  const currentCanvasRun =
+    canvasRuns.find(
+      (run) =>
+        run.boardId === board?.id &&
+        ["running", "ready"].includes(run.status) &&
+        (run.changed || run.phase === "locking"),
+    ) ??
+    canvasRuns.find(
+      (run) =>
+        run.boardId === board?.id && ["running", "ready"].includes(run.status),
+    );
+  const organizing = currentCanvasRun?.origin === "organize";
+  const canvasLocked =
+    !!currentCanvasRun &&
+    (currentCanvasRun.changed || currentCanvasRun.phase === "locking");
+  canvasWriteLocked.current = canvasLocked;
   const editingLocked = useRef(false);
+  /** True while a board switch/transfer is in flight or a canvas agent run owns the board. */
+  const locked = () => editingLocked.current || canvasWriteLocked.current;
   const boardCache = useRef(new Map<string, Board>()),
     completionQueues = useRef(new Map<string, Promise<void>>());
   const boardRef = useRef<Board | null>(null),
     saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     requestMeta = useRef(
-      new Map<string, { request: AIRequest; anchor?: string }>(),
+      new Map<
+        string,
+        { request: AIRequest; anchor?: string; hintSignature?: string }
+      >(),
     );
   // Ghost hints: in flight (by card), failed (by card|signature), and hover debounce timers.
   const hintBusy = useRef(new Set<string>());
@@ -282,8 +317,17 @@ export default function App() {
   }, []);
   const edit = useCallback(
     (fn: (b: Board) => Board, record = true) => {
-      if (!editingLocked.current && boardRef.current)
-        putBoard(fn(boardRef.current), record);
+      if (editingLocked.current || !boardRef.current) return;
+      const current = boardRef.current;
+      const next = fn(current);
+      if (
+        canvasWriteLocked.current &&
+        (next.nodes !== current.nodes ||
+          next.relations !== current.relations ||
+          next.scene !== current.scene)
+      )
+        return;
+      putBoard(next, record);
     },
     [putBoard],
   );
@@ -295,6 +339,126 @@ export default function App() {
     setSaveStatus("saved");
     await refreshList();
   }, [refreshList]);
+  const receiveCanvasRun = useCallback(
+    (run: CanvasRun) => {
+      setCanvasRuns((previous) => [
+        run,
+        ...previous.filter((item) => item.id !== run.id),
+      ]);
+      const isCurrent = boardRef.current?.id === run.boardId;
+      if (
+        run.status === "running" &&
+        run.phase === "locking" &&
+        !canvasPreparing.current.has(run.id)
+      ) {
+        canvasPreparing.current.add(run.id);
+        if (isCurrent) {
+          canvasWriteLocked.current = true;
+          canvasPreviewRunId.current = run.id;
+          setEditingId(null);
+          setPreview(null);
+          setDragPos(null);
+        }
+        void (async () => {
+          try {
+            if (saveTimer.current) clearTimeout(saveTimer.current);
+            const current =
+              boardRef.current?.id === run.boardId
+                ? boardRef.current
+                : boardCache.current.get(run.boardId);
+            if (current) await api.saveBoard(current);
+            await api.prepareCanvasRun(run.boardId, run.id);
+          } catch (error) {
+            showToast(errorText(error));
+            await api.cancelCanvasRun(run.boardId, run.id);
+          } finally {
+            canvasPreparing.current.delete(run.id);
+          }
+        })();
+      }
+      if (isCurrent && run.changed && run.status === "running" && run.draft) {
+        canvasPreviewRunId.current = run.id;
+        setCanvasPreview(reconcileCanvasResult(boardRef.current!, run.draft));
+      }
+      if (run.status === "ready" && !canvasCommitting.current.has(run.id)) {
+        canvasCommitting.current.add(run.id);
+        void (async () => {
+          try {
+            if (saveTimer.current) clearTimeout(saveTimer.current);
+            const current =
+              boardRef.current?.id === run.boardId
+                ? boardRef.current
+                : boardCache.current.get(run.boardId);
+            if (current) await api.saveBoard(current);
+            const result = await api.commitCanvasRun(run.boardId, run.id);
+            if (!appliedCanvas.current.has(run.id)) {
+              appliedCanvas.current.add(run.id);
+              const local =
+                boardRef.current?.id === run.boardId
+                  ? boardRef.current
+                  : boardCache.current.get(run.boardId);
+              const next = local
+                ? reconcileCanvasResult(local, result, current ?? undefined)
+                : result;
+              if (boardRef.current?.id === run.boardId) {
+                putBoard(next, run.changed);
+                setCanvasPreview(null);
+                canvasWriteLocked.current = false;
+              } else boardCache.current.set(run.boardId, next);
+            }
+            showToast(run.summary || "画布修改已完成，可撤销恢复。");
+          } catch (error) {
+            setCanvasPreview(null);
+            canvasWriteLocked.current = false;
+            await api.cancelCanvasRun(run.boardId, run.id).catch(() => {});
+            showToast(errorText(error));
+          } finally {
+            canvasCommitting.current.delete(run.id);
+          }
+        })();
+      }
+      if (
+        isCurrent &&
+        ["paused", "cancelled", "failed", "conflict"].includes(run.status)
+      ) {
+        if (canvasPreviewRunId.current === run.id) {
+          setCanvasPreview(null);
+          canvasWriteLocked.current = false;
+          canvasPreviewRunId.current = null;
+        }
+        if (run.status === "paused")
+          showToast("画布任务已暂停，进度已保存。可在画布记录中继续。");
+        if (run.error) showToast(errorText(run.error));
+      }
+    },
+    [putBoard, showToast],
+  );
+  useEffect(
+    () => api.onCanvasRun(({ run }) => receiveCanvasRun(run)),
+    [receiveCanvasRun],
+  );
+  useEffect(() => {
+    if (!board?.id) return;
+    let cancelled = false;
+    void api
+      .listCanvasRuns(board.id)
+      .then(async (runs) => {
+        if (cancelled) return;
+        setCanvasRuns((previous) => [
+          ...runs,
+          ...previous.filter((run) => run.boardId !== board.id),
+        ]);
+        for (const summary of runs)
+          if (["running", "ready"].includes(summary.status)) {
+            const run = await api.getCanvasRun(board.id, summary.id);
+            if (run && !cancelled) receiveCanvasRun(run);
+          }
+      })
+      .catch((error) => showToast(errorText(error)));
+    return () => {
+      cancelled = true;
+    };
+  }, [board?.id, receiveCanvasRun, showToast]);
   const closeFlush = useCallback(async () => {
     editingLocked.current = true;
     setClosing(true);
@@ -311,7 +475,7 @@ export default function App() {
     let cancelled = false;
     void (async () => {
       try {
-        const list = await api.listBoards();
+        const list = (await api.listBoards()).filter((b) => !b.archivedAt);
         const settings = await api.getAISettings();
         let initial = list.length
           ? await api.loadBoard(
@@ -356,6 +520,7 @@ export default function App() {
           void refreshList();
         })
         .catch((e) => {
+          if (boardRef.current?.canvasVersion !== board.canvasVersion) return;
           setSaveStatus("error");
           showToast(`保存失败：${errorText(e)}`);
         });
@@ -405,6 +570,7 @@ export default function App() {
   useEffect(
     () =>
       api.onAIUpdate((update: AIUpdate) => {
+        if (update.stickyId.startsWith("canvas-run-")) return;
         // Ghost hints are a quiet cache: no thread, no toast, no busy state.
         const hintMeta = requestMeta.current.get(update.requestId);
         if (hintMeta?.request.mode === "hint") {
@@ -414,10 +580,10 @@ export default function App() {
           hintBusy.current.delete(id);
           const b = boardRef.current;
           if (update.status !== "done" || b?.id !== update.boardId) return;
+          if (hintMeta.hintSignature !== hintSignature(b, id)) return;
           const hints = parseHints(update.text, b, id);
           if (!hints) hintFailed.current.add(`${id}|${hintSignature(b, id)}`);
-          else if (!editingLocked.current)
-            putBoard(withHints(b, id, hints), false);
+          else if (!locked()) putBoard(withHints(b, id, hints), false);
           return;
         }
         const key = `${update.boardId}/${update.stickyId}`;
@@ -432,7 +598,8 @@ export default function App() {
         if (update.status === "streaming") return;
         const meta = requestMeta.current.get(update.requestId);
         requestMeta.current.delete(update.requestId);
-        if (meta && meta.request.mode !== "answer") setMapBusy(false);
+        if (meta && ["map", "expand"].includes(meta.request.mode))
+          setMapBusy(false);
         if (update.status === "error") {
           showToast(errorText(update.error ?? "AI 暂时无法回答"));
           return;
@@ -456,8 +623,18 @@ export default function App() {
             let next = target;
             try {
               if (meta && meta.request.mode !== "answer") {
-                next = buildMapFromAI(update.text, target, meta.anchor);
-                showToast("已展开新的概念。你可以继续调整它们。");
+                next = buildMapFromAI(
+                  update.text,
+                  target,
+                  meta.anchor,
+                  meta.request.mode === "expand" ? "expand" : "map",
+                  meta.request.context,
+                );
+                showToast(
+                  next.nodes.length === target.nodes.length
+                    ? "这次没有找到值得补充的新概念。你仍可以继续提问或稍后再试。"
+                    : "已展开新的概念。你可以继续调整它们。",
+                );
               } else {
                 next = {
                   ...target,
@@ -479,11 +656,14 @@ export default function App() {
                   ),
                 };
               }
-              if (boardRef.current?.id === target.id) putBoard(next, false);
-              else {
-                next = { ...next, updatedAt: now() };
-                boardCache.current.set(next.id, next);
-                await api.saveBoard(next);
+              if (next !== target) {
+                if (boardRef.current?.id === target.id) {
+                  putBoard(next, false);
+                } else {
+                  next = { ...next, updatedAt: now() };
+                  boardCache.current.set(next.id, next);
+                  await api.saveBoard(next);
+                }
               }
               setPending((p) => ({ ...p, [key]: { text: "", busy: false } }));
             } catch (error) {
@@ -574,6 +754,14 @@ export default function App() {
         [`${request.boardId}/${request.stickyId}`]: { text: "", busy: true },
       }));
       try {
+        if (request.canvas) {
+          if (saveTimer.current) clearTimeout(saveTimer.current);
+          const target =
+            boardRef.current?.id === request.boardId
+              ? boardRef.current
+              : boardCache.current.get(request.boardId);
+          if (target) await api.saveBoard(target);
+        }
         await api.ask(request);
       } catch (error) {
         requestMeta.current.delete(request.requestId);
@@ -600,7 +788,7 @@ export default function App() {
         setShowSettings(true);
         return false;
       }
-      const context = contextForNote(b, noteId, selection);
+      const context = contextForNote(b, noteId, selection, false, "references");
       const request: AIRequest = {
         boardId: b.id,
         stickyId: noteId,
@@ -608,6 +796,11 @@ export default function App() {
         prompt,
         context,
         mode: "answer",
+        canvas: true,
+        excludedCardIds: b.notes
+          .find((note) => note.id === noteId)
+          ?.excludedRefs?.filter((ref) => ref.startsWith("node:"))
+          .map((ref) => ref.slice(5)),
       };
       // A retry resends the question already in the thread.
       if (!retry)
@@ -640,7 +833,13 @@ export default function App() {
   );
   const expand = useCallback(
     (id: string) => {
-      if (editingLocked.current) return;
+      if (locked()) return;
+      if (
+        [...requestMeta.current.values()].some(
+          (meta) => meta.request.mode !== "answer",
+        )
+      )
+        return;
       const b = boardRef.current;
       if (!b) return;
       if (b.kind === "walkthrough") {
@@ -670,7 +869,7 @@ export default function App() {
           stickyId: "expand-" + id,
           requestId: uid(),
           mode: "expand",
-          prompt: `围绕「${node.title}」给 2–4 个有帮助的新概念或具体子问题。按知识关系设置 parent：同层概念放到共同父节点下，组成、原理或细节才放到对应概念下。先解释它如何工作或用一个例子拆开，不要一次铺开整个领域；不要按提问先后逐层往下挂。`,
+          prompt: `围绕「${node.title}」补充 2–4 个有帮助的新概念或具体子问题。先检查白板结构和已有子概念，避免重复或换句话重述已有内容；已展开过仍可继续补充。按知识关系设置 parent：同层概念放到共同父节点下，组成、原理或细节才放到对应概念下。先解释它如何工作或用一个例子拆开，不要一次铺开整个领域；不要按提问先后逐层往下挂。如果这次没有值得补充的新内容，返回 {"nodes":[],"relations":[]}，不要勉强凑数。`,
           context,
         },
         id,
@@ -678,6 +877,27 @@ export default function App() {
     },
     [putBoard, settings.configured, sendAI, showToast],
   );
+  const organizeBoard = useCallback(() => {
+    const current = boardRef.current;
+    if (!current || locked()) return;
+    if (!settings.configured) {
+      setShowSettings(true);
+      return;
+    }
+    void (async () => {
+      try {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        await api.saveBoard(current);
+        const run = await api.startCanvasRun(current.id);
+        setCanvasRuns((previous) => [
+          run,
+          ...previous.filter((item) => item.id !== run.id),
+        ]);
+      } catch (error) {
+        showToast(errorText(error));
+      }
+    })();
+  }, [settings.configured, showToast]);
   const generateMap = useCallback(
     (target: Board, prompt?: string) => {
       if (!settings.configured) {
@@ -715,7 +935,7 @@ export default function App() {
   );
   /** 「让 AI 带我开始」: open the root's drawer conversation and let the tutor probe what the learner knows. */
   const startKickoff = useCallback(() => {
-    if (editingLocked.current) return;
+    if (locked()) return;
     const b = boardRef.current;
     const root = b && rootOf(b);
     if (!b || !root) return;
@@ -756,11 +976,12 @@ export default function App() {
   /** Accept: turn the kickoff conversation into the first level of child questions on the canvas. */
   const proposeFirstLevel = useCallback(() => {
     const b = boardRef.current;
-    if (!b || editingLocked.current) return;
+    if (!b || locked()) return;
     generateMap(b, firstLevelPrompt(b.topic, learnerAnswers(kickoffNote(b))));
   }, [generateMap]);
   const resetBoardView = useCallback(() => {
     setPast([]);
+    setCanvasPreview(null);
     setSelection(null);
     setPicked([]);
     setDrawer(null);
@@ -798,11 +1019,62 @@ export default function App() {
       setSwitchingBoardId(null);
     }
   }
+  async function setBoardArchived(
+    id: string,
+    archived: boolean,
+  ): Promise<void> {
+    if (locked()) return;
+    editingLocked.current = true;
+    setSwitchingBoardId(id);
+    try {
+      await flush();
+      const target = boardCache.current.get(id) ?? (await api.loadBoard(id));
+      if (!target) throw new Error("画布不存在");
+      let replacement: Board | null = null;
+      if (archived && boardRef.current?.id === id) {
+        const next = boards.find((b) => b.id !== id && !b.archivedAt);
+        replacement = next
+          ? await loadBoardForNavigation(
+              next.id,
+              boardCache.current,
+              api.loadBoard,
+              flush,
+            )
+          : createEmptyBoard("新的知识主题");
+        if (!replacement) throw new Error("无法读取下一张画布");
+        if (!next) await api.saveBoard(replacement);
+      }
+      const value = {
+        ...(boardCache.current.get(id) ?? target),
+        updatedAt: now(),
+      };
+      if (archived) value.archivedAt = now();
+      else delete value.archivedAt;
+      await api.saveBoard(value);
+      boardCache.current.set(id, value);
+      if (replacement) {
+        boardRef.current = replacement;
+        boardCache.current.set(replacement.id, replacement);
+        setBoard(replacement);
+        resetBoardView();
+        setTimeout(() => flow.fitView({ padding: 0.16, duration: 400 }), 60);
+      }
+      await refreshList();
+      showToast(
+        archived ? "画布已归档，可在设置中恢复。" : "画布已恢复到侧栏。",
+      );
+    } catch (error) {
+      showToast(errorText(error));
+    } finally {
+      editingLocked.current = false;
+      setSwitchingBoardId(null);
+    }
+  }
   async function openSession(
     boardId: string,
     sessionId: string,
   ): Promise<void> {
-    if (editingLocked.current) return;
+    if (locked()) return;
     if (boardRef.current?.id !== boardId) await switchBoard(boardId);
     const current = boardRef.current;
     if (current?.id !== boardId) return;
@@ -817,7 +1089,7 @@ export default function App() {
     }
   }
   async function createBoard(walkthrough = false) {
-    if (editingLocked.current || (!walkthrough && !topic.trim())) return;
+    if (locked() || (!walkthrough && !topic.trim())) return;
     editingLocked.current = true;
     let kickoff = false;
     try {
@@ -844,7 +1116,7 @@ export default function App() {
     if (kickoff) startKickoff();
   }
   async function importBoardFile(file: File) {
-    if (editingLocked.current) return;
+    if (locked()) return;
     editingLocked.current = true;
     setTransferBusy(true);
     try {
@@ -868,7 +1140,7 @@ export default function App() {
     }
   }
   async function exportCurrentBoard(format: ExportFormat) {
-    if (editingLocked.current || !boardRef.current) return;
+    if (locked() || !boardRef.current) return;
     editingLocked.current = true;
     setTransferBusy(true);
     try {
@@ -914,10 +1186,19 @@ export default function App() {
       );
   }, []);
   const undo = useCallback(() => {
-    if (editingLocked.current) return;
+    if (locked()) return;
     setPast((p) => {
       if (!p.length) return p;
-      const previous = p[p.length - 1];
+      const prior = p[p.length - 1];
+      const snapshot = {
+        ...prior,
+        canvasVersion: boardRef.current?.canvasVersion,
+        appliedCanvasRuns: boardRef.current?.appliedCanvasRuns,
+      };
+      const previous =
+        prior.canvasVersion !== boardRef.current?.canvasVersion
+          ? reconcileCanvasResult(boardRef.current!, snapshot)
+          : snapshot;
       boardRef.current = previous;
       boardCache.current.set(previous.id, previous);
       setBoard(previous);
@@ -1203,7 +1484,10 @@ export default function App() {
   }, [loaded, board]);
 
   // ---- layout: positions come only from layoutTree (or a drag/insert preview)
-  const shown = preview ?? board;
+  const shown =
+    (canvasPreview?.id === board?.id ? canvasPreview : null) ??
+    preview ??
+    board;
   // Card widths come from the title; row tops from the measured card heights.
   const layoutOptions = useMemo(
     () => ({
@@ -1234,9 +1518,16 @@ export default function App() {
    */
   const requestHints = useCallback((id: string) => {
     const b = boardRef.current;
-    if (!b || !configured.current || editingLocked.current) return;
+    if (
+      !b ||
+      !configured.current ||
+      editingLocked.current ||
+      canvasWriteLocked.current
+    )
+      return;
     if (!b.nodes.some((n) => n.id === id) || cachedHints(b, id)) return;
-    const key = `${id}|${hintSignature(b, id)}`;
+    const signature = hintSignature(b, id);
+    const key = `${id}|${signature}`;
     if (hintFailed.current.has(key) || hintBusy.current.size) return;
     const virtual = newNote(b, { x: 0, y: 0 }, { kind: "node", id });
     const request: AIRequest = {
@@ -1251,7 +1542,11 @@ export default function App() {
       ),
     };
     hintBusy.current.add(id);
-    requestMeta.current.set(request.requestId, { request, anchor: id });
+    requestMeta.current.set(request.requestId, {
+      request,
+      anchor: id,
+      hintSignature: signature,
+    });
     api.ask(request).catch(() => {
       requestMeta.current.delete(request.requestId);
       hintBusy.current.delete(id);
@@ -1388,6 +1683,21 @@ export default function App() {
   );
   const nodes = useMemo<CanvasNode[]>(() => {
     if (!shown || !board) return [];
+    const generatingCards = new Set<string>();
+    for (const { request, anchor } of requestMeta.current.values()) {
+      if (
+        request.boardId !== board.id ||
+        request.mode === "hint" ||
+        !pending[`${request.boardId}/${request.stickyId}`]?.busy
+      )
+        continue;
+      const attachment = board.notes.find(
+        (note) => note.id === request.stickyId,
+      )?.attachedTo;
+      const cardId =
+        anchor ?? (attachment?.kind === "node" ? attachment.id : undefined);
+      if (cardId) generatingCards.add(cardId);
+    }
     const out: CanvasNode[] = [];
     for (const n of shown.nodes) {
       const p = layout.positions.get(n.id);
@@ -1465,11 +1775,13 @@ export default function App() {
           onAsk: (id: string) => addNote({ kind: "node", id }),
           onExpand: expand,
           canExpand:
-            !n.expanded &&
-            (board.kind === "ai" ||
+            board.kind === "ai" ||
+            (!n.expanded &&
               ["concept-dom", "concept-style", "concept-render"].includes(
                 n.id,
               )),
+          expandBusy: mapBusy,
+          generating: generatingCards.has(n.id),
           onScene: (patch: Partial<Board["scene"]>) =>
             edit((b) => ({ ...b, scene: { ...b.scene, ...patch } }), false),
           onNote: (id: string) =>
@@ -1500,6 +1812,8 @@ export default function App() {
     setStatus,
     addNote,
     expand,
+    mapBusy,
+    pending,
     edit,
     kickoffReady,
     startKickoff,
@@ -1683,6 +1997,33 @@ export default function App() {
         }}
       />
       <TooltipLayer />
+      {board && showCanvasActivity && (
+        <CanvasActivity
+          board={board}
+          runs={canvasRuns.filter((run) => run.boardId === board.id)}
+          onClose={() => setShowCanvasActivity(false)}
+          onResume={(run) =>
+            void api
+              .resumeCanvasRun(run.boardId, run.id)
+              .catch((error) => showToast(errorText(error)))
+          }
+          onCancel={(run) =>
+            void api
+              .cancelCanvasRun(run.boardId, run.id)
+              .catch((error) => showToast(errorText(error)))
+          }
+          onRestore={(archiveId) => {
+            const noteId = addNote(undefined, { fresh: true });
+            if (noteId) {
+              setShowCanvasActivity(false);
+              askNote(
+                noteId,
+                `请恢复源记录 ${archiveId} 对应的原卡片，保留原内容和笔记关联。`,
+              );
+            }
+          }}
+        />
+      )}
       {transferBusy && !showExport && (
         <div className="map-progress lab" role="status">
           <LoaderCircle size={14} className="spin" />
@@ -1708,189 +2049,243 @@ export default function App() {
       )}
       {board && !mobile && (
         <>
-          <ReactFlow<CanvasNode>
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            onNodesChange={onNodesChange}
-            onNodeDrag={onNodeDrag}
-            onNodeDragStop={onNodeDragStop}
-            onConnect={connect}
-            connectionMode={ConnectionMode.Loose}
-            connectionRadius={70}
-            nodesConnectable={tool === "link"}
-            onNodeClick={(e, n) => {
-              if (n.type === "ghost") return;
-              if (e.shiftKey || e.metaKey || e.ctrlKey) {
-                const next = toggleCard(
-                  { single: selectedNodeId, picked },
-                  n.id,
-                );
-                setPicked(next.picked);
-                setSelection(
-                  next.single ? { kind: "node", id: next.single } : null,
-                );
-                return;
-              }
-              setPicked([]);
-              setSelection({ kind: "node", id: n.id });
-              addNote(
-                { kind: "node", id: n.id },
-                { cards: false, autoFocus: false },
-              );
-            }}
-            onNodeDoubleClick={(_, n) =>
-              n.type !== "ghost" && setEditingId(n.id)
-            }
-            onEdgeClick={(_, e) =>
-              e.type === "cross" && setSelection({ kind: "relation", id: e.id })
-            }
-            onPaneClick={() => {
-              if (boxing.current) return;
-              setPicked([]);
-              setSelection(null);
-              setEditingId(null);
-            }}
-            onPaneContextMenu={(e) => {
-              e.preventDefault();
-              addNote(undefined, { cards: false });
-            }}
-            fitView
-            fitViewOptions={{ padding: 0.16 }}
-            minZoom={0.18}
-            maxZoom={1.8}
-            deleteKeyCode={null}
-            selectionKeyCode={null}
-            multiSelectionKeyCode={null}
-            // Left drag on empty canvas draws a marquee (select tool). Panning:
-            // two-finger scroll, Space-drag, middle/right drag, or the hand tool.
-            selectionOnDrag={tool === "select" && !spacePan}
-            selectionMode={SelectionMode.Partial}
-            onSelectionStart={(e) => {
-              boxing.current = {
-                base:
-                  e.shiftKey || e.metaKey || e.ctrlKey
-                    ? picked.length
-                      ? picked
-                      : selectedNodeId
-                        ? [selectedNodeId]
-                        : []
-                    : [],
-                inside: new Set(),
-              };
-            }}
-            onSelectionEnd={() => {
-              // Let the pane click that ends the drag see we were boxing.
-              setTimeout(() => (boxing.current = null), 0);
-            }}
-            panOnScroll
-            panOnDrag={tool === "hand" || spacePan ? true : [1, 2]}
-            onMoveStart={(e) => {
-              // Panning, not zooming: a drag, or a scroll without the pinch/ctrl modifier.
-              if (!e) return;
-              if (e.type === "wheel" && (e as WheelEvent).ctrlKey) return;
-              clearTimeout(panEnd.current);
-              setPanning(true);
-            }}
-            onMoveEnd={() => {
-              clearTimeout(panEnd.current);
-              panEnd.current = setTimeout(() => setPanning(false), 450);
-            }}
-            zoomOnDoubleClick={false}
-            nodeDragThreshold={4}
-            proOptions={{ hideAttribution: true }}
+          <div
+            className={`canvas-interaction ${canvasLocked ? "canvas-edit-locked" : ""}`}
           >
-            <LevelGuides {...bounds} />
-            <MapUnit showMap={panning || tool === "hand"} />
-          </ReactFlow>
-          <WorkspaceSidebar
-            boards={boards}
-            currentId={board.id}
-            collapsed={sidebarCollapsed}
-            switchingId={switchingBoardId}
-            width={sidebarWidth}
-            onWidthChange={setSidebarWidth}
-            onResizingChange={setSidebarResizing}
-            onToggle={() => setSidebarCollapsed((value) => !value)}
-            onPick={(id) => void switchBoard(id)}
-            onNew={() => setShowNew(true)}
-            onSearch={() => setPalette(true)}
-            onSettings={() => setShowSettings(true)}
-            sessions={listSessions(board)}
-            currentSessionId={drawer?.id}
-            onOpenSession={(boardId, sessionId) =>
-              void openSession(boardId, sessionId)
-            }
-            onNewSession={() => addNote(undefined, { fresh: true })}
-          />
-          <Progress
-            nodes={board.nodes}
-            onStudy={() => setStudy({ startId: selectedNodeId ?? undefined })}
-          />
-          <Dock
-            tool={tool}
-            setTool={setTool}
-            onAddConcept={() => {
-              const parent = selectedNodeId ?? rootId;
-              if (parent) addChildOf(parent);
-            }}
-            onNote={openNotes}
-            onAsk={ask}
-          />
-          {tool === "link" && (
-            <div className="hint lab">
-              连线：从一张卡拖到另一张卡 · Esc 取消
-            </div>
-          )}
-          {picked.length >= 2 && (
-            <div
-              className="chrome relation-bar multi-bar"
-              role="toolbar"
-              aria-label="多选"
+            <ReactFlow<CanvasNode>
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              onNodesChange={onNodesChange}
+              onNodeDrag={onNodeDrag}
+              onNodeDragStop={onNodeDragStop}
+              onConnect={connect}
+              connectionMode={ConnectionMode.Loose}
+              connectionRadius={70}
+              nodesConnectable={tool === "link" && !canvasLocked}
+              nodesDraggable={!canvasLocked}
+              onNodeClick={(e, n) => {
+                if (n.type === "ghost") return;
+                if (canvasWriteLocked.current) {
+                  setSelection({ kind: "node", id: n.id });
+                  return;
+                }
+                if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                  const next = toggleCard(
+                    { single: selectedNodeId, picked },
+                    n.id,
+                  );
+                  setPicked(next.picked);
+                  setSelection(
+                    next.single ? { kind: "node", id: next.single } : null,
+                  );
+                  return;
+                }
+                setPicked([]);
+                setSelection({ kind: "node", id: n.id });
+                addNote(
+                  { kind: "node", id: n.id },
+                  { cards: false, autoFocus: false },
+                );
+              }}
+              onNodeDoubleClick={(_, n) => {
+                if (!canvasWriteLocked.current && n.type !== "ghost")
+                  setEditingId(n.id);
+              }}
+              onEdgeClick={(_, e) =>
+                e.type === "cross" &&
+                setSelection({ kind: "relation", id: e.id })
+              }
+              onPaneClick={() => {
+                if (boxing.current) return;
+                setPicked([]);
+                setSelection(null);
+                setEditingId(null);
+                setDrawer(null);
+              }}
+              onPaneContextMenu={(e) => {
+                e.preventDefault();
+                addNote(undefined, { cards: false });
+              }}
+              fitView
+              fitViewOptions={{ padding: 0.16 }}
+              minZoom={0.1}
+              maxZoom={1.8}
+              deleteKeyCode={null}
+              selectionKeyCode={null}
+              multiSelectionKeyCode={null}
+              // Left drag on empty canvas draws a marquee (select tool). Panning:
+              // two-finger scroll, Space-drag, middle/right drag, or the hand tool.
+              selectionOnDrag={tool === "select" && !spacePan}
+              selectionMode={SelectionMode.Partial}
+              onSelectionStart={(e) => {
+                boxing.current = {
+                  base:
+                    e.shiftKey || e.metaKey || e.ctrlKey
+                      ? picked.length
+                        ? picked
+                        : selectedNodeId
+                          ? [selectedNodeId]
+                          : []
+                      : [],
+                  inside: new Set(),
+                };
+              }}
+              onSelectionEnd={() => {
+                // Let the pane click that ends the drag see we were boxing.
+                setTimeout(() => (boxing.current = null), 0);
+              }}
+              panOnScroll
+              panOnDrag={tool === "hand" || spacePan ? true : [1, 2]}
+              onMoveStart={(e) => {
+                // Panning, not zooming: a drag, or a scroll without the pinch/ctrl modifier.
+                if (!e) return;
+                if (e.type === "wheel" && (e as WheelEvent).ctrlKey) return;
+                clearTimeout(panEnd.current);
+                setPanning(true);
+              }}
+              onMoveEnd={() => {
+                clearTimeout(panEnd.current);
+                panEnd.current = setTimeout(() => setPanning(false), 450);
+              }}
+              zoomOnDoubleClick={false}
+              nodeDragThreshold={4}
+              proOptions={{ hideAttribution: true }}
             >
-              <span className="lab">已选 {picked.length} 张卡</span>
-              <button
-                className="btn sm primary"
-                onClick={() => askMany(picked)}
-              >
-                问 AI <kbd>/</kbd>
-              </button>
-              <button className="btn sm" onClick={() => setPicked([])}>
-                清除
-              </button>
-            </div>
-          )}
-          {selectedRelation && (
-            <div className="chrome relation-bar">
-              <span className="lab">交叉链接</span>
-              <input
-                aria-label="关系标签"
-                value={selectedRelation.label}
-                onChange={(e) =>
-                  edit(
-                    (b) => ({
-                      ...b,
-                      relations: b.relations.map((r) =>
-                        r.id === selectedRelation.id
-                          ? { ...r, label: e.target.value }
-                          : r,
-                      ),
-                    }),
-                    false,
-                  )
-                }
+              <LevelGuides {...bounds} />
+              <TopicOverviews
+                board={board}
+                layout={baseLayout}
+                heights={layoutOptions.heights}
+                suspended={!!editingId || !!dragPos || !!preview || organizing}
               />
+              <MapUnit showMap={panning || tool === "hand"} />
+            </ReactFlow>
+            <WorkspaceSidebar
+              boards={boards.filter((b) => !b.archivedAt)}
+              currentId={board.id}
+              collapsed={sidebarCollapsed}
+              switchingId={switchingBoardId}
+              width={sidebarWidth}
+              onWidthChange={setSidebarWidth}
+              onResizingChange={setSidebarResizing}
+              onToggle={() => setSidebarCollapsed((value) => !value)}
+              onPick={(id) => void switchBoard(id)}
+              onArchive={(id) => void setBoardArchived(id, true)}
+              onNew={() => setShowNew(true)}
+              onSearch={() => setPalette(true)}
+              onSettings={() => setShowSettings(true)}
+              onCanvasActivity={() => setShowCanvasActivity(true)}
+              sessions={listSessions(board)}
+              currentSessionId={drawer?.id}
+              onOpenSession={(boardId, sessionId) =>
+                void openSession(boardId, sessionId)
+              }
+              onNewSession={() => addNote(undefined, { fresh: true })}
+            />
+            <Progress nodes={board.nodes} />
+            <Dock
+              tool={tool}
+              setTool={setTool}
+              onAddConcept={() => {
+                const parent = selectedNodeId ?? rootId;
+                if (parent) addChildOf(parent);
+              }}
+              onNote={openNotes}
+              onAsk={ask}
+              onStudy={() => setStudy({ startId: selectedNodeId ?? undefined })}
+              canStudy={board.nodes.some((n) => n.parentId !== null)}
+              onOrganize={organizeBoard}
+              organizeDisabled={
+                organizing ||
+                mapBusy ||
+                Object.values(pending).some((request) => request.busy)
+              }
+            />
+            {tool === "link" && (
+              <div className="hint lab">
+                连线：从一张卡拖到另一张卡 · Esc 取消
+              </div>
+            )}
+            {picked.length >= 2 && (
+              <div
+                className="chrome relation-bar multi-bar"
+                role="toolbar"
+                aria-label="多选"
+              >
+                <span className="lab">已选 {picked.length} 张卡</span>
+                <button
+                  className="btn sm primary"
+                  onClick={() => askMany(picked)}
+                >
+                  问 AI <kbd>/</kbd>
+                </button>
+                <button className="btn sm" onClick={() => setPicked([])}>
+                  清除
+                </button>
+              </div>
+            )}
+            {selectedRelation && (
+              <div className="chrome relation-bar">
+                <span className="lab">交叉链接</span>
+                <input
+                  aria-label="关系标签"
+                  value={selectedRelation.label}
+                  onChange={(e) =>
+                    edit(
+                      (b) => ({
+                        ...b,
+                        relations: b.relations.map((r) =>
+                          r.id === selectedRelation.id
+                            ? { ...r, label: e.target.value }
+                            : r,
+                        ),
+                      }),
+                      false,
+                    )
+                  }
+                />
+                <button
+                  className="btn"
+                  onClick={() =>
+                    addNote({ kind: "relation", id: selectedRelation.id })
+                  }
+                >
+                  问为什么
+                </button>
+                <button className="btn" onClick={removeSelected}>
+                  删除
+                </button>
+              </div>
+            )}
+          </div>
+          {currentCanvasRun && (
+            <div
+              className="canvas-run-progress chrome"
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <CanvasRunProgress run={currentCanvasRun} />
               <button
-                className="btn"
+                className="btn sm"
                 onClick={() =>
-                  addNote({ kind: "relation", id: selectedRelation.id })
+                  void api
+                    .cancelCanvasRun(
+                      currentCanvasRun.boardId,
+                      currentCanvasRun.id,
+                    )
+                    .catch((error) => showToast(errorText(error)))
                 }
               >
-                问为什么
+                取消
               </button>
-              <button className="btn" onClick={removeSelected}>
-                删除
+              <button
+                className="btn sm"
+                onClick={() => setShowCanvasActivity(true)}
+              >
+                查看改动
               </button>
             </div>
           )}
@@ -1906,9 +2301,9 @@ export default function App() {
           key={drawerNote.id}
           note={drawerNote}
           opening={drawer}
-          anchor={board.nodes.find((n) => n.id === drawerNote.attachedTo?.id)}
+          anchor={shown?.nodes.find((n) => n.id === drawerNote.attachedTo?.id)}
           anchorTitle={
-            board.nodes.find((n) => n.id === drawerNote.attachedTo?.id)?.title
+            shown?.nodes.find((n) => n.id === drawerNote.attachedTo?.id)?.title
           }
           refs={
             contextForNote(
@@ -1916,6 +2311,7 @@ export default function App() {
               drawerNote.id,
               selection?.kind === "note" ? null : selection,
               true,
+              "references",
             ).references
           }
           nodes={board.nodes}
@@ -1927,6 +2323,12 @@ export default function App() {
           }}
           pending={pending[`${board.id}/${drawerNote.id}`]?.text}
           busy={pending[`${board.id}/${drawerNote.id}`]?.busy}
+          canvasRun={canvasRuns.find(
+            (run) =>
+              run.boardId === board.id &&
+              run.stickyId === drawerNote.id &&
+              ["running", "ready"].includes(run.status),
+          )}
           error={pending[`${board.id}/${drawerNote.id}`]?.error}
           onChange={(patch) =>
             edit(
@@ -2004,7 +2406,7 @@ export default function App() {
       )}
       {palette && (
         <Palette
-          boards={boards}
+          boards={boards.filter((b) => !b.archivedAt)}
           footer={`${isDesktop ? "白板保存在这台 Mac" : "浏览器预览 · 仅当前浏览器保存"} · ${saveStatus === "saving" ? "保存中" : saveStatus === "saved" ? "已保存" : "保存失败"}`}
           currentId={board?.id}
           onClose={() => setPalette(false)}
@@ -2037,6 +2439,9 @@ export default function App() {
       {showSettings && (
         <Settings
           settings={settings}
+          archivedBoards={boards.filter((b) => !!b.archivedAt)}
+          archiveBusy={switchingBoardId !== null || organizing}
+          onRestore={(id) => void setBoardArchived(id, false)}
           boardTitle={board?.title}
           transferBusy={transferBusy || switchingBoardId !== null}
           onImport={() => importInput.current?.click()}

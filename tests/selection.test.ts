@@ -58,8 +58,14 @@ describe("context cards", () => {
     });
     expect(toggleContextCard({ contextCards: ["x"] }, "x", false)).toEqual({
       contextCards: [],
-      excludedRefs: [],
+      excludedRefs: ["node:x"],
     });
+    expect(toggleContextCard({ excludedRefs: ["node:x"] }, "x", false)).toEqual(
+      {
+        contextCards: ["x"],
+        excludedRefs: [],
+      },
+    );
     // An automatic neighbour is excluded rather than removed, and can come back.
     const off = toggleContextCard({}, "n", true);
     expect(off).toEqual({ contextCards: [], excludedRefs: ["node:n"] });

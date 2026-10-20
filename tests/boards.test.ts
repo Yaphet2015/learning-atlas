@@ -122,6 +122,26 @@ describe("board creation and progressive exploration", () => {
 });
 
 describe("constrained AI map parsing", () => {
+  it("accepts no additions only for expansion and leaves the board intact", () => {
+    const board = createEmptyBoard("浏览器");
+    const empty = JSON.stringify({ nodes: [], relations: [] });
+    expect(buildMapFromAI(empty, board, board.nodes[0].id, "expand")).toBe(
+      board,
+    );
+    expect(() => buildMapFromAI(empty, board)).toThrow();
+    expect(() =>
+      buildMapFromAI(
+        JSON.stringify({
+          nodes: [],
+          relations: [{ source: "anchor", target: "anchor", label: "关系" }],
+        }),
+        board,
+        board.nodes[0].id,
+        "expand",
+      ),
+    ).toThrow();
+  });
+
   it("preserves the board and replaces generated ids with safe unique ids", () => {
     const original = createEmptyBoard("浏览器");
     const result = buildMapFromAI(JSON.stringify(map()), original);
