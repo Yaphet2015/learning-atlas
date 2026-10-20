@@ -7,6 +7,7 @@ import type {
 } from "../shared/types";
 import { contextBundleSchema } from "../shared/validation";
 import { serializeStructure } from "./structure";
+import { cardReview } from "./card-review";
 
 /** How a reference is named in note.excludedRefs. */
 export const refKey = (r: Pick<ContextReference, "kind" | "id">) =>
@@ -15,13 +16,14 @@ export const refKey = (r: Pick<ContextReference, "kind" | "id">) =>
 const clip = (value: string, length: number) =>
   value.length <= length ? value : `${value.slice(0, length - 1)}…`;
 
-/** A deliberately local, inspectable context snapshot, never a dump of the board. */
+/** Selected references, a compact outline, and the four-level card review. */
 export function contextForNote(
   board: Board,
   noteId: string,
   selection?: Selection,
   /** The drawer lists unticked references too, so they can be ticked back. */
   keepExcluded = false,
+  scope: "review" | "references" = "review",
 ): ContextBundle {
   const note = board.notes.find((item) => item.id === noteId);
   if (!note) throw new Error("找不到这张便签。");
@@ -155,22 +157,26 @@ export function contextForNote(
   const summary = references
     .map((item) => `[${item.kind}:${item.id}] ${item.title}\n${item.text}`)
     .join("\n\n");
+  if (scope === "references")
+    return contextBundleSchema.parse({ topic, references, summary });
   // The whole map, compactly: the tutor can answer questions about levels,
   // order and links without the learner pasting them.
-  const anchor =
-    note.attachedTo?.kind === "node"
-      ? note.attachedTo.id
-      : selected?.kind === "node"
-        ? selected.id
-        : null;
+  const anchor = selected?.kind === "node" ? selected.id : null;
   const structure = serializeStructure(board, {
     anchor,
     cards: note.contextCards,
   });
+  const reviewFocus = anchor ? [anchor] : [];
+  reviewFocus.push(...(note.contextCards ?? []));
+  if (selected?.kind === "relation") {
+    const edge = board.relations.find((item) => item.id === selected.id);
+    if (edge) reviewFocus.push(edge.source, edge.target);
+  }
   return contextBundleSchema.parse({
     topic,
     references,
     summary,
     ...(structure ? { structure } : {}),
+    review: cardReview(board, reviewFocus, note.excludedRefs),
   });
 }

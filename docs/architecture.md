@@ -10,7 +10,7 @@ Board documents are versioned JSON. `BoardStore` validates IDs and the full grap
 
 Runtime imports the official pinned pi-durable API, including `Harness.open`, `openNodeSqliteStorage`, ownerless conversations, `configure`, session-scoped `defineDoc`, `watchEvents`, `submit` and `abort`.
 
-One main-process owner and cached opening Promise owns each board/sticky SQLite file. Each note has an independently resumable ownerless conversation and session-scoped context document. The document receives a bounded snapshot of the relevant board context on each authorized request. Per-note files keep restarting one note from implicitly resuming other notes' interrupted paid requests.
+One main-process owner and cached opening Promise owns each board/sticky SQLite file. Each note has an independently resumable ownerless conversation and session-scoped context document. The tutor document receives the learner's selected references. Canvas-enabled conversations and organization tasks read cards through bounded tools; full canvas contents are stored locally in a separate Pi document and are never injected into a prompt section. Per-note files keep restarting one note from implicitly resuming other notes' interrupted paid requests.
 
 Provider keys are explicitly entered and retained in main-process memory, or read from the specifically supported `OPENAI_API_KEY` environment variable for the official endpoint. They are never returned through IPC, stored in JSON/SQLite, embedded in renderer bundles or logged. A new endpoint cannot silently inherit another endpoint's key. No credential creation, OAuth grant or persistent access is performed. Raw provider error diagnostics are sanitized before persistence and display.
 
@@ -18,9 +18,19 @@ Runtime snapshots restore messages; streaming deltas update the visible answer, 
 
 ## Context and learning semantics
 
-`contextForNote` includes the original topic, the note's own body, explicit attachment/selection, relationship endpoints and a bounded adjacent branch. A scene attachment adds the live width/color, prediction and explanation. It excludes unrelated graph branches and every other note's text or chat history. The current note's durable conversation naturally retains its own prior messages.
+`contextForNote` includes the original topic, the note's own body, explicit attachment/selection, relationship endpoints and a bounded adjacent branch. A scene attachment adds the live width/color, prediction and explanation. The conversation may read other branches of the current canvas on demand. Explicitly excluded cards remain protected; tools never expose another note's text or conversation history, or another canvas. The current note's durable conversation naturally retains its own prior messages.
 
-The interface shows context references before submission. Free notes can be associated with a node or relation through the inspector. AI responses remain in notes; adding a response to the map opens an editing dialog and requires an explicit user action. Viewing/expanding a concept never marks it understood; self-assessment is a separate user control. Prediction, manipulation and explanation are optional, without forced tests or gates.
+The interface shows context references before submission. Free notes can be associated with a node or relation through the inspector. Explanatory AI responses remain in notes. Explicit user editing requests may use canvas tools; their changes appear as temporary previews and are committed after validation. The existing manual add-to-map editing dialog remains available. Viewing/expanding a concept never marks it understood; self-assessment is a separate user control. Prediction, manipulation and explanation are optional, without forced tests or gates.
+
+## Canvas Agent transactions
+
+One canvas extension provides structure/search, bounded card reads (8 cards / 16,000 characters), atomic edit batches (20 operations / 16,000 characters), versioned review confirmations and explicit completion. Both ordinary conversations and organization use it. Organization must cover every current card and cross-link; chat edits cover the affected neighbourhood. The original question retains its identity, while several roots and required ancestors remain valid.
+
+A conversation-scoped Pi document holds each run's base, draft, operation batches, reviewed versions and tool-call receipts. Editing and receipt writes share one SQLite transaction. A replay-safe tool therefore returns its previous result rather than applying the edit again. Completed runs retain metadata rather than full workspace snapshots. Automatic compaction is enabled with a canvas working window capped at 96K tokens; the exact work ledger remains outside the model context. A slice pauses at 128 requests or 15 minutes.
+
+Before its first write the renderer flushes current data and acknowledges the preview lock. The store compares the base canvas and permits one writer per board. The renderer keeps the preview separate from its saved Board. Final commit applies operations to the latest Board, preserves concurrent notes, and stores a run receipt plus a canvas version. Late saves using an earlier canvas version are rejected. The run receipt makes recovery across the SQLite/JSON commit gap idempotent. A committed result is one undo step.
+
+Normal close pauses unfinished work. Reopening only lists work; it never resumes model requests automatically. Continue and abandon are explicit actions in the canvas history. Cancelling or failing discards the visible preview. Deleted/merged cards keep portable source records; merge redirects notes and references without inventing mastery. Source restoration retains the original ID, content and recoverable bindings.
 
 ## Portable learning records
 
@@ -30,10 +40,12 @@ Import validates the complete file (up to 64 MB), allocates a new board ID, rest
 
 ## Generated visuals
 
-AI graph responses are data-only JSON, limited to a small number of nodes and edges. Optional process/parts/comparison visuals use bounded labels and a literal/analogy marker, rendered by trusted components. No model-authored HTML, SVG scripts, JavaScript, tools or arbitrary network resources are executed. React escapes plain text. AI claims are not automatically verified.
+AI graph responses are data-only JSON, limited to a small number of nodes and edges. Optional process/parts/comparison visuals use bounded labels and a literal/analogy marker, rendered by trusted components. Model-authored HTML, SVG scripts and JavaScript are never executed. Canvas tool calls run only registered, schema-validated domain operations; there are no arbitrary filesystem, shell or network tools. React escapes plain text. AI claims are not automatically verified.
 
 ## Verification boundaries
 
-Unit tests cover model invariants, scoped context, safe parsing, storage failures and symlink/traversal protection. Runtime tests use real Harness/SQLite with an offline simulated transport, never a paid provider, and cover key safety, streaming, isolation, cancellation, replay and interrupted-run recovery. They are not evidence of a successful live OpenAI call.
+Unit tests cover model invariants, scoped context, safe parsing, storage failures and symlink/traversal protection. Automated runtime tests use real Harness/SQLite with a simulated provider transport, and cover key safety, streaming, isolation, cancellation, replay and interrupted-run recovery. They are not evidence of a successful live OpenAI call.
 
 The workflow runs an actual Electron embedded-Node SQLite + Harness close/reopen smoke, renderer interactions, and ARM64 packaging on macOS. Preview bundles use ad-hoc signing with the Electron JIT/library-validation entitlements required for that mode. Developer ID signing and Apple notarization are not configured; no system security settings are changed. Inspect the exact workflow result before claiming a downloadable build is ready.
+
+For an authorized live provider check, load `DS_API_KEY` and `DS_BASE_URL` in the shell and run `pnpm test:agent:live`. The Electron script follows the system proxy and uses only temporary boards. It checks organization, conversation CRUD, merge/archive, idempotent commit and source restoration, then removes the temporary data. Credentials and provider payloads are not logged.

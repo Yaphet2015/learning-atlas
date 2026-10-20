@@ -37,6 +37,28 @@ const api: AtlasAPI = {
     ipcRenderer.invoke("studyboard:configure-ai", settings),
   testAIConnection: (settings) =>
     ipcRenderer.invoke("studyboard:test-ai", settings),
+  startCanvasRun: (boardId) =>
+    ipcRenderer.invoke("studyboard:canvas-start", boardId),
+  listCanvasRuns: (boardId) =>
+    ipcRenderer.invoke("studyboard:canvas-list", boardId),
+  getCanvasRun: (boardId, runId) =>
+    ipcRenderer.invoke("studyboard:canvas-get", boardId, runId),
+  prepareCanvasRun: (boardId, runId) =>
+    ipcRenderer.invoke("studyboard:canvas-prepare", boardId, runId),
+  resumeCanvasRun: (boardId, runId) =>
+    ipcRenderer.invoke("studyboard:canvas-resume", boardId, runId),
+  cancelCanvasRun: (boardId, runId) =>
+    ipcRenderer.invoke("studyboard:canvas-cancel", boardId, runId),
+  commitCanvasRun: (boardId, runId) =>
+    ipcRenderer.invoke("studyboard:canvas-commit", boardId, runId),
+  onCanvasRun: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      update: Parameters<typeof callback>[0],
+    ) => callback(update);
+    ipcRenderer.on("studyboard:canvas-run", listener);
+    return () => ipcRenderer.removeListener("studyboard:canvas-run", listener);
+  },
   ask: (request) => ipcRenderer.invoke("studyboard:ask", request),
   stop: (board, sticky) => ipcRenderer.invoke("studyboard:stop", board, sticky),
   getHistory: (board, sticky) =>

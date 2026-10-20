@@ -6,6 +6,7 @@ import {
 } from "../src/model/boards";
 import { contextForNote, refKey } from "../src/model/context";
 import { contextBundleSchema } from "../src/shared/validation";
+import { cardReview } from "../src/model/card-review";
 
 function fixture() {
   const board = expandWalkthrough(createWalkthroughBoard(), "concept-render");
@@ -49,6 +50,12 @@ describe("local note context", () => {
     expect(ids).toContain("concept-dom");
     expect(ids).not.toContain("concept-style");
     expect(sent.summary).not.toContain("[node:concept-style]");
+    expect(
+      sent.review?.nodes.find((n) => n.id === "concept-style"),
+    ).toMatchObject({
+      body: "",
+      bodyExcluded: true,
+    });
     // The topic and the note itself are always sent.
     expect(sent.references[0].kind).toBe("topic");
     expect(ids).toContain(current.id);
@@ -109,6 +116,8 @@ describe("local note context", () => {
     expect(context.references.some((ref) => ref.id === "concept-paint")).toBe(
       false,
     );
+    expect(context.review?.anchors).toEqual(["concept-dom"]);
+    expect(context.structure).toContain("DOM [待探索] ◀ 当前卡片");
   });
   it("does not read a different note merely because it is selected", () => {
     const { board, current, privateNote } = fixture();
@@ -186,5 +195,48 @@ describe("local note context", () => {
     expect(() => contextForNote(board, "missing-note")).toThrow(
       "找不到这张便签",
     );
+  });
+
+  it("builds only bounded references for canvas conversations", () => {
+    const { board, current } = fixture();
+    const context = contextForNote(
+      board,
+      current.id,
+      undefined,
+      false,
+      "references",
+    );
+    expect(context.structure).toBeUndefined();
+    expect(context.review).toBeUndefined();
+    expect(JSON.stringify(context)).not.toContain("UNRELATED_BODY");
+    expect(JSON.stringify(context)).not.toContain("OTHER_NOTE_PRIVATE_TEXT");
+  });
+
+  it("sends the complete review alongside the compact references without other notes", () => {
+    const { board, current } = fixture();
+    const context = contextForNote(board, current.id, {
+      kind: "node",
+      id: "concept-dom",
+    });
+    expect(context.review).toEqual(cardReview(board, ["concept-dom"]));
+    const content = JSON.stringify(context.review);
+    expect(content).toContain("UNRELATED_BODY");
+    expect(content).not.toContain("OTHER_NOTE_PRIVATE_TEXT");
+    expect(content).not.toContain("PRIVATE_CHAT_HISTORY");
+    expect(context.topic).toBe(board.topic);
+  });
+
+  it("reviews both endpoints of a selected relation and the extra selected cards", () => {
+    const { board, current } = fixture();
+    current.contextCards = ["concept-dom"];
+    const context = contextForNote(board, current.id, {
+      kind: "relation",
+      id: "relation-style-render",
+    });
+    expect(context.review?.anchors).toEqual([
+      "concept-dom",
+      "concept-style",
+      "concept-render",
+    ]);
   });
 });

@@ -5,9 +5,12 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
+  Archive,
   ChevronRight,
   Compass,
+  History,
   LoaderCircle,
   MessageSquare,
   PanelLeftClose,
@@ -44,9 +47,11 @@ type WorkspaceSidebarProps = {
   onResizingChange: (resizing: boolean) => void;
   onToggle: () => void;
   onPick: (id: string) => void;
+  onArchive: (id: string) => void;
   onNew: () => void;
   onSearch: () => void;
   onSettings: () => void;
+  onCanvasActivity?: () => void;
   sessions: SessionEntry[];
   currentSessionId?: string;
   onOpenSession: (boardId: string, sessionId: string) => void;
@@ -61,6 +66,7 @@ type BoardGroupProps = {
   sessions: SessionEntry[];
   currentSessionId?: string;
   onPick: () => void;
+  onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onOpenSession: (sessionId: string) => void;
   onNewSession: () => void;
 };
@@ -78,17 +84,15 @@ function BoardGroup({
   sessions,
   currentSessionId,
   onPick,
+  onContextMenu,
   onOpenSession,
   onNewSession,
 }: BoardGroupProps): ReactElement {
-  const [expanded, setExpanded] = useState(current);
+  const [expanded, setExpanded] = useState(false);
   const [savedSessions, setSavedSessions] = useState<SessionLoadState>({
     status: "loading",
   });
   const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    if (current) setExpanded(true);
-  }, [current, currentSessionId]);
   useEffect(() => {
     if (current || !expanded || collapsed) return;
     let cancelled = false;
@@ -169,10 +173,8 @@ function BoardGroup({
           data-tip={collapsed ? board.title : undefined}
           aria-current={current ? "page" : undefined}
           disabled={disabled}
-          onClick={() => {
-            setExpanded(true);
-            onPick();
-          }}
+          onClick={onPick}
+          onContextMenu={onContextMenu}
         >
           {switchingId === board.id && (
             <LoaderCircle size={14} className="ico spin" />
@@ -223,15 +225,52 @@ export function WorkspaceSidebar({
   onResizingChange,
   onToggle,
   onPick,
+  onArchive,
   onNew,
   onSearch,
   onSettings,
+  onCanvasActivity,
   sessions,
   currentSessionId,
   onOpenSession,
   onNewSession,
 }: WorkspaceSidebarProps): ReactElement {
   const [query, setQuery] = useState("");
+  const [menu, setMenu] = useState<{
+    id: string;
+    x: number;
+    y: number;
+    trigger: HTMLButtonElement;
+  } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    function dismiss(event: Event): void {
+      if (
+        event.target instanceof Node &&
+        menuRef.current?.contains(event.target)
+      )
+        return;
+      setMenu(null);
+    }
+    function escape(event: KeyboardEvent): void {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setMenu(null);
+      menu?.trigger.focus();
+    }
+    document.addEventListener("pointerdown", dismiss, true);
+    document.addEventListener("keydown", escape, true);
+    window.addEventListener("resize", dismiss);
+    document.addEventListener("scroll", dismiss, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss, true);
+      document.removeEventListener("keydown", escape, true);
+      window.removeEventListener("resize", dismiss);
+      document.removeEventListener("scroll", dismiss, true);
+    };
+  }, [menu]);
   const resizeOrigin = useRef<{ x: number; width: number } | null>(null);
   function stopResizing(): void {
     if (!resizeOrigin.current) return;
@@ -252,7 +291,7 @@ export function WorkspaceSidebar({
 
   return (
     <aside
-      className="chrome workspace-sidebar"
+      className="workspace-sidebar"
       aria-label="学习空间"
       onKeyDown={(e) => {
         if (e.key === "Tab" || e.key === "Enter") e.stopPropagation();
@@ -317,7 +356,6 @@ export function WorkspaceSidebar({
       </div>
       <div className="workspace-section workspace-copy">
         <span>知识画布</span>
-        <span>{boards.length}</span>
       </div>
       <nav
         id="workspace-navigation"
@@ -337,6 +375,29 @@ export function WorkspaceSidebar({
                 sessions={sessions}
                 currentSessionId={currentSessionId}
                 onPick={() => onPick(b.id)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  if (switchingId !== null) return;
+                  const box = event.currentTarget.getBoundingClientRect();
+                  setMenu({
+                    id: b.id,
+                    x: Math.max(
+                      8,
+                      Math.min(
+                        event.clientX || box.left,
+                        window.innerWidth - 184,
+                      ),
+                    ),
+                    y: Math.max(
+                      8,
+                      Math.min(
+                        event.clientY || box.bottom,
+                        window.innerHeight - 56,
+                      ),
+                    ),
+                    trigger: event.currentTarget,
+                  });
+                }}
                 onOpenSession={(id) => onOpenSession(b.id, id)}
                 onNewSession={onNewSession}
               />
@@ -347,7 +408,47 @@ export function WorkspaceSidebar({
           <p className="workspace-empty">没有找到画布，换个词试试。</p>
         )}
       </nav>
+      {menu &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-label="画布操作"
+            className="workspace-context-menu"
+            style={{ left: menu.x, top: menu.y }}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Tab") setMenu(null);
+            }}
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            <button
+              autoFocus
+              role="menuitem"
+              disabled={switchingId !== null}
+              onClick={() => {
+                setMenu(null);
+                menu.trigger.focus();
+                onArchive(menu.id);
+              }}
+            >
+              <Archive size={16} className="ico" />
+              归档
+            </button>
+          </div>,
+          document.body,
+        )}
       <div className="workspace-settings">
+        {onCanvasActivity && (
+          <button
+            className="workspace-action"
+            {...tip("画布记录")}
+            onClick={onCanvasActivity}
+          >
+            <History size={17} className="ico" />
+            <span className="workspace-copy">画布记录</span>
+          </button>
+        )}
         <button
           className="workspace-action"
           {...tip("设置", `${MOD}.`)}

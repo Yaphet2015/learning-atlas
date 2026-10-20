@@ -104,4 +104,38 @@ describe("AI ghost hints", () => {
     };
     expect(cachedHints(renamed, "a")).toBeUndefined();
   });
+
+  it("invalidates hints after topic, parallel contents, or knowledge parents change", () => {
+    const b = board();
+    b.nodes.push(node("peer", "光的反射", "q", 1));
+    const hints = parseHints('{"below":"白光里有几种颜色"}', b, "a")!;
+    const cached = withHints(b, "a", hints);
+    for (const changed of [
+      { ...cached, topic: "光怎样形成颜色？" },
+      {
+        ...cached,
+        nodes: cached.nodes.map((n) =>
+          n.id === "peer" ? { ...n, body: "反射与折射的差异" } : n,
+        ),
+      },
+      {
+        ...cached,
+        nodes: cached.nodes.map((n) =>
+          n.id === "peer" ? { ...n, parentId: "a" } : n,
+        ),
+      },
+    ]) {
+      expect(cachedHints(changed, "a")).toBeUndefined();
+    }
+    // Saving the cache or changing mastery alone does not change knowledge contents.
+    expect(
+      cachedHints(
+        {
+          ...cached,
+          nodes: cached.nodes.map((n) => ({ ...n, status: "exploring" })),
+        },
+        "a",
+      ),
+    ).toEqual(hints);
+  });
 });

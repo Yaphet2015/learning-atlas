@@ -96,7 +96,7 @@ test("collapse and expand persist, and both sidebars leave the canvas controls c
       panel.locator("nav").evaluate((el) => el.scrollWidth <= el.clientWidth),
     )
     .toBe(true);
-  await expect.poll(async () => (await geometry()).canvasLeft).toBe(268);
+  await expect.poll(async () => (await geometry()).canvasLeft).toBe(244);
   const expandedWidth = (await canvas.boundingBox())!.width;
   await panel.getByRole("button", { name: "收起左侧边栏" }).click();
   await expect(panel).toHaveCSS("width", "56px");
@@ -208,7 +208,7 @@ test("dragging the sidebar resizes the canvas, clamps width and remembers it aft
   await dragBy(80);
   await expect(panel).toHaveCSS("width", "324px");
   await expect(panel).toHaveCSS("transition-duration", "0s");
-  expect((await page.locator(".react-flow").boundingBox())!.x).toBe(348);
+  expect((await page.locator(".react-flow").boundingBox())!.x).toBe(324);
   const flow = (await page.locator(".react-flow").boundingBox())!;
   const dock = (await page.locator(".dock").boundingBox())!;
   expect(
@@ -243,4 +243,149 @@ test("dragging the sidebar resizes the canvas, clamps width and remembers it aft
   await expect(handle).toHaveAttribute("aria-valuenow", "400");
   await handle.dblclick();
   await expect(panel).toHaveCSS("width", "244px");
+});
+
+test("collapsed sidebar entries center their visible content", async ({
+  page,
+}) => {
+  await installFakeAtlas(page, true, "web", boards());
+  await gotoApp(page);
+  const panel = sidebar(page);
+  await panel.getByRole("button", { name: "收起左侧边栏" }).click();
+  await expect(panel).toHaveCSS("width", "56px");
+  const offsets = await panel.evaluate((el) =>
+    [
+      ...el.querySelectorAll(
+        ".workspace-toggle, .workspace-action, .workspace-board",
+      ),
+    ].map((button) => {
+      const content = button.querySelector(
+        "svg, span:not(.workspace-copy):not(.workspace-current)",
+      )!;
+      const a = button.getBoundingClientRect();
+      const b = content.getBoundingClientRect();
+      return {
+        x: Math.abs(a.x + a.width / 2 - b.x - b.width / 2),
+        y: Math.abs(a.y + a.height / 2 - b.y - b.height / 2),
+      };
+    }),
+  );
+  for (const offset of offsets) {
+    expect(offset.x).toBeLessThan(1);
+    expect(offset.y).toBeLessThan(1);
+  }
+});
+
+test("the application sidebar fills the window and the canvas starts at its divider", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  const panel = sidebar(page);
+  await expect(panel).not.toHaveClass(/chrome/);
+  await expect(panel).toHaveCSS("border-radius", "0px");
+  await expect(panel).toHaveCSS("box-shadow", "none");
+  for (const collapsed of [false, true]) {
+    if (collapsed)
+      await panel.getByRole("button", { name: "收起左侧边栏" }).click();
+    await expect(panel).toHaveCSS("width", collapsed ? "56px" : "244px");
+    const box = (await panel.boundingBox())!;
+    expect([box.x, box.y, box.height]).toEqual([
+      0,
+      0,
+      page.viewportSize()!.height,
+    ]);
+    await expect
+      .poll(async () => (await page.locator(".react-flow").boundingBox())!.x)
+      .toBe(box.width);
+  }
+});
+
+test("same-name canvases archive independently, persist after reload and restore from settings", async ({
+  page,
+}) => {
+  const seed = boards();
+  seed[1].title = seed[0].title;
+  await installFakeAtlas(page, true, "web", seed);
+  await gotoApp(page);
+  const entries = sidebar(page).locator(".workspace-board");
+  await entries.nth(1).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "归档", exact: true }).click();
+  await expect(entries).toHaveCount(1);
+  await expect(entries).toHaveAttribute("aria-current", "page");
+  await reloadApp(page);
+  await expect(entries).toHaveCount(1);
+  await sidebar(page)
+    .getByRole("button", { name: "设置", exact: true })
+    .click();
+  await page.getByRole("button", { name: "已归档画布", exact: true }).click();
+  const row = page.locator(".settings-section .setting-row");
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText(seed[1].title);
+  await row.getByRole("button", { name: "恢复", exact: true }).click();
+  await expect(
+    page.getByText("还没有归档的画布。", { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(entries).toHaveCount(2);
+  // Restoration sorts the second canvas first; verify its actual content.
+  await entries.nth(0).click();
+  await expect(page.locator(".react-flow__node-root h2")).toHaveText(
+    seed[1].topic,
+  );
+});
+
+test("archiving the current canvas switches away and archiving the last creates a fresh canvas", async ({
+  page,
+}) => {
+  await installFakeAtlas(page, true, "web", boards());
+  await gotoApp(page);
+  const entries = sidebar(page).locator(".workspace-board");
+  await entries.filter({ hasText: "重疾险条款" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "归档", exact: true }).click();
+  await expect(entries).toHaveCount(1);
+  await expect(entries).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".react-flow__node-root h2")).toHaveText(
+    "光为什么会折射？",
+  );
+  await entries.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "归档", exact: true }).click();
+  await expect(entries).toHaveCount(1);
+  await expect(entries).toHaveText("新的知识主题");
+  await reloadApp(page);
+  await expect(entries).toHaveCount(1);
+  await expect(entries).toHaveText("新的知识主题");
+  await sidebar(page)
+    .getByRole("button", { name: "设置", exact: true })
+    .click();
+  await page.getByRole("button", { name: "已归档画布", exact: true }).click();
+  await expect(page.locator(".settings-section .setting-row")).toHaveCount(2);
+});
+
+test("archive menu dismisses with Escape and failed saves leave the canvas active", async ({
+  page,
+}) => {
+  await installFakeAtlas(page, true, "web", boards());
+  await gotoApp(page);
+  const current = sidebar(page).locator(
+    '.workspace-board[aria-current="page"]',
+  );
+  await current.click({ button: "right" });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(current).toBeFocused();
+  await page.evaluate(() => {
+    const api = window.atlas!;
+    const save = api.saveBoard;
+    api.saveBoard = async (board) => {
+      if (board.archivedAt) throw new Error("归档保存失败");
+      await save(board);
+    };
+  });
+  await current.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "归档", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("归档保存失败");
+  await expect(sidebar(page).locator(".workspace-board")).toHaveCount(2);
+  await expect(current).toHaveText("重疾险条款");
+  await reloadApp(page);
+  await expect(sidebar(page).locator(".workspace-board")).toHaveCount(2);
 });

@@ -1,11 +1,18 @@
 import type {
   Board,
   ConceptNode,
+  ContextBundle,
   Point,
   Relation,
   StickyNote,
 } from "../shared/types";
-import { aiMapSchema, boardSchema, pointSchema } from "../shared/validation";
+import {
+  aiExpansionSchema,
+  aiMapSchema,
+  boardSchema,
+  pointSchema,
+} from "../shared/validation";
+import { applyOverviews } from "./overview";
 
 export function newId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -229,6 +236,8 @@ export function buildMapFromAI(
   text: string,
   board: Board,
   anchorId?: string,
+  mode: "map" | "expand" = "map",
+  sourceContext?: ContextBundle,
 ): Board {
   if (text.length > 32_000)
     throw new Error("AI 返回的知识图谱过大，请缩小问题范围。");
@@ -241,7 +250,8 @@ export function buildMapFromAI(
   } catch {
     throw new Error("AI 未返回有效的图谱 JSON。你的画布没有改变，请重试。");
   }
-  const result = aiMapSchema.safeParse(parsed);
+  const schema = mode === "expand" ? aiExpansionSchema : aiMapSchema;
+  const result = schema.safeParse(parsed);
   if (!result.success)
     throw new Error(
       "AI 返回的图谱不符合格式要求。请要求 1–6 个纯文本节点，并重试。",
@@ -259,6 +269,13 @@ export function buildMapFromAI(
       throw new Error("AI 返回了重复或保留的节点编号。请重试。");
     resolvedIds.set(item.id, newId("concept"));
   }
+  function cacheOverviews(next: Board): Board {
+    if (sourceContext && sourceContext.topic !== board.topic) return next;
+    return applyOverviews(
+      next, board, map.overviews, resolvedIds, sourceContext?.review,
+    );
+  }
+  if (map.nodes.length === 0) return cacheOverviews(board);
   function resolveParent(parent: string | null | undefined): string | null {
     if (parent === null) return null;
     // Omitted parents remain compatible with older, single-level responses.
@@ -327,7 +344,7 @@ export function buildMapFromAI(
     cross.push(relation(newId("relation"), source, target, edge.label));
   }
   const expandedParents = new Set(parents.values());
-  return boardSchema.parse({
+  const next = boardSchema.parse({
     ...board,
     updatedAt: now(),
     nodes: [
@@ -344,4 +361,5 @@ export function buildMapFromAI(
     ],
     relations: [...board.relations, ...cross],
   });
+  return cacheOverviews(next);
 }

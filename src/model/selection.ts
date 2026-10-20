@@ -55,7 +55,7 @@ export function toggleContextCard(
   if (included)
     return {
       contextCards: cards.filter((c) => c !== id),
-      excludedRefs: automatic ? [...new Set([...excluded, key])] : excluded,
+      excludedRefs: [...new Set([...excluded, key])],
     };
   return {
     contextCards: automatic ? cards : [...cards, id],

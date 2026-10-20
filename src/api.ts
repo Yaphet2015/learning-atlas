@@ -35,11 +35,12 @@ const preview: AtlasAPI = {
     return () => {};
   },
   async listBoards() {
-    return read().map(({ id, title, kind, updatedAt }) => ({
+    return read().map(({ id, title, kind, updatedAt, archivedAt }) => ({
       id,
       title,
       kind,
       updatedAt,
+      ...(archivedAt ? { archivedAt } : {}),
     }));
   },
   async loadBoard(id) {
@@ -121,6 +122,26 @@ const preview: AtlasAPI = {
       kind: "config",
       message: "浏览器预览不能测试连接：请在桌面客户端中配置 AI。",
     };
+  },
+  async startCanvasRun() {
+    throw new Error("画布 Agent 需要桌面客户端。");
+  },
+  async listCanvasRuns() {
+    return [];
+  },
+  async getCanvasRun() {
+    return null;
+  },
+  async prepareCanvasRun() {},
+  async resumeCanvasRun() {
+    throw new Error("画布 Agent 需要桌面客户端。");
+  },
+  async cancelCanvasRun() {},
+  async commitCanvasRun() {
+    throw new Error("画布 Agent 需要桌面客户端。");
+  },
+  onCanvasRun() {
+    return () => {};
   },
   async ask() {
     throw new Error("AI_NOT_CONFIGURED: 请在桌面客户端的 AI 设置中连接模型。");

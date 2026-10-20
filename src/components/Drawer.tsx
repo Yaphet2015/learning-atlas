@@ -23,10 +23,12 @@ import {
 } from "lucide-react";
 import type {
   ChatMessage,
+  CanvasRun,
   ConceptNode,
   ContextReference,
   StickyNote,
 } from "../shared/types";
+import { CanvasRunProgress } from "./CanvasRunProgress";
 import { StructuredVisual } from "./StructuredVisual";
 import { displayMessage } from "../model/kickoff";
 import { outlineOf, type OutlineItem } from "../model/answer";
@@ -204,7 +206,7 @@ function Refs({
         <span className="k">参考</span>
         <span className="items" title={on.map(refTitle).join(" · ")}>
           {open
-            ? `${on.length} 项 · AI 只看到勾选的内容`
+            ? `${on.length} 项附加参考 · AI 可按需查看本画布，未勾选卡片除外`
             : shown.map(refTitle).join(" · ")}
         </span>
         {!open && on.length > shown.length && (
@@ -498,6 +500,7 @@ export function Drawer({
   refs,
   pending,
   busy,
+  canvasRun,
   error,
   onChange,
   onAsk,
@@ -523,6 +526,7 @@ export function Drawer({
   refs: ContextReference[];
   pending?: string;
   busy?: boolean;
+  canvasRun?: CanvasRun;
   error?: string;
   onChange: (patch: Partial<StickyNote>) => void;
   onAsk: (prompt: string) => boolean;
@@ -843,6 +847,15 @@ export function Drawer({
             </div>
           );
         })}
+        {canvasRun && (
+          <div
+            className="canvas-drawer-progress"
+            role="status"
+            aria-live="polite"
+          >
+            <CanvasRunProgress run={canvasRun} />
+          </div>
+        )}
         {busy && (
           <div
             className="msg assistant ans streaming"

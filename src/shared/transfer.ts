@@ -276,5 +276,26 @@ export function transferMarkdown(transfer: BoardTransfer): string {
       if (m.meta?.laid) out.push("已加入知识地图。", "");
     }
   }
+  if (board.cardArchives?.length) {
+    out.push("## 可恢复的源卡片", "");
+    for (const archive of board.cardArchives) {
+      out.push(
+        `### ${line(archive.node.title)}`,
+        "",
+        text(archive.node.body),
+        "",
+        `移除原因：${text(archive.reason)}`,
+        "",
+        `原学习状态：${archive.node.status}`,
+        "",
+      );
+      if (archive.node.hand) out.push(`原批注：${text(archive.node.hand)}`, "");
+      if (archive.mergedInto)
+        out.push(
+          `合并目标：${line(board.nodes.find((node) => node.id === archive.mergedInto)?.title ?? archive.mergedInto)}`,
+          "",
+        );
+    }
+  }
   return out.join("\n");
 }

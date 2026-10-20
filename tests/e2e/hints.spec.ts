@@ -166,6 +166,11 @@ test("ghost hints: one lazy, batched, cached request per card; a click grows the
   expect(ask).toMatchObject({ mode: "hint", stickyId: "hint-c-how" });
   expect(ask.prompt).toContain("below");
   expect(ask.context.structure).toContain("◀ 当前卡片");
+  expect(ask.context.topic).toBe(insuranceBoard(true).topic);
+  expect(ask.context.review).toMatchObject({ radius: 4, anchors: ["c-how"] });
+  expect(ask.context.review.nodes).toHaveLength(
+    insuranceBoard(true).nodes.length,
+  );
   // Cached on the card: leaving and coming back does not ask again.
   await page.mouse.move(700, 900);
   await card(page, "c-how").hover();

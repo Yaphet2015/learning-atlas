@@ -12,19 +12,17 @@ describe("macOS window chrome inset", () => {
     for (const other of ["web", "win32", "linux", undefined])
       expect(windowChromeClasses(other, false)).toEqual([]);
   });
-  it("clears the traffic lights configured in the main process", () => {
+  it("hangs macOS traffic lights just below the title bar centre", () => {
     const main = readFileSync("electron/main.ts", "utf8");
-    const css = readFileSync("src/styles.css", "utf8");
-    const light = /trafficLightPosition: \{ x: (\d+), y: (\d+) \}/.exec(main);
     expect(main).toContain('titleBarStyle: "hiddenInset"');
-    expect(light).not.toBeNull();
-    const top = Number(
-      /\.mac-titlebar \{\s*--sidebar-top: (\d+)px;/.exec(css)?.[1],
+    const css = readFileSync("src/styles.css", "utf8");
+    const position = /trafficLightPosition: \{ x: (\d+), y: (\d+) \}/.exec(
+      main,
     );
-    // Leave 12px below the traffic lights even when the sidebar is collapsed.
-    expect(top).toBeGreaterThanOrEqual(Number(light![2]) + 14 + 12);
-    expect(css).toMatch(
-      /\.workspace-sidebar \{[\s\S]*?top: var\(--sidebar-top\)/,
-    );
+    const height = /\.titlebar-drag \{[\s\S]*?height: (\d+)px;/.exec(css);
+    expect(position).not.toBeNull();
+    expect(height).not.toBeNull();
+    // Optical centring: the buttons sit slightly below the strip's geometric centre.
+    expect(Number(position![2]) + 14 / 2).toBe(Number(height![1]) / 2 + 4);
   });
 });

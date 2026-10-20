@@ -104,9 +104,19 @@ test("single clicks follow the selected card and keep canvas shortcuts usable", 
   ).toHaveCount(3);
   await card("c-what").click();
   await expect(content.getByRole("heading")).toHaveText("保什么");
+  await page
+    .locator('.workspace-board[aria-current="page"]')
+    .locator("..")
+    .getByRole("button", { name: /^展开/ })
+    .click();
   await expect(
     page.locator('.workspace-session[aria-current="true"]'),
   ).toContainText("保什么");
+  await page
+    .locator(".react-flow__pane")
+    .click({ position: { x: 20, y: 200 } });
+  await expect(drawer).toHaveCount(0);
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
 });
 
 test("an answer renders as blocks, never as raw markdown", async ({ page }) => {
@@ -142,9 +152,14 @@ test("「铺成第一层」 lays the outline as unseen cards, undoably", async (
     page.locator(".react-flow__node-concept .card.s-unseen"),
   ).toHaveCount(4);
   await expect(drawer.locator(".lay.done")).toContainText("已铺成第一层");
-  await page.locator(".react-flow__pane").click();
+  await page
+    .locator(".react-flow__pane")
+    .click({ position: { x: 20, y: 200 } });
+  await expect(drawer).toHaveCount(0);
   await page.keyboard.press("ControlOrMeta+z");
   await expect(cards).toHaveCount(0);
+  await expect(drawer).toHaveCount(0);
+  await page.locator(".react-flow__node-root").click();
   await expect(drawer.locator(".lay.done")).toHaveCount(0);
 });
 
@@ -195,11 +210,11 @@ test("the composer shows its state: empty, typing", async ({ page }) => {
   await expect(drawer.locator(".hint-kbd")).toHaveText("⇧↵ 换行");
 });
 
-test("progress reads 「N / M 讲清楚」 and the long title keeps a tooltip", async ({
+test("progress reads 「N / M」 and the long title keeps a tooltip", async ({
   page,
 }) => {
   await open(page, insuranceBoard(true));
-  await expect(page.locator(".progress .count")).toHaveText("1 / 6 讲清楚");
+  await expect(page.locator(".progress .count")).toHaveText("1 / 6");
   await expect(page.locator(".progress .bar i")).toHaveCount(6);
   await expect(
     page.locator('.workspace-board[aria-current="page"]'),

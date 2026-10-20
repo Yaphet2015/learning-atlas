@@ -30,6 +30,12 @@ test("sidebar conversations stay ordered, persist and reopen on their cards", as
   const seed = seeded();
   await installFakeAtlas(page, true, "web", [seed]);
   await gotoApp(page);
+  await expect(entries(page)).toHaveCount(0);
+  await page
+    .locator('.workspace-board[aria-current="page"]')
+    .locator("..")
+    .getByRole("button", { name: /^展开/ })
+    .click();
   const drawer = page.locator(".drawer");
   await card(page, "c-how").click();
   await ask(page, "赔付次数怎么算？");
@@ -59,6 +65,12 @@ test("sidebar conversations stay ordered, persist and reopen on their cards", as
     )
     .toBe(3);
   await reloadApp(page);
+  await expect(entries(page)).toHaveCount(0);
+  await page
+    .locator('.workspace-board[aria-current="page"]')
+    .locator("..")
+    .getByRole("button", { name: /^展开/ })
+    .click();
   await entries(page).filter({ hasText: "赔付次数怎么算？" }).click();
   await expect(drawer.locator(".msg.user")).toHaveText("赔付次数怎么算？");
   await expect(card(page, "c-how")).toHaveClass(/selected/);
@@ -78,6 +90,12 @@ test("expanding another canvas lists its sessions and opens the selected convers
   second.notes[0].title = "另一个画布的会话";
   await installFakeAtlas(page, true, "web", [first, second]);
   await gotoApp(page);
+  await expect(entries(page)).toHaveCount(0);
+  await page
+    .locator('.workspace-board[aria-current="page"]')
+    .locator("..")
+    .getByRole("button", { name: /^展开/ })
+    .click();
   await page
     .getByRole("button", { name: "展开另一个画布的对话", exact: true })
     .click();
@@ -105,6 +123,12 @@ test("web preview conversations persist and the sidebar can create a new convers
     JSON.stringify([seeded()]),
   );
   await gotoApp(page);
+  await expect(entries(page)).toHaveCount(0);
+  await page
+    .locator('.workspace-board[aria-current="page"]')
+    .locator("..")
+    .getByRole("button", { name: /^展开/ })
+    .click();
   await page.getByRole("button", { name: "新对话", exact: true }).click();
   await page.getByLabel("批注标题").fill("犹豫期的问题");
   await expect(entries(page)).toHaveCount(2);
@@ -118,6 +142,12 @@ test("web preview conversations persist and the sidebar can create a new convers
     )
     .toBe(2);
   await reloadApp(page);
+  await expect(entries(page)).toHaveCount(0);
+  await page
+    .locator('.workspace-board[aria-current="page"]')
+    .locator("..")
+    .getByRole("button", { name: /^展开/ })
+    .click();
   await entries(page).filter({ hasText: "犹豫期的问题" }).click();
   await expect(page.getByLabel("批注标题")).toHaveValue("犹豫期的问题");
   await expect(

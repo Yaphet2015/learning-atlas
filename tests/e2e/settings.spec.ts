@@ -9,7 +9,7 @@ test("⌘. opens the settings page; Esc closes it; ⌘K reaches it too", async (
   await expect(
     page.locator(".dock").getByRole("button", { name: "设置", exact: true }),
   ).toHaveCount(0);
-  const ask = page.locator(".dock .ask");
+  const ask = page.locator(".dock").getByRole("button", { name: "问一问 /" });
   const background = await ask.evaluate(
     (el) => getComputedStyle(el).backgroundColor,
   );

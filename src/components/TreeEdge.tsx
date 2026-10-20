@@ -27,7 +27,11 @@ export type TreeEdgeData = {
 export type TreeEdgeType = Edge<TreeEdgeData, "tree">;
 
 /** Parent bottom → child top: one clean cubic bezier; dashed into an unseen child. */
-export function TreeEdge({ source, target, data }: EdgeProps<TreeEdgeType>) {
+export function TreeEdge({
+  source,
+  target,
+  data,
+}: Pick<EdgeProps<TreeEdgeType>, "source" | "target" | "data">) {
   const a = useBox(source),
     b = useBox(target);
   if (!a || !b) return null;
@@ -55,7 +59,10 @@ export function TreeEdge({ source, target, data }: EdgeProps<TreeEdgeType>) {
 export type SeqEdgeType = Edge<{ [key: string]: unknown }, "seq">;
 
 /** 先→后 between adjacent siblings: a small shaftless chevron, centred in the gap. */
-export function SeqEdge({ source, target }: EdgeProps<SeqEdgeType>) {
+export function SeqEdge({
+  source,
+  target,
+}: Pick<EdgeProps<SeqEdgeType>, "source" | "target">) {
   const a = useBox(source),
     b = useBox(target);
   if (!a || !b) return null;

@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { gotoApp } from "./ready";
+import { insuranceBoard } from "./fixtures";
+import { installFakeAtlas } from "./fake-atlas";
 
 test("the minimap shows only while panning or with the hand tool; zoom stays", async ({
   page,
@@ -45,4 +47,65 @@ test("reduced motion: the minimap appears and hides without a fade", async ({
     .locator(".minimap-card")
     .evaluate((el) => getComputedStyle(el).transitionDuration);
   expect(duration.split(",").every((d) => parseFloat(d) === 0)).toBe(true);
+});
+
+test("the minimap shows canvas relationships and follows dragged nodes", async ({
+  page,
+}) => {
+  const board = insuranceBoard(true);
+  await installFakeAtlas(page, true, "web", [
+    {
+      ...board,
+      relations: [
+        {
+          id: "cross-test",
+          source: "c-what",
+          target: "c-how",
+          label: "关联",
+          kind: "cross",
+        },
+      ],
+    },
+  ]);
+  await gotoApp(page);
+  await page.keyboard.press("h");
+  const map = page.locator(".atlas-minimap");
+  await expect(map).toBeVisible();
+  for (const kind of ["tree", "seq", "cross"]) {
+    const main = page.locator(`.react-flow__edges .${kind}-edge`);
+    const mini = map.locator(`.${kind}-edge`);
+    await expect(main.first()).toBeAttached();
+    await expect(mini).toHaveCount(await main.count());
+  }
+  await expect(map.locator(".cross-label")).toBeHidden();
+  const mainPath = page
+    .locator('.react-flow__edge[data-id="tree-c-what"] .tree-edge > path')
+    .first();
+  const miniPath = map
+    .locator('.mini-edges[data-node-id="c-what"] .tree-edge > path')
+    .first();
+  await expect
+    .poll(() => miniPath.getAttribute("d"))
+    .toBe(await mainPath.getAttribute("d"));
+  await expect(miniPath).toHaveCSS("vector-effect", "non-scaling-stroke");
+  const before = await miniPath.getAttribute("d");
+  await page.keyboard.press("v");
+  const card = (await page
+    .locator('.react-flow__node[data-id="c-what"]')
+    .boundingBox())!;
+  await page.mouse.move(card.x + 40, card.y + 25);
+  await page.mouse.down();
+  try {
+    await page.mouse.move(card.x + 110, card.y + 65, { steps: 6 });
+    await expect.poll(() => miniPath.getAttribute("d")).not.toBe(before);
+    await expect
+      .poll(
+        async () =>
+          (await miniPath.getAttribute("d")) ===
+          (await mainPath.getAttribute("d")),
+      )
+      .toBe(true);
+  } finally {
+    await page.mouse.up();
+  }
 });

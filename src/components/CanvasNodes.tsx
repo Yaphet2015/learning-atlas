@@ -20,6 +20,7 @@ import {
 import type { CardHints, ConceptNode, SceneState } from "../shared/types";
 import type { HintSide } from "../model/hints";
 import { Seal } from "./Seal";
+import { BorderBeam } from "./BorderBeam";
 import { tip } from "./Tooltip";
 
 export type CardData = {
@@ -56,6 +57,8 @@ export type CardData = {
   onAsk?: (id: string) => void;
   onExpand?: (id: string) => void;
   canExpand?: boolean;
+  expandBusy?: boolean;
+  generating?: boolean;
   /** Root only, while an AI board has no first level yet: the obvious next step. */
   onKickoff?: () => void;
   kickoffStarted?: boolean;
@@ -336,6 +339,7 @@ function SelectToolbar({
         <button
           className="icon"
           {...tip("再看一层")}
+          disabled={data.expandBusy}
           onClick={() => data.onExpand?.(n.id)}
         >
           <Layers3 size={15} className="ico" />
@@ -369,12 +373,16 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
     <article
       {...attention}
       className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""} ${hintsOpen ? "hints-open" : ""} ${controlsActive ? "hint-controls-active" : ""}`}
+      aria-busy={data.generating || undefined}
     >
+      {data.generating && <BorderBeam />}
       {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />
       {n.status === "explained" && <Seal />}
-      {data.no && <span className="no">{data.no}</span>}
-      <Title data={data} as="h3" />
+      <div className="card-heading">
+        <Title data={data} as="h3" />
+        {data.no && <span className="no">{data.no}</span>}
+      </div>
       {n.body && <p>{n.body}</p>}
       {(data.onNote || n.visual || n.hand) && (
         <div className="meta">
@@ -423,7 +431,9 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
     <article
       {...attention}
       className={`origin ${selected || data.noteOpen ? "is-selected" : ""} ${hintsOpen ? "hints-open" : ""} ${controlsActive ? "hint-controls-active" : ""}`}
+      aria-busy={data.generating || undefined}
     >
+      {data.generating && <BorderBeam />}
       {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />
       <div className="origin-head">

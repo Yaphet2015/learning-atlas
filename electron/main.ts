@@ -102,6 +102,15 @@ async function bootstrap(): Promise<void> {
   } else {
     if (!app.isPackaged) app.dock?.setIcon(devIcon);
     const store = new BoardStore(path.join(app.getPath("userData"), "boards"));
+    const canvasLocks = new Map<
+      string,
+      {
+        boardId: string;
+        expected: string;
+        resolve: () => void;
+        reject: (error: Error) => void;
+      }
+    >();
     runtime = new AIRuntime(
       path.join(app.getPath("userData"), "ai"),
       (update) => {
@@ -110,6 +119,42 @@ async function bootstrap(): Promise<void> {
       },
       // The API key is encrypted at rest with safeStorage (macOS: Keychain-backed).
       safeStorage,
+      {
+        load: (boardId) => store.load(boardId),
+        acquire: (run, expected, signal) =>
+          new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(
+              () => finish(new Error("画布预览准备超时，任务已停止。")),
+              30_000,
+            );
+            const abort = () => finish(new Error("画布任务已停止。"));
+            function finish(error?: Error) {
+              clearTimeout(timeout);
+              signal?.removeEventListener("abort", abort);
+              canvasLocks.delete(run.id);
+              if (error) reject(error);
+              else resolve();
+            }
+            canvasLocks.set(run.id, {
+              boardId: run.boardId,
+              expected,
+              resolve: () => finish(),
+              reject: (error) => finish(error),
+            });
+            if (signal?.aborted) abort();
+            else signal?.addEventListener("abort", abort, { once: true });
+          }),
+        release: (boardId, runId) => {
+          canvasLocks.get(runId)?.reject(new Error("画布任务已停止。"));
+          store.releaseCanvas(boardId, runId);
+        },
+        commit: (boardId, runId, expected, operations) =>
+          store.commitCanvas(boardId, runId, expected, operations),
+      },
+      (run) => {
+        if (window && !window.isDestroyed())
+          window.webContents.send("studyboard:canvas-run", { run });
+      },
     );
     function assertSender(event: Electron.IpcMainInvokeEvent) {
       const url = event.senderFrame?.url;
@@ -191,6 +236,43 @@ async function bootstrap(): Promise<void> {
       if (closePending) throw new Error("App is preparing to close");
       return runtime.ask(aiRequestSchema.parse(value));
     });
+    handle("studyboard:canvas-start", (boardId) => {
+      if (closePending) throw new Error("App is preparing to close");
+      return runtime.startCanvasRun(id.parse(boardId));
+    });
+    handle("studyboard:canvas-list", (boardId) =>
+      runtime.listCanvasRuns(id.parse(boardId)),
+    );
+    handle("studyboard:canvas-get", (boardId, runId) =>
+      runtime.getCanvasRun(id.parse(boardId), id.parse(runId)),
+    );
+    handle("studyboard:canvas-prepare", async (boardId, runId) => {
+      boardId = id.parse(boardId);
+      runId = id.parse(runId);
+      const pending = canvasLocks.get(runId);
+      if (!pending || pending.boardId !== boardId) return;
+      try {
+        await store.acquireCanvas(boardId, runId, pending.expected);
+        if (canvasLocks.get(runId) !== pending) {
+          store.releaseCanvas(boardId, runId);
+          return;
+        }
+        pending.resolve();
+      } catch {
+        pending.reject(new Error("画布已更新或被占用，请按最新画布重试。"));
+        throw new Error("画布已更新或被占用，请按最新画布重试。");
+      }
+    });
+    handle("studyboard:canvas-resume", (boardId, runId) => {
+      if (closePending) throw new Error("App is preparing to close");
+      return runtime.resumeCanvasRun(id.parse(boardId), id.parse(runId));
+    });
+    handle("studyboard:canvas-cancel", (boardId, runId) =>
+      runtime.cancelCanvasRun(id.parse(boardId), id.parse(runId)),
+    );
+    handle("studyboard:canvas-commit", (boardId, runId) =>
+      runtime.commitCanvasRun(id.parse(boardId), id.parse(runId)),
+    );
     handle("studyboard:stop", (board, sticky) =>
       runtime.stop(id.parse(board), id.parse(sticky)),
     );
@@ -310,8 +392,8 @@ async function bootstrap(): Promise<void> {
         title: "Studyboard",
         icon: app.isPackaged ? undefined : devIcon,
         titleBarStyle: "hiddenInset",
-        // Centre the native buttons within the 28px draggable title bar.
-        trafficLightPosition: { x: 14, y: 7 },
+        // Lower the native buttons slightly for optical centring in the title bar.
+        trafficLightPosition: { x: 12, y: 17 },
         webPreferences: {
           preload: path.join(here, "preload.cjs"),
           contextIsolation: true,

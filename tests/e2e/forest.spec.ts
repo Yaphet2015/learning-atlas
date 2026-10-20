@@ -43,7 +43,7 @@ test("the root grows upward: a broader question above, the old root becomes its 
   await expect(roots(page)).toContainText("保险怎么选");
 });
 
-test("roots side by side: a new root beside, its own tree, 走一遍 and the outline see both", async ({
+test("roots side by side: a new root beside, its own tree, chat and 走一遍 reach it", async ({
   page,
 }) => {
   await installFakeAtlas(page, true, "web", [insuranceBoard(true)]);
@@ -81,7 +81,7 @@ test("roots side by side: a new root beside, its own tree, 走一遍 and the out
   const sb = (await side.boundingBox())!;
   expect(Math.abs(sb.y - r0!.y)).toBeLessThan(2);
   expect(sb.x).toBeGreaterThan(r0!.x + r0!.width);
-  // A request's outline lists both roots.
+  // Chat seeds the selected branch; the Agent reads the rest through tools.
   await child.click();
   await page.keyboard.press("/");
   const drawer = page.locator(".drawer");
@@ -89,10 +89,13 @@ test("roots side by side: a new root beside, its own tree, 走一遍 and the out
   await drawer.getByLabel("发送提问").click();
   await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
-  const outline = asks.at(-1).context.structure as string;
-  expect(outline).toContain("L0 起点 重疾险有哪些比较重要的条款");
-  expect(outline).toContain("§B L0 起点 医疗险怎么选");
-  expect(outline).toContain("§B1 L1 免赔额");
+  const request = asks.at(-1);
+  expect(request.canvas).toBe(true);
+  expect(request.context.structure).toBeUndefined();
+  expect(request.context.review).toBeUndefined();
+  expect(request.context.references.map((ref: any) => ref.title)).toEqual(
+    expect.arrayContaining(["医疗险怎么选", "免赔额"]),
+  );
   await page.keyboard.press("Escape");
   // 走一遍 walks the cards of both trees.
   // Clear the selected card with Escape: a fixed pane coordinate can hit a

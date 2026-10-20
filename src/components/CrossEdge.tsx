@@ -12,7 +12,7 @@ export function CrossEdge({
   target,
   data,
   selected,
-}: EdgeProps<CrossEdgeType>) {
+}: Pick<EdgeProps<CrossEdgeType>, "source" | "target" | "data" | "selected">) {
   const a = useBox(source),
     b = useBox(target);
   if (!a || !b) return null;

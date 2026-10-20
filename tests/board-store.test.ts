@@ -50,6 +50,18 @@ describe("atomic private board storage", () => {
     ).toBe(0o600);
     expect((await stat(join(directory, "boards"))).mode & 0o777).toBe(0o700);
   });
+  it("persists archive metadata across restarts and keeps the complete board recoverable", async () => {
+    const board = createWalkthroughBoard();
+    board.archivedAt = new Date().toISOString();
+    await store.save(board);
+    const reopened = new BoardStore(join(directory, "boards"));
+    expect(await reopened.load(board.id)).toEqual(board);
+    expect((await reopened.list())[0].archivedAt).toBe(board.archivedAt);
+    delete board.archivedAt;
+    await reopened.save(board);
+    expect((await store.list())[0].archivedAt).toBeUndefined();
+    expect(await store.load(board.id)).toEqual(board);
+  });
   it("serializes rapid writes to the same board and snapshots inputs immediately", async () => {
     const board = createEmptyBoard("initial");
     const writes = [];
