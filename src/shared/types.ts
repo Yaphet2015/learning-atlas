@@ -38,6 +38,8 @@ export interface ConceptNode {
   status: Understanding;
   /** Handwritten margin remark shown under the body. */
   hand?: string;
+  /** Latest 走一遍 prediction; saved with the card, hidden on the canvas. */
+  prediction?: string;
   expanded?: boolean;
   visual?: VisualDiagram;
 }

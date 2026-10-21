@@ -1,3 +1,4 @@
+import { FIT_PADDING } from "./model/viewport";
 import {
   useCallback,
   useEffect,
@@ -495,7 +496,10 @@ export default function App() {
         setSettings(settings);
         await refreshList();
         setLoaded(true);
-        setTimeout(() => flow.fitView({ padding: 0.16, duration: 500 }), 160);
+        setTimeout(
+          () => flow.fitView({ padding: FIT_PADDING, duration: 500 }),
+          160,
+        );
       } catch (error) {
         if (!cancelled) {
           showToast(errorText(error));
@@ -1011,7 +1015,10 @@ export default function App() {
       boardCache.current.set(b.id, b);
       setBoard(b);
       resetBoardView();
-      setTimeout(() => flow.fitView({ padding: 0.16, duration: 400 }), 60);
+      setTimeout(
+        () => flow.fitView({ padding: FIT_PADDING, duration: 400 }),
+        60,
+      );
     } catch (e) {
       showToast(errorText(e));
     } finally {
@@ -1057,7 +1064,10 @@ export default function App() {
         boardCache.current.set(replacement.id, replacement);
         setBoard(replacement);
         resetBoardView();
-        setTimeout(() => flow.fitView({ padding: 0.16, duration: 400 }), 60);
+        setTimeout(
+          () => flow.fitView({ padding: FIT_PADDING, duration: 400 }),
+          60,
+        );
       }
       await refreshList();
       showToast(
@@ -1105,7 +1115,10 @@ export default function App() {
       setShowNew(false);
       setTopic("");
       await refreshList();
-      setTimeout(() => flow.fitView({ padding: 0.22, duration: 450 }), 80);
+      setTimeout(
+        () => flow.fitView({ padding: FIT_PADDING, duration: 450 }),
+        80,
+      );
       kickoff = !walkthrough;
     } catch (e) {
       showToast(errorText(e));
@@ -1130,7 +1143,10 @@ export default function App() {
       resetBoardView();
       await refreshList();
       setSaveStatus("saved");
-      setTimeout(() => flow.fitView({ padding: 0.16, duration: 400 }), 60);
+      setTimeout(
+        () => flow.fitView({ padding: FIT_PADDING, duration: 400 }),
+        60,
+      );
       showToast("画板已导入，学习记录和对话已恢复。");
     } catch (error) {
       showToast(errorText(error));
@@ -1214,6 +1230,23 @@ export default function App() {
           n.id === id ? { ...n, status, ...(hand ? { hand } : {}) } : n,
         ),
       })),
+    [edit],
+  );
+  // Write through to the board cache on input: Escape can unmount without blur.
+  // Autosave remains debounced; typing does not fill the board undo history.
+  const setPrediction = useCallback(
+    (id: string, prediction: string) =>
+      edit(
+        (b) => ({
+          ...b,
+          nodes: b.nodes.map((n) => {
+            if (n.id !== id) return n;
+            const { prediction: _old, ...rest } = n;
+            return prediction.trim() ? { ...rest, prediction } : rest;
+          }),
+        }),
+        false,
+      ),
     [edit],
   );
   const rename = useCallback(
@@ -1438,7 +1471,7 @@ export default function App() {
         if (picked.length >= 2) askMany(picked);
         else ask();
       } else if (key === "0") {
-        flow.fitView({ padding: 0.16, duration: 400 });
+        flow.fitView({ padding: FIT_PADDING, duration: 400 });
       } else if (key === "d") {
         setDark((d) => !d);
       } else if (selectedNodeId && ["1", "2", "3"].includes(key)) {
@@ -2109,7 +2142,7 @@ export default function App() {
                 addNote(undefined, { cards: false });
               }}
               fitView
-              fitViewOptions={{ padding: 0.16 }}
+              fitViewOptions={{ padding: FIT_PADDING }}
               minZoom={0.1}
               maxZoom={1.8}
               deleteKeyCode={null}
@@ -2397,6 +2430,7 @@ export default function App() {
           board={board}
           startId={study.startId}
           onRate={setStatus}
+          onPredict={setPrediction}
           onAskAI={(id, text) => {
             setStudy(null);
             addNote({ kind: "node", id }, { text, cards: false });

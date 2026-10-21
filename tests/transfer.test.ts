@@ -31,6 +31,7 @@ function example() {
   note.excludedRefs = [board.nodes[3].id];
   board.notes = [note];
   board.nodes[1].status = "explained";
+  board.nodes[1].prediction = "每张卡片的预测也需要保留";
   board.scene.prediction = "宽度改变会重新布局";
   board.scene.explanation = "文字换行了";
   return { board, messages };
@@ -69,6 +70,7 @@ describe("portable learning history", () => {
     expect(markdown).toContain("第 0 条学习记录");
     expect(markdown).toContain(messages[249].text);
     expect(markdown).toContain("我能解释");
+    expect(markdown).toContain("我的预测：每张卡片的预测也需要保留");
     expect(markdown).toContain("宽度改变会重新布局");
   });
   it("preserves transcript order even if timestamps go backwards, without repeating truncated cache messages", () => {

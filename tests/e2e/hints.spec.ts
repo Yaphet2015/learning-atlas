@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { installFakeAtlas } from "./fake-atlas";
 import { insuranceBoard } from "./fixtures";
 import { gotoApp } from "./ready";
@@ -8,6 +8,15 @@ const card = (page: Page, id: string) =>
 const hintAsks = (page: Page) =>
   page.evaluate(() => (window as any).__atlasHints as any[]);
 
+async function hoverForHint(owner: Locator, hint: Locator) {
+  // Initial fit can move the card after hover succeeds, cancelling its debounce.
+  // Reacquire it before testing the uninterrupted trip through the controls.
+  await expect(async () => {
+    await owner.locator("article").hover();
+    await expect(hint).toHaveCSS("opacity", "1", { timeout: 1_500 });
+  }).toPass({ timeout: 10_000 });
+}
+
 for (const [id, side] of [
   ["c-how", "below"],
   ["c-how", "right"],
@@ -16,6 +25,11 @@ for (const [id, side] of [
   test(`ghost hint ${side}: cross the gaps from card to plus to hint and click`, async ({
     page,
   }) => {
+    if (side === "above") {
+      // Exercise the initial-layout race seen on the slower macOS CI runner.
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+    }
     await installFakeAtlas(page, true, "web", [insuranceBoard(true)]);
     await gotoApp(page);
     const owner = card(page, id);
@@ -23,13 +37,12 @@ for (const [id, side] of [
     const plus = owner.locator(`.plus.${side}`);
     // A neighbour with cached hints must not cover the controls during transit.
     if (side === "right") {
-      await card(page, "c-money").locator("article").hover();
-      await expect(
+      await hoverForHint(
+        card(page, "c-money"),
         card(page, "c-money").locator(".ghost-hint.right"),
-      ).toHaveCSS("opacity", "1");
+      );
     }
-    await owner.locator("article").hover();
-    await expect(hint).toHaveCSS("opacity", "1");
+    await hoverForHint(owner, hint);
     const title = (await hint.innerText()).trim();
     const body = (await owner.locator("article").boundingBox())!;
     const handle = (await plus.boundingBox())!;

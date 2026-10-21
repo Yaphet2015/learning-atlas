@@ -1,3 +1,4 @@
+import { FIT_PADDING } from "../model/viewport";
 import { useEffect, useMemo, useState } from "react";
 import {
   MiniMap,
@@ -331,7 +332,7 @@ export function MapUnit({ showMap }: { showMap: boolean }) {
         <span className="sep" />
         <button
           {...tip("查看全图", "0")}
-          onClick={() => flow.fitView({ padding: 0.16, duration: 400 })}
+          onClick={() => flow.fitView({ padding: FIT_PADDING, duration: 400 })}
         >
           <Crosshair size={15} className="ico" />
         </button>
