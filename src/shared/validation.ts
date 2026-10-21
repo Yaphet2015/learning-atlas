@@ -515,7 +515,9 @@ export const aiMapSchema = z
       .max(12),
     overviews: aiOverviewsSchema,
   })
-  .strict();
+  // Stray top-level notes (e.g. "relations_note") are dropped rather than failing the whole map;
+  // nodes and relations stay strict.
+  .strip();
 
 // Expansion may find no useful additions; initial maps must still contain nodes.
 export const aiExpansionSchema = z.union([
