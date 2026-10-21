@@ -29,15 +29,29 @@ describe("rich cards", () => {
     expect(card.sources?.[0].url).toContain("spglobal");
     expect(boardSchema.parse(next).nodes[1].example).toBe(rich.example);
   });
-  it("rejects unsafe source links and over-long point lists", () => {
+  it("drops unsafe or invalid optional fields, trims long lists, keeps the card", () => {
     const board = createEmptyBoard("x");
-    const bad = (patch: object) =>
-      expect(() =>
-        buildMapFromAI(JSON.stringify({ nodes: [{ ...rich, ...patch }], relations: [] }), board),
-      ).toThrow();
-    bad({ sources: [{ title: "x", url: "javascript:alert(1)" }] });
-    bad({ keyPoints: ["1", "2", "3", "4", "5"] });
-    bad({ depthType: "deep" });
+    const next = buildMapFromAI(
+      JSON.stringify({
+        nodes: [
+          {
+            ...rich,
+            sources: [{ title: "x", url: "javascript:alert(1)" }],
+            keyPoints: ["1", "2", "3", "4", "5"],
+            depthType: "deep",
+            example: "<script>alert(1)</script>",
+          },
+        ],
+        relations: [],
+      }),
+      board,
+    );
+    const card = next.nodes[1];
+    expect(card.sources).toBeUndefined();
+    expect(card.keyPoints).toEqual(["1", "2", "3", "4"]);
+    expect(card.depthType).toBeUndefined();
+    expect(card.example).toBeUndefined();
+    expect(JSON.stringify(next)).not.toContain("script");
   });
   it("the near-duplicate filter reads keyPoints", () => {
     const board = buildMapFromAI(

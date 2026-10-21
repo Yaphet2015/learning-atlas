@@ -71,6 +71,29 @@ export const richCardFields = {
   depthType: depthTypeSchema.optional(),
   sources: z.array(cardSourceSchema).max(4).optional(),
 };
+/**
+ * The same fields as the model sends them: a bad or over-long optional field is trimmed or dropped
+ * instead of failing the whole map (plain-text checks still apply, so nothing unsafe is kept).
+ */
+const aiRichCardFields = {
+  summary: richCardFields.summary.catch(undefined),
+  keyPoints: z
+    .preprocess(
+      (v) => (Array.isArray(v) ? v.slice(0, 4) : v),
+      richCardFields.keyPoints,
+    )
+    .catch(undefined),
+  whyItMatters: richCardFields.whyItMatters.catch(undefined),
+  example: richCardFields.example.catch(undefined),
+  misconception: richCardFields.misconception.catch(undefined),
+  depthType: richCardFields.depthType.catch(undefined),
+  sources: z
+    .preprocess(
+      (v) => (Array.isArray(v) ? v.slice(0, 4) : v),
+      richCardFields.sources,
+    )
+    .catch(undefined),
+};
 export const conceptNodeSchema = z
   .object({
     id: idSchema,
@@ -529,7 +552,7 @@ export const aiMapSchema = z
             visual: visualDiagramSchema.optional(),
             /** The plan block this card realises. */
             block: idSchema.optional(),
-            ...richCardFields,
+            ...aiRichCardFields,
           })
           .strict(),
       )
