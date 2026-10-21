@@ -35,6 +35,8 @@ const DIMS = [
 const EXTRA = [
   ["l2", "L2 新信息率", (t) => t.newInfo?.[2]],
   ["l3", "L3 新信息率", (t) => t.newInfo?.[3]],
+  ["planCl", "计划清单覆盖", (t) => t.planChecklistCoverage],
+  ["blockCov", "块落地率", (t) => t.blockCoverage],
   ["cards", "卡片数", (t) => t.cards],
   [
     "body",

@@ -25,6 +25,14 @@ import {
   kickoffSkeleton,
   learnerAnswers,
 } from "../src/model/kickoff";
+import {
+  confirmPlan,
+  coveredBlocks,
+  parsePlan,
+  planFirstLevelPrompt,
+  planPrompt,
+} from "../src/model/plan";
+import type { BoardPlan } from "../src/shared/types";
 import { expandPrompt } from "../src/model/expand";
 import type { Board, ContextBundle, StickyNote } from "../src/shared/types";
 import { TOPICS, type EvalTopic } from "./topics";
@@ -123,7 +131,7 @@ async function chat(
 }
 
 interface Step {
-  kind: "map" | "expand" | "kickoff";
+  kind: "map" | "expand" | "kickoff" | "plan";
   round: number;
   anchor: string;
   anchorTitle: string;
@@ -231,6 +239,55 @@ const JUDGE_SYSTEM = `你是严格的学习内容评审。你会看到一个学�
 - nonRedundancy（不重复）：卡片之间、上下层之间是否避免同义改写和重复；深挖是否带来新信息。5=几乎无重复；1=大量换说法重复。
 只输出一个 JSON 对象，不要代码围栏：{"goalFit":n,"coverage":n,"depth":n,"nonRedundancy":n,"checklist":[{"item":"清单原文","covered":true或false,"where":"覆盖它的卡片标题或空"}],"missingImportant":["清单外的重要遗漏"],"redundantPairs":[["卡片A","卡片B"]],"shallowExamples":["最空泛的卡片标题：原因"],"verdict":"两三句总评"}`;
 
+/** The plan request as App.tsx requestPlan sends it; the harness auto-confirms the draft. */
+async function plan(board: Board, steps: Step[]): Promise<BoardPlan> {
+  const root = board.nodes[0];
+  const virtual = newNote(board, { x: 0, y: 0 }, { kind: "node", id: root.id });
+  const context = contextForNote(
+    { ...board, notes: [virtual] },
+    virtual.id,
+    undefined,
+    false,
+    "references",
+  );
+  const system = `${tutorInstructions("plan")}\n\n${renderScopedContext(context)}`;
+  const prompt = planPrompt(board.topic, learnerAnswers(kickoffNote(board)));
+  const step: Step = {
+    kind: "plan",
+    round: -1,
+    anchor: root.id,
+    anchorTitle: root.title,
+    systemChars: system.length,
+    prompt,
+    added: 0,
+  };
+  steps.push(step);
+  const r = await chat(system, prompt, { temperature: modeTemperature("plan") });
+  Object.assign(step, {
+    raw: r.content,
+    reasoningChars: r.reasoningChars,
+    finish: r.finish,
+    ms: r.ms,
+    usage: r.usage,
+  });
+  return confirmPlan(parsePlan(r.content));
+}
+
+const PLAN_JUDGE_SYSTEM = `你是严格的教学设计评审。给你一个起点问题、它的“必须覆盖要点”清单和一份学习计划骨架。逐条判断清单中的每个要点是否被骨架中的某个块明确规划（块的标题或理由点到了它；只是相关不算）。再给 1–5 分：intentFit（类型判断与目标是否切合起点问题的真实意图），structure（块是否互不重叠、粒度合适、顺序合理）。
+只输出一个 JSON 对象，不要代码围栏：{"checklist":[{"item":"清单原文","covered":true或false,"block":"块id或空"}],"intentFit":n,"structure":n,"verdict":"一两句"}`;
+
+async function judgePlan(t: EvalTopic, p: BoardPlan) {
+  const skeleton = p.blocks
+    .map((b) => `${b.parent ? "  " : ""}- [${b.id}]${b.core ? "（核心）" : ""} ${b.title}：${b.why}`)
+    .join("\n");
+  const user = `起点问题：「${t.topic}」\n必须覆盖要点：\n${t.mustHave.map((m, i) => `${i + 1}. ${m}`).join("\n")}\n\n计划：类型 ${p.intent}；目标 ${p.goal}；学习者 ${p.learner}\n骨架：\n${skeleton}\n不展开：${p.outOfScope.join("、")}`;
+  const r = await chat(PLAN_JUDGE_SYSTEM, user);
+  const s = r.content.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+  const j = JSON.parse(s.slice(s.indexOf("{"), s.lastIndexOf("}") + 1));
+  const covered = (j.checklist ?? []).filter((c: any) => c.covered).length;
+  return { ...j, planChecklistCoverage: +(covered / t.mustHave.length).toFixed(3) };
+}
+
 async function judge(t: EvalTopic, nodes: EvalNode[]) {
   const user = `起点问题：「${t.topic}」\n问题类型：${t.type}\n必须覆盖要点：\n${t.mustHave.map((m, i) => `${i + 1}. ${m}`).join("\n")}\n\n画布：\n${outlineText(nodes)}`;
   const r = await chat(JUDGE_SYSTEM, user);
@@ -337,12 +394,24 @@ async function runTopic(t: EvalTopic, out: string) {
       });
     }
   }
+  // Plan, then expand (App.tsx proposeFirstLevel → requestPlan → confirm). EVAL_PLAN=0 keeps the PR-A path.
+  let planJudgement: any;
+  if (process.env.EVAL_PLAN !== "0") {
+    try {
+      board = { ...board, plan: await plan(board, steps) };
+    } catch (e) {
+      const last = steps[steps.length - 1];
+      if (last?.kind === "plan") last.error = String((e as Error).message ?? e);
+    }
+  }
   const kick = kickoffNote(board);
   board = await generate(
     board,
     root,
     "map",
-    firstLevelPrompt(t.topic, learnerAnswers(kick), kickoffSkeleton(kick)),
+    board.plan
+      ? planFirstLevelPrompt(board)
+      : firstLevelPrompt(t.topic, learnerAnswers(kick), kickoffSkeleton(kick)),
     0,
     steps,
   );
@@ -375,7 +444,18 @@ async function runTopic(t: EvalTopic, out: string) {
       steps,
     );
   const nodes = levels(board);
-  const metrics = treeMetrics(nodes);
+  const metrics: any = treeMetrics(nodes);
+  if (board.plan) {
+    metrics.planBlocks = board.plan.blocks.length;
+    metrics.blockCoverage = +(
+      coveredBlocks(board).size / board.plan.blocks.length
+    ).toFixed(3);
+    try {
+      planJudgement = await judgePlan(t, board.plan);
+    } catch (e) {
+      planJudgement = { error: String((e as Error).message) };
+    }
+  }
   let judgement: any;
   try {
     judgement = await judge(t, nodes);
@@ -390,6 +470,8 @@ async function runTopic(t: EvalTopic, out: string) {
     relations: board.relations,
     metrics,
     judgement,
+    plan: board.plan,
+    planJudgement,
     outline: outlineText(nodes),
     ms: Date.now() - started,
   };
@@ -438,6 +520,12 @@ async function main() {
       dims.map((d) => [d, mean(rs.map((r) => r.judgement[d]))]),
     ),
     checklistCoverage: mean(rs.map((r) => r.judgement.checklistCoverage)),
+    planChecklistCoverage: mean(
+      rs.map((r) => r.planJudgement?.planChecklistCoverage).filter((x) => x != null),
+    ),
+    blockCoverage: mean(
+      rs.map((r) => r.metrics.blockCoverage).filter((x) => x != null),
+    ),
     cards: mean(rs.map((r) => r.metrics.nodes)),
     textDupRate: mean(rs.map((r) => r.metrics.textPairs.dupRate)),
     newInfoL2: mean(
@@ -469,6 +557,11 @@ async function main() {
       type: r.topic.type,
       ...Object.fromEntries(dims.map((d) => [d, r.judgement[d]])),
       checklistCoverage: r.judgement.checklistCoverage,
+      planChecklistCoverage: r.planJudgement?.planChecklistCoverage,
+      planIntent: r.plan?.intent,
+      planIntentFit: r.planJudgement?.intentFit,
+      planStructure: r.planJudgement?.structure,
+      blockCoverage: r.metrics.blockCoverage,
       cards: r.metrics.nodes,
       byLevel: r.metrics.byLevel,
       textDupRate: r.metrics.textPairs.dupRate,
@@ -487,6 +580,8 @@ async function main() {
       .map((d) => r[d])
       .concat([
         r.checklistCoverage,
+        r.planChecklistCoverage ?? "",
+        r.blockCoverage ?? "",
         r.cards,
         r.textDupRate,
         r.newInfoL2 ?? r.newInfo?.[2],
@@ -494,7 +589,7 @@ async function main() {
       ])
       .join(" | ");
   const head =
-    "| 项 | 贴题 | 覆盖 | 深度 | 不重复 | 清单覆盖率 | 卡片数 | 近重复对比例 | L2 新信息率 | L3 新信息率 |\n|---|---|---|---|---|---|---|---|---|---|";
+    "| 项 | 贴题 | 覆盖 | 深度 | 不重复 | 清单覆盖率 | 计划清单覆盖 | 块落地率 | 卡片数 | 近重复对比例 | L2 新信息率 | L3 新信息率 |\n|---|---|---|---|---|---|---|---|---|---|---|---|";
   const md = [
     `# Generation eval ${stamp}`,
     `模型 ${MODEL}；${results.length} 个主题；用时 ${Math.round(summary.wallMs / 1000)}s；调用 ${totals.calls} 次（失败 ${totals.failures}）；tokens 输入 ${totals.prompt}（缓存命中 ${totals.cached}）/ 输出 ${totals.completion}（其中推理 ${totals.reasoning}）。`,
