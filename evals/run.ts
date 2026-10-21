@@ -57,7 +57,16 @@ interface Usage {
   reasoning: number;
   cached: number;
 }
-const totals: Usage & { calls: number; failures: number } = {
+const totals: Usage & {
+  calls: number;
+  failures: number;
+  retries: number;
+  retryMs: number;
+  retryReasons: string[];
+} = {
+  retries: 0,
+  retryMs: 0,
+  retryReasons: [],
   prompt: 0,
   completion: 0,
   reasoning: 0,
@@ -93,7 +102,7 @@ async function chat(
             : {}),
           messages: [{ role: "system", content: system }, ...turns],
         }),
-        signal: AbortSignal.timeout(300_000),
+        signal: AbortSignal.timeout(Number(process.env.EVAL_TIMEOUT_MS ?? 150_000)),
       });
       const json: any = await res.json().catch(() => ({}));
       totals.calls++;
@@ -124,6 +133,12 @@ async function chat(
     } catch (e) {
       last = String((e as Error).message ?? e).slice(0, 200);
     }
+    // Failed attempts (timeouts, HTTP errors, empty content) are counted so slow steps are explainable.
+    totals.retries++;
+    totals.retryMs += Date.now() - started;
+    if (totals.retryReasons.length < 40)
+      totals.retryReasons.push(`${Math.round((Date.now() - started) / 1000)}s ${last.slice(0, 80)}`);
+    console.error(`  retry ${i + 1}/${tries} after ${Math.round((Date.now() - started) / 1000)}s: ${last.slice(0, 120)}`);
     await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
   }
   totals.failures++;
