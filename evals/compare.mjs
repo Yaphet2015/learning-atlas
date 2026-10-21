@@ -31,12 +31,14 @@ const DIMS = [
   ["checklistCoverage", "清单覆盖率"],
   ["depth", "深度"],
   ["nonRedundancy", "不重复"],
+  ["newInfoPerCard", "每卡新信息"],
 ];
 const EXTRA = [
   ["l2", "L2 新信息率", (t) => t.newInfo?.[2]],
   ["l3", "L3 新信息率", (t) => t.newInfo?.[3]],
   ["planCl", "计划清单覆盖", (t) => t.planChecklistCoverage],
   ["blockCov", "块落地率", (t) => t.blockCoverage],
+  ["richShare", "带要点卡片占比", (t) => t.richShare],
   ["cards", "卡片数", (t) => t.cards],
   [
     "body",

@@ -241,8 +241,20 @@ function levels(board: Board): EvalNode[] {
     id: n.id,
     parentId: n.parentId,
     title: n.title,
-    body: n.body,
+    // Rich cards (PR-C): the judge and the text metrics read everything the card says.
+    body: [
+      n.depthType ? `〔${n.depthType}〕` : "",
+      n.summary ?? "",
+      n.body,
+      ...(n.keyPoints ?? []).map((k) => `· ${k}`),
+      n.whyItMatters ? `作用：${n.whyItMatters}` : "",
+      n.example ? `例：${n.example}` : "",
+      n.misconception ?? "",
+    ]
+      .filter(Boolean)
+      .join(" "),
     level: depth(n.id),
+    rich: !!n.keyPoints?.length,
   }));
 }
 
@@ -267,7 +279,9 @@ const JUDGE_SYSTEM = `你是严格的学习内容评审。你会看到一个学�
 - coverage（覆盖）：对照清单逐条判断是否被画布实质覆盖（标题或正文明确讲到该要点，不是只出现关键词）。另外判断是否有清单外但重要的遗漏。
 - depth（深度）：卡片内容是否超出定义和复述，给出机制/因果、具体例子或数字、误区、判断标准；深层（L2/L3）是否真的比上层更深。5=多数卡片有实质信息；1=多数是标题式空话。
 - nonRedundancy（不重复）：卡片之间、上下层之间是否避免同义改写和重复；深挖是否带来新信息。5=几乎无重复；1=大量换说法重复。
-只输出一个 JSON 对象，不要代码围栏：{"goalFit":n,"coverage":n,"depth":n,"nonRedundancy":n,"checklist":[{"item":"清单原文","covered":true或false,"where":"覆盖它的卡片标题或空"}],"missingImportant":["清单外的重要遗漏"],"redundantPairs":[["卡片A","卡片B"]],"shallowExamples":["最空泛的卡片标题：原因"],"verdict":"两三句总评"}`;
+- newInfoPerCard（每卡新信息）：逐张看非起点卡片，它的要点里有多少是父卡、兄弟卡或其他卡片没说过的新事实、机制、例子或判断标准。5=几乎每张都有实质新信息；3=约一半卡片只是换说法；1=多数卡片没有新信息。
+depth 要依据卡片的全部内容（结论、正文、要点、例子、误解）评，而不只是标题。
+只输出一个 JSON 对象，不要代码围栏：{"goalFit":n,"coverage":n,"depth":n,"nonRedundancy":n,"newInfoPerCard":n,"checklist":[{"item":"清单原文","covered":true或false,"where":"覆盖它的卡片标题或空"}],"missingImportant":["清单外的重要遗漏"],"redundantPairs":[["卡片A","卡片B"]],"shallowExamples":["最空泛的卡片标题：原因"],"verdict":"两三句总评"}`;
 
 /** The plan request as App.tsx requestPlan sends it; the harness auto-confirms the draft. */
 async function plan(board: Board, steps: Step[]): Promise<BoardPlan> {
@@ -452,7 +466,7 @@ async function runTopic(t: EvalTopic, out: string) {
       board,
       id,
       "expand",
-      expandPrompt(board.nodes.find((n) => n.id === id)!.title),
+      expandPrompt(board, id),
       1,
       steps,
     );
@@ -469,12 +483,16 @@ async function runTopic(t: EvalTopic, out: string) {
       board,
       id,
       "expand",
-      expandPrompt(board.nodes.find((n) => n.id === id)!.title),
+      expandPrompt(board, id),
       2,
       steps,
     );
   const nodes = levels(board);
   const metrics: any = treeMetrics(nodes);
+  const generated = nodes.filter((n: any) => n.level > 0);
+  metrics.richShare = generated.length
+    ? +(generated.filter((n: any) => n.rich).length / generated.length).toFixed(3)
+    : 0;
   if (board.plan) {
     metrics.planBlocks = board.plan.blocks.length;
     metrics.blockCoverage = +(
@@ -543,7 +561,13 @@ async function main() {
   );
   results.sort((a, b) => TOPICS.indexOf(a.topic) - TOPICS.indexOf(b.topic));
   const ok = results.filter((r) => !r.judgement.error);
-  const dims = ["goalFit", "coverage", "depth", "nonRedundancy"] as const;
+  const dims = [
+    "goalFit",
+    "coverage",
+    "depth",
+    "nonRedundancy",
+    "newInfoPerCard",
+  ] as const;
   const row = (rs: any[]) => ({
     n: rs.length,
     ...Object.fromEntries(
@@ -557,6 +581,7 @@ async function main() {
       rs.map((r) => r.metrics.blockCoverage).filter((x) => x != null),
     ),
     cards: mean(rs.map((r) => r.metrics.nodes)),
+    richShare: mean(rs.map((r) => r.metrics.richShare)),
     textDupRate: mean(rs.map((r) => r.metrics.textPairs.dupRate)),
     newInfoL2: mean(
       rs.map((r) => r.metrics.newInfoRatio[2]).filter((x) => x != null),
@@ -593,6 +618,7 @@ async function main() {
       planStructure: r.planJudgement?.structure,
       blockCoverage: r.metrics.blockCoverage,
       cards: r.metrics.nodes,
+      richShare: r.metrics.richShare,
       byLevel: r.metrics.byLevel,
       textDupRate: r.metrics.textPairs.dupRate,
       newInfo: r.metrics.newInfoRatio,
@@ -619,7 +645,7 @@ async function main() {
       ])
       .join(" | ");
   const head =
-    "| 项 | 贴题 | 覆盖 | 深度 | 不重复 | 清单覆盖率 | 计划清单覆盖 | 块落地率 | 卡片数 | 近重复对比例 | L2 新信息率 | L3 新信息率 |\n|---|---|---|---|---|---|---|---|---|---|---|---|";
+    "| 项 | 贴题 | 覆盖 | 深度 | 不重复 | 每卡新信息 | 清单覆盖率 | 计划清单覆盖 | 块落地率 | 卡片数 | 近重复对比例 | L2 新信息率 | L3 新信息率 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|";
   const md = [
     `# Generation eval ${stamp}`,
     `模型 ${MODEL}；${results.length} 个主题；用时 ${Math.round(summary.wallMs / 1000)}s；调用 ${totals.calls} 次（失败 ${totals.failures}）；tokens 输入 ${totals.prompt}（缓存命中 ${totals.cached}）/ 输出 ${totals.completion}（其中推理 ${totals.reasoning}）。`,
