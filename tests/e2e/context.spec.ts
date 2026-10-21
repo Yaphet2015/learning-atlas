@@ -76,7 +76,8 @@ test("a marquee on empty canvas picks cards and 问 AI sends them all", async ({
   const ids = asks[0].context.references.map((r: any) => r.id);
   expect(ids).toEqual(expect.arrayContaining(["c-how", "c-money"]));
   expect(asks[0].canvas).toBe(true);
-  expect(asks[0].context.structure).toBeUndefined();
+  expect(asks[0].context.structure).toContain("白板结构");
+  expect(asks[0].context.review).toBeUndefined();
   expect(asks[0].context.review).toBeUndefined();
   await expect(bar).toHaveCount(0);
 });
@@ -156,7 +157,8 @@ test("「添加卡片」 searches the board and adds or removes context cards", 
   let asks = await page.evaluate(() => (window as any).__atlasAsks);
   expect(asks[0].context.references.map((r: any) => r.id)).toContain("c-wait");
   expect(asks[0].canvas).toBe(true);
-  expect(asks[0].context.structure).toBeUndefined();
+  expect(asks[0].context.structure).toContain("白板结构");
+  expect(asks[0].context.review).toBeUndefined();
   expect(asks[0].context.review).toBeUndefined();
   // Unticking takes it out of the next request.
   await picker.getByLabel("搜索卡片").fill("等待期");

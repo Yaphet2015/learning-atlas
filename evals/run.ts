@@ -265,7 +265,7 @@ async function kickoff(
       n.id,
       undefined,
       false,
-      "references",
+      "outline",
     );
     const system = `${canvasTutorInstructions()}\n\n${renderScopedContext(canvasBundle(context))}`;
     const step: Step = {

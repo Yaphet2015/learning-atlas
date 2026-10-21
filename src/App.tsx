@@ -822,7 +822,7 @@ export default function App() {
         setShowSettings(true);
         return false;
       }
-      const context = contextForNote(b, noteId, selection, false, "references");
+      const context = contextForNote(b, noteId, selection, false, "outline");
       const request: AIRequest = {
         boardId: b.id,
         stickyId: noteId,

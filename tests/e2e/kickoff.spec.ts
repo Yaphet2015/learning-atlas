@@ -45,9 +45,10 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
   expect(asks.map((a: any) => a.mode)).toEqual(["answer", "answer", "map"]);
   expect(asks[2].prompt).toContain("知道折射，但不懂为什么是弯的");
-  // Conversation requests read the canvas through tools rather than embedding it.
+  // Conversation requests carry the outline; card bodies are read through tools.
   expect(asks[1].canvas).toBe(true);
-  expect(asks[1].context.structure).toBeUndefined();
+  expect(asks[1].context.structure).toContain("白板结构");
+  expect(asks[1].context.review).toBeUndefined();
   expect(asks[1].context.review).toBeUndefined();
   expect(asks[2].context.topic).toBe("彩虹是怎么形成的？");
   expect(asks[2].context.review.radius).toBe(4);
