@@ -195,7 +195,7 @@ export interface AIRequest {
   canvas?: boolean;
   canvasRunId?: string;
   excludedCardIds?: string[];
-  mode: "answer" | "map" | "expand" | "hint" | "organize";
+  mode: "answer" | "map" | "expand" | "hint" | "organize" | "enrich";
 }
 export interface AIUpdate {
   boardId: string;

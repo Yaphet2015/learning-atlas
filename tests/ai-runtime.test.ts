@@ -907,8 +907,8 @@ describe("event reconciliation and prompt safety", () => {
     expect(tutorInstructions("expand")).toContain("2–4 个");
     expect(tutorInstructions("expand")).toContain('"anchor"');
     expect(tutorInstructions("map")).toContain("不要输出或执行 HTML");
-    expect(tutorInstructions("map")).toContain('basis:"analogy"');
-    expect(tutorInstructions("map")).toContain("不可捏造数字");
+    expect(tutorInstructions("enrich")).toContain('basis:"analogy"');
+    expect(tutorInstructions("enrich")).toContain("不可捏造数字");
   });
 });
 
