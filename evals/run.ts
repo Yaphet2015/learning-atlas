@@ -25,6 +25,7 @@ import {
   kickoffSkeleton,
   learnerAnswers,
 } from "../src/model/kickoff";
+import { applyCritique, critiquePrompt } from "../src/model/critique";
 import {
   confirmPlan,
   coveredBlocks,
@@ -79,7 +80,7 @@ type Msg = { role: "system" | "user" | "assistant"; content: string };
 async function chat(
   system: string,
   user: string | Msg[],
-  opts: { temperature?: number } = {},
+  opts: { temperature?: number; effort?: "low" | "high" } = {},
   tries = 3,
 ) {
   const turns: Msg[] =
@@ -109,6 +110,7 @@ async function chat(
           ...(opts.temperature !== undefined
             ? { temperature: opts.temperature }
             : {}),
+          ...(opts.effort ? { reasoning_effort: opts.effort } : {}),
           messages: [{ role: "system", content: system }, ...turns],
         }),
         signal: abort.signal,
@@ -155,14 +157,19 @@ async function chat(
     if (totals.retryReasons.length < 40)
       totals.retryReasons.push(`${Math.round((Date.now() - started) / 1000)}s ${last.slice(0, 80)}`);
     console.error(`  retry ${i + 1}/${tries} after ${Math.round((Date.now() - started) / 1000)}s: ${last.slice(0, 120)}`);
-    await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+    // Balance (402), rate (429) and server (5xx) errors are often transient: wait longer before retrying.
+    const transient = /^HTTP (402|429|5\d\d)/.test(last);
+    await new Promise((r) => setTimeout(r, (transient ? 20_000 : 2000) * (i + 1)));
   }
   totals.failures++;
   throw new Error(last);
 }
 
 interface Step {
-  kind: "map" | "expand" | "kickoff" | "plan";
+  kind: "map" | "expand" | "kickoff" | "plan" | "critique";
+  parseRetries?: number;
+  dropped?: number;
+  revised?: number;
   round: number;
   anchor: string;
   anchorTitle: string;
@@ -207,20 +214,74 @@ async function generate(
     added: 0,
   };
   steps.push(step);
+  // A reply that fails to parse is asked for once more (same request), as a learner's retry would.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await chat(system, prompt, {
+        temperature: modeTemperature(mode),
+      });
+      Object.assign(step, {
+        raw: r.content,
+        reasoningChars: r.reasoningChars,
+        finish: r.finish,
+        ms: r.ms,
+        usage: r.usage,
+      });
+      let next = buildMapFromAI(r.content, board, anchorId, mode, context);
+      step.added = next.nodes.length - board.nodes.length;
+      delete step.error;
+      if (step.added > 0 && process.env.EVAL_CRITIQUE !== "0")
+        next = await critique(next, anchorId, board, steps, round);
+      return next;
+    } catch (e) {
+      step.error = String((e as Error).message ?? e);
+      if (!/图谱|JSON/.test(step.error)) break;
+      step.parseRetries = (step.parseRetries ?? 0) + 1;
+    }
+  }
+  return board;
+}
+
+/** The critique pass as App.tsx critiqueRef sends it (references scope, low effort). */
+async function critique(
+  board: Board,
+  anchorId: string,
+  before: Board,
+  steps: Step[],
+  round: number,
+): Promise<Board> {
+  const known = new Set(before.nodes.map((n) => n.id));
+  const ids = board.nodes.filter((n) => !known.has(n.id)).map((n) => n.id);
+  const virtual = newNote(board, { x: 0, y: 0 }, { kind: "node", id: anchorId });
+  const context = contextForNote(
+    { ...board, notes: [...board.notes, virtual] },
+    virtual.id,
+    undefined,
+    false,
+    "references",
+  );
+  const system = `${tutorInstructions("critique")}\n\n${renderScopedContext(context)}`;
+  const prompt = critiquePrompt(board, anchorId, ids);
+  const step: Step = {
+    kind: "critique",
+    round,
+    anchor: anchorId,
+    anchorTitle: board.nodes.find((n) => n.id === anchorId)?.title ?? "",
+    systemChars: system.length,
+    prompt,
+    added: 0,
+  };
+  steps.push(step);
   try {
     const r = await chat(system, prompt, {
-      temperature: modeTemperature(mode),
+      temperature: modeTemperature("critique"),
+      effort: "low",
     });
-    Object.assign(step, {
-      raw: r.content,
-      reasoningChars: r.reasoningChars,
-      finish: r.finish,
-      ms: r.ms,
-      usage: r.usage,
-    });
-    const next = buildMapFromAI(r.content, board, anchorId, mode, context);
-    step.added = next.nodes.length - board.nodes.length;
-    return next;
+    Object.assign(step, { raw: r.content, ms: r.ms, usage: r.usage, reasoningChars: r.reasoningChars });
+    const res = applyCritique(r.content, board, ids, board);
+    step.dropped = res.dropped.length;
+    step.revised = res.revised.length;
+    return res.board;
   } catch (e) {
     step.error = String((e as Error).message ?? e);
     return board;
@@ -625,6 +686,9 @@ async function main() {
       newInfo: r.metrics.newInfoRatio,
       avgBody: r.metrics.avgBodyChars,
       failedSteps: r.steps.filter((s: Step) => s.error).length,
+      critiqueDropped: r.steps.reduce((a: number, s: Step) => a + (s.dropped ?? 0), 0),
+      critiqueRevised: r.steps.reduce((a: number, s: Step) => a + (s.revised ?? 0), 0),
+      parseRetries: r.steps.reduce((a: number, s: Step) => a + (s.parseRetries ?? 0), 0),
       emptyExpansions: r.steps.filter(
         (s: Step) => s.kind === "expand" && !s.error && s.added === 0,
       ).length,
