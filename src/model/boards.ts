@@ -260,6 +260,13 @@ function cardSignature(n: {
   for (let i = 0; i < text.length - 1; i++) grams.add(text.slice(i, i + 2));
   return { title: normalize(n.title), grams };
 }
+function pointSignature(text: string): CardSignature {
+  const t = normalize(text);
+  const grams = new Set<string>();
+  for (let i = 0; i < t.length - 1; i++) grams.add(t.slice(i, i + 2));
+  // A point has no title; the whole text stands in so equal points match exactly.
+  return { title: t, grams };
+}
 /** Same normalized title, or title+body character bigrams with Jaccard ≥ 0.6. */
 export function nearDuplicate(a: CardSignature, b: CardSignature): boolean {
   if (a.title && a.title === b.title) return true;
@@ -362,6 +369,9 @@ export function buildMapFromAI(
   const kept: typeof placed = [];
   const dropped = new Set<string>();
   const seenCards = board.nodes.map(cardSignature);
+  const seenPoints = board.nodes.flatMap((n) =>
+    (n.keyPoints ?? []).map(pointSignature),
+  );
   for (const card of placed) {
     if (card.parentId && dropped.has(card.parentId)) {
       dropped.add(card.id);
@@ -371,6 +381,18 @@ export function buildMapFromAI(
     if (seenCards.some((other) => nearDuplicate(sig, other))) {
       dropped.add(card.id);
       continue;
+    }
+    // Key points the board already states are removed; a card left with none of its own is dropped.
+    if (card.keyPoints?.length) {
+      const fresh = card.keyPoints.filter(
+        (p) => !seenPoints.some((q) => nearDuplicate(pointSignature(p), q)),
+      );
+      if (!fresh.length) {
+        dropped.add(card.id);
+        continue;
+      }
+      if (fresh.length < card.keyPoints.length) card.keyPoints = fresh;
+      seenPoints.push(...fresh.map(pointSignature));
     }
     seenCards.push(sig);
     kept.push(card);

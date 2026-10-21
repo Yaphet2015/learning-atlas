@@ -62,6 +62,7 @@ import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import { expandPrompt } from "./model/expand";
 import { applyEnrichment, enrichPrompt } from "./model/enrich";
+import { applyCritique, critiquePrompt } from "./model/critique";
 import {
   confirmPlan,
   parsePlan,
@@ -298,9 +299,14 @@ export default function App() {
           hintSignature?: string;
           /** enrich: the new cards it decorates. */
           newIds?: string[];
+          /** critique: the board as generated, so learner edits made meanwhile are kept. */
+          generated?: Board;
         }
       >(),
     ),
+    critiqueRef = useRef<
+      (board: Board, anchor: string | undefined, ids: string[]) => void
+    >(() => {}),
     enrichRef = useRef<
       (board: Board, anchor: string | undefined, ids: string[]) => void
     >(() => {});
@@ -626,6 +632,23 @@ export default function App() {
           return;
         }
         // Diagrams and overviews for new cards: quiet, optional decoration.
+        // The critique pass: revise or drop weak new cards, then decorate the survivors.
+        if (hintMeta?.request.mode === "critique") {
+          if (update.status === "streaming") return;
+          requestMeta.current.delete(update.requestId);
+          const b = boardRef.current;
+          const ids = hintMeta.newIds ?? [];
+          if (b?.id !== update.boardId || locked()) return;
+          let next = b;
+          if (update.status === "done") {
+            const r = applyCritique(update.text, b, ids, hintMeta.generated);
+            next = r.board;
+            if (next !== b) putBoard(next, false);
+          }
+          const alive = ids.filter((id) => next.nodes.some((n) => n.id === id));
+          if (alive.length) enrichRef.current(next, hintMeta.anchor, alive);
+          return;
+        }
         if (hintMeta?.request.mode === "enrich") {
           if (update.status === "streaming") return;
           requestMeta.current.delete(update.requestId);
@@ -717,7 +740,7 @@ export default function App() {
                   .filter((n) => !known.has(n.id))
                   .map((n) => n.id);
                 if (meta && meta.request.mode !== "answer" && added.length)
-                  enrichRef.current(next, meta.anchor, added);
+                  critiqueRef.current(next, meta.anchor, added);
                 if (boardRef.current?.id === target.id) {
                   putBoard(next, false);
                 } else {
@@ -900,6 +923,7 @@ export default function App() {
           (meta) =>
             meta.request.mode !== "answer" &&
             meta.request.mode !== "enrich" &&
+            meta.request.mode !== "critique" &&
             meta.request.mode !== "plan",
         )
       )
@@ -1729,6 +1753,37 @@ export default function App() {
     const b = boardRef.current;
     setPreview(id && b ? addChild(b, id, GHOST) : null);
   }, []);
+  // After new cards land: a quiet critique pass (keep, revise or drop), then enrich.
+  critiqueRef.current = (b, anchor, ids) => {
+    const anchorId =
+      anchor && b.nodes.some((n) => n.id === anchor) ? anchor : rootOf(b)?.id;
+    if (!configured.current || !anchorId) return;
+    const virtual = newNote(b, { x: 0, y: 0 }, { kind: "node", id: anchorId });
+    const request: AIRequest = {
+      boardId: b.id,
+      stickyId: "critique-" + anchorId,
+      requestId: uid(),
+      mode: "critique",
+      prompt: critiquePrompt(b, anchorId, ids),
+      context: contextForNote(
+        { ...b, notes: [...b.notes, virtual] },
+        virtual.id,
+        undefined,
+        false,
+        "references",
+      ),
+    };
+    requestMeta.current.set(request.requestId, {
+      request,
+      anchor: anchorId,
+      newIds: ids,
+      generated: b,
+    });
+    api.ask(request).catch(() => {
+      requestMeta.current.delete(request.requestId);
+      enrichRef.current(b, anchorId, ids);
+    });
+  };
   // After new cards land: one quiet follow-up for their diagrams and topic overviews.
   enrichRef.current = (b, anchor, ids) => {
     if (!configured.current) return;

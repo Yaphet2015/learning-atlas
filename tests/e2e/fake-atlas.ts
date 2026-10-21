@@ -39,7 +39,15 @@ export async function installFakeAtlas(
       // The learning-plan request before the first level.
       const plans: any[] = [];
       (window as any).__atlasPlans = plans;
+      // The quiet critique pass after new cards land (keeps everything unless a test says otherwise).
+      const critiques: any[] = [];
+      (window as any).__atlasCritiques = critiques;
       const answer = (request: any) => {
+        if (request.mode === "critique")
+          return (
+            (window as any).__atlasCritiqueAnswers?.shift() ??
+            JSON.stringify({ cards: [] })
+          );
         if (request.mode === "plan")
           return (
             (window as any).__atlasPlanAnswers?.shift() ??
@@ -329,7 +337,9 @@ export async function installFakeAtlas(
               ? enriches
               : request.mode === "plan"
                 ? plans
-                : asks
+                : request.mode === "critique"
+                  ? critiques
+                  : asks
           ).push(request);
           if (request.canvas && (window as any).__atlasChatCanvas) {
             void startCanvas(request.boardId, "chat", request.requestId);

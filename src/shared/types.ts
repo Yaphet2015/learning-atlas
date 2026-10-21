@@ -253,7 +253,8 @@ export interface AIRequest {
     | "hint"
     | "organize"
     | "enrich"
-    | "plan";
+    | "plan"
+    | "critique";
 }
 export interface AIUpdate {
   boardId: string;

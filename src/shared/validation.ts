@@ -485,6 +485,7 @@ export const aiRequestSchema = z
       "organize",
       "enrich",
       "plan",
+      "critique",
     ]),
   })
   .strict();
