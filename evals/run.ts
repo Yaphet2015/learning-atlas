@@ -97,7 +97,7 @@ async function chat(
         }, Number(process.env.EVAL_TIMEOUT_MS ?? 150_000));
       });
       deadline.catch(() => {});
-      const res = await fetch(`${BASE}/chat/completions`, {
+      const res = await Promise.race([fetch(`${BASE}/chat/completions`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -112,13 +112,14 @@ async function chat(
           messages: [{ role: "system", content: system }, ...turns],
         }),
         signal: abort.signal,
-      });
+      }), deadline]);
       // The deadline also covers the body: a stalled stream (keep-alive bytes, no end) used to
       // hold a step for ~9 minutes and then come back empty.
       const json: any = await Promise.race([
-        res.json().catch(() => ({})),
+        res.json().catch(() => ({ __bodyError: true })),
         deadline,
       ]);
+      if (json.__bodyError) throw new Error(`body read failed after ${Math.round((Date.now() - started) / 1000)}s`);
       clearTimeout(timer);
       totals.calls++;
       if (!res.ok) {
