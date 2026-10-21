@@ -20,6 +20,7 @@ import {
 import type { CardHints, ConceptNode, SceneState } from "../shared/types";
 import type { HintSide } from "../model/hints";
 import { Seal } from "./Seal";
+import { DepthTag } from "./CardDetail";
 import { BorderBeam } from "./BorderBeam";
 import { tip } from "./Tooltip";
 
@@ -383,9 +384,15 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
         <Title data={data} as="h3" />
         {data.no && <span className="no">{data.no}</span>}
       </div>
-      {n.body && <p>{n.body}</p>}
-      {(data.onNote || n.visual || n.hand) && (
+      {/* Compact face: the one-line summary when the card has one; the drawer shows the rest. */}
+      {(n.summary || n.body) && (
+        <p className={n.summary ? "face-summary" : undefined}>
+          {n.summary || n.body}
+        </p>
+      )}
+      {(data.onNote || n.visual || n.hand || n.depthType) && (
         <div className="meta">
+          <DepthTag card={n} />
           {data.onNote && (
             <button className="chip-fig nodrag nopan" onClick={openNote}>
               <BookOpen size={13} className="ico" />

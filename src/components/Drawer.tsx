@@ -1,3 +1,4 @@
+import { CardDetail, DepthTag } from "./CardDetail";
 import { PlanEditor } from "./PlanEditor";
 import type { BoardPlan } from "../shared/types";
 import { useEffect, useRef, useState } from "react";
@@ -796,8 +797,13 @@ export function Drawer({
         {anchor && (
           <section className="this-card" aria-label="这张卡">
             <span className="lab">这张卡 · 完整内容</span>
-            <h2>{anchor.title}</h2>
+            <h2>
+              {anchor.title}
+              <DepthTag card={anchor} />
+            </h2>
+            {anchor.summary && <p className="card-summary">{anchor.summary}</p>}
             {anchor.body && <p className="card-body">{anchor.body}</p>}
+            <CardDetail card={anchor} />
             {anchor.visual && <StructuredVisual visual={anchor.visual} />}
           </section>
         )}
