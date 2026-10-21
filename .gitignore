@@ -9,3 +9,7 @@ test-results/
 *.db
 *.db-*
 .DS_Store
+
+# Generation eval: raw runs stay local; the committed baseline lives in evals/baseline/
+evals/results/
+evals/.build/

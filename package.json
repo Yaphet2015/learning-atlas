@@ -20,7 +20,8 @@
     "dist:mac": "pnpm run build && electron-builder --mac --arm64",
     "dist:dir": "pnpm run build && electron-builder --dir",
     "format": "prettier --write src electron tests *.ts *.json .github/workflows/*.yml docs/*.md README.md",
-    "test:agent:live": "pnpm build && electron scripts/check-canvas-agent.mjs"
+    "test:agent:live": "pnpm build && electron scripts/check-canvas-agent.mjs",
+    "eval:generation": "node evals/build.mjs && node evals/.build/run.mjs"
   },
   "dependencies": {
     "@earendil-works/chord": "1.3.0",
