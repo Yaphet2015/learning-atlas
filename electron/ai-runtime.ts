@@ -73,12 +73,28 @@ import {
 import {
   canvasBundle,
   canvasTutorInstructions,
+  maxOutputTokens,
+  modeTemperature,
   renderScopedContext,
   tutorInstructions,
 } from "./prompts.js";
 export { renderScopedContext, tutorInstructions };
 
 const CTX = BACKGROUND_CONTEXT;
+/** A configured model id can carry a per-mode temperature ("gpt-4o-mini@t=0.4"); the provider sees only the id. */
+const TEMPERATURE_SUFFIX = /@t=(\d+(?:\.\d+)?)$/;
+export function modelRef(model: string, temperature?: number): string {
+  return temperature === undefined ? model : `${model}@t=${temperature}`;
+}
+export function parseModelRef(ref: string): {
+  id: string;
+  temperature?: number;
+} {
+  const match = TEMPERATURE_SUFFIX.exec(ref);
+  return match
+    ? { id: ref.slice(0, match.index), temperature: Number(match[1]) }
+    : { id: ref };
+}
 const DEFAULT_MODEL = "gpt-4o-mini";
 const OFFICIAL_URL = "https://api.openai.com/v1";
 const PROVIDER_ERROR =
@@ -170,8 +186,7 @@ const tutor = defineExtension({
       const saved = await read.snapshot(ScopedContext, conversationId, context);
       const doc = await read.snapshot(CanvasDoc, conversationId, context);
       const work = doc?.runs[doc.activeId];
-      if (work?.status === "running")
-        return canvasTutorInstructions();
+      if (work?.status === "running") return canvasTutorInstructions();
       return tutorInstructions(saved?.mode ?? "answer");
     }),
     section(
@@ -342,8 +357,8 @@ const isOfficialUrl = (url: string) => normalizeUrl(url) === OFFICIAL_URL;
 function buildProvider(baseUrl: string, model: string): Provider {
   const original = openaiProvider();
   if (isOfficialUrl(baseUrl)) return original;
-  // DeepSeek V4 shares the output budget between reasoning and the visible answer.
-  // A 4096-token cap can end the request before any answer is produced.
+  // Reasoning models share the output budget between reasoning and the visible answer;
+  // a small cap can end the request before any answer is produced.
   // https://api-docs.deepseek.com/quick_start/pricing/
   const deepSeekV4 =
     model === "deepseek-flash" || model.startsWith("deepseek-v4-");
@@ -364,7 +379,7 @@ function buildProvider(baseUrl: string, model: string): Provider {
         reasoning: false,
         input: ["text"],
         contextWindow: deepSeekV4 ? 1_000_000 : 32768,
-        maxTokens: deepSeekV4 ? 32768 : 4096,
+        maxTokens: maxOutputTokens(model),
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       },
     ],
@@ -781,31 +796,39 @@ export class AIRuntime {
       registry.install(tutor);
       registry.install(this.webExtension);
       if (this.canvasExtension) registry.install(this.canvasExtension);
-      const models = this.canvasHost
-        ? new Proxy(this.models, {
-            get: (target, prop) => {
-              if (prop === "getModel")
-                return (provider: string, modelId: string) => {
-                  const model = target.getModel(provider, modelId);
-                  return model
-                    ? {
-                        ...model,
-                        reasoning:
-                          model.reasoning ||
-                          model.id === "deepseek-flash" ||
-                          model.id.startsWith("deepseek-v4-"),
-                        contextWindow: Math.min(
-                          model.contextWindow || 96_000,
-                          96_000,
-                        ),
-                      }
-                    : undefined;
-                };
-              const value = Reflect.get(target, prop);
-              return typeof value === "function" ? value.bind(target) : value;
-            },
-          })
-        : this.models;
+      const canvasHost = !!this.canvasHost;
+      const models = new Proxy(this.models, {
+        get: (target, prop) => {
+          if (prop === "getModel")
+            return (provider: string, modelId: string) => {
+              const { id, temperature } = parseModelRef(modelId);
+              const model = target.getModel(provider, id);
+              if (!model) return undefined;
+              const tuned =
+                temperature === undefined
+                  ? model
+                  : {
+                      ...model,
+                      samplingParams: { ...model.samplingParams, temperature },
+                    };
+              return canvasHost
+                ? {
+                    ...tuned,
+                    reasoning:
+                      model.reasoning ||
+                      model.id === "deepseek-flash" ||
+                      model.id.startsWith("deepseek-v4-"),
+                    contextWindow: Math.min(
+                      model.contextWindow || 96_000,
+                      96_000,
+                    ),
+                  }
+                : tuned;
+            };
+          const value = Reflect.get(target, prop);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
       try {
         // Keep read-only history paused. Only an explicit user request enables scheduling below.
         return await Harness.open(
@@ -1067,7 +1090,13 @@ export class AIRuntime {
           ...(useWeb ? this.webExtension.tools! : []),
         ];
         await configure(tx, conversation.id, {
-          model: { provider: "openai", modelId: this.model },
+          model: {
+            provider: "openai",
+            modelId: modelRef(
+              this.model,
+              useCanvas ? undefined : modeTemperature(request.mode),
+            ),
+          },
           thinkingLevel: useCanvas ? "low" : undefined,
           extensions: [
             tutor,

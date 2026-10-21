@@ -11,6 +11,8 @@ import { join } from "node:path";
 import {
   canvasBundle,
   canvasTutorInstructions,
+  maxOutputTokens,
+  modeTemperature,
   renderScopedContext,
   tutorInstructions,
 } from "../electron/prompts";
@@ -37,8 +39,8 @@ if (!KEY || !BASE || !MODEL) {
   );
   process.exit(0);
 }
-// The app budgets 32k output for DeepSeek reasoning models (electron/ai-runtime.ts buildProvider).
-const MAX_TOKENS = 32_768;
+// Same output budget as the app gives this model (electron/prompts.ts maxOutputTokens).
+const MAX_TOKENS = maxOutputTokens(MODEL);
 const CONCURRENCY = Math.max(1, Number(process.env.EVAL_CONCURRENCY ?? 3));
 
 interface Usage {
@@ -167,7 +169,9 @@ async function generate(
   };
   steps.push(step);
   try {
-    const r = await chat(system, prompt);
+    const r = await chat(system, prompt, {
+      temperature: modeTemperature(mode),
+    });
     Object.assign(step, {
       raw: r.content,
       reasoningChars: r.reasoningChars,
@@ -307,8 +311,8 @@ async function kickoff(
   const done = await ask(first, t.kickoff!);
   return { ...board, notes: [...board.notes, done] };
 }
-/** Request options of a drawer answer (the app sets none yet). */
-const answerOptions = (): { temperature?: number } => ({});
+/** Request options of a drawer answer, as the app sends them. */
+const answerOptions = () => ({ temperature: modeTemperature("answer") });
 
 async function runTopic(t: EvalTopic, out: string) {
   const started = Date.now();

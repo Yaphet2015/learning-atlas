@@ -71,3 +71,32 @@ export function canvasBundle(context: ContextBundle): ContextBundle {
   const { review: _review, structure: _structure, ...selected } = context;
   return selected;
 }
+
+/**
+ * Sampling temperature per request mode. Structure generation stays near-deterministic so
+ * re-expanding a card does not just reshuffle wording; hints may vary more. Canvas-agent
+ * conversations (drawer answers, organize) keep the provider default.
+ */
+export function modeTemperature(mode: AIRequest["mode"]): number | undefined {
+  if (mode === "map" || mode === "expand") return 0.4;
+  if (mode === "hint") return 0.7;
+  return undefined;
+}
+
+/**
+ * Models that think before answering (DeepSeek V4/R1, OpenAI o-series, QwQ, "reasoner"/"thinking"
+ * variants). Their reasoning shares the output budget with the visible answer.
+ */
+export function isReasoningModel(model: string): boolean {
+  return /^deepseek-(flash|reasoner|v4-|r1)|^o\d|(^|[-_/])(r1|qwq)([-_]|$)|reason|thinking/i.test(
+    model,
+  );
+}
+
+/**
+ * Output budget for a custom OpenAI-compatible endpoint. Reasoning models get room for both the
+ * reasoning and the JSON answer, so the visible content is not left empty.
+ */
+export function maxOutputTokens(model: string): number {
+  return isReasoningModel(model) ? 32_768 : 8_192;
+}
