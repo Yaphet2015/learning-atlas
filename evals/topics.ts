@@ -15,6 +15,11 @@ export interface EvalTopic {
   type: TopicType;
   topic: string;
   mustHave: string[];
+  /**
+   * Scripted learner reply to the kickoff questions. Topics with one go through
+   * 「让 AI 带我开始」 first, so the first level gets the learner's answer and the tutor's skeleton.
+   */
+  kickoff?: string;
 }
 
 export const TOPICS: EvalTopic[] = [
@@ -34,6 +39,8 @@ export const TOPICS: EvalTopic[] = [
   },
   {
     id: "entropy",
+    kickoff:
+      "高中物理学过一点热力学，听过“熵是混乱度”，但不知道它到底在数什么，也想知道和信息论的熵是不是一回事。",
     type: "concept",
     topic: "熵到底是什么",
     mustHave: [
@@ -48,6 +55,8 @@ export const TOPICS: EvalTopic[] = [
   },
   {
     id: "attention",
+    kickoff:
+      "会一点 Python 和神经网络基础，知道矩阵乘法，但看不懂 QKV 公式，想弄懂注意力具体怎么算、为什么有效。",
     type: "mechanism",
     topic: "什么是 transformer 的注意力机制",
     mustHave: [
@@ -77,6 +86,8 @@ export const TOPICS: EvalTopic[] = [
   },
   {
     id: "critical-illness",
+    kickoff:
+      "30 岁，家里有房贷，已经有公司团体医疗险，预算有限，想知道要不要买、怎么买才不被坑。",
     type: "decision",
     topic: "重疾险怎么选",
     mustHave: [
@@ -106,6 +117,8 @@ export const TOPICS: EvalTopic[] = [
   },
   {
     id: "marathon",
+    kickoff:
+      "平时几乎不跑步，最多慢跑过 3 公里，想在半年后完赛一个全马，不追求成绩但不想受伤。",
     type: "howto",
     topic: "零基础怎么准备第一个全程马拉松",
     mustHave: [
@@ -136,6 +149,8 @@ export const TOPICS: EvalTopic[] = [
   },
   {
     id: "microecon",
+    kickoff:
+      "大一非经济专业，数学一般，想自学微观经济学到能读懂经济学文章和应付考研的程度。",
     type: "learning-path",
     topic: "如何学好微观经济学",
     mustHave: [
@@ -179,6 +194,8 @@ export const TOPICS: EvalTopic[] = [
   },
   {
     id: "index-vs-active",
+    kickoff:
+      "刚开始定投，听说指数基金好但身边有人推荐主动基金，想知道长期该怎么选、怎么配置。",
     type: "compare",
     topic: "指数基金和主动基金哪个更好",
     mustHave: [

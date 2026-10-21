@@ -6,6 +6,7 @@ import {
   firstLevelPrompt,
   kickoffNote,
   kickoffPrompt,
+  kickoffSkeleton,
   learnerAnswers,
   needsKickoff,
   rootOf,
@@ -81,5 +82,30 @@ describe("「让 AI 带我开始」 kickoff", () => {
     const prompt = firstLevelPrompt("重疾险", [], ["保什么", "什么时候不赔"]);
     expect(prompt).toContain("必须按这份骨架拆");
     expect(prompt).toContain("1. 保什么；2. 什么时候不赔");
+  });
+  it("takes the skeleton from the tutor's latest outlined kickoff reply", () => {
+    const board = createEmptyBoard("重疾险怎么选");
+    const kick = note(board, [
+      msg("user", kickoffPrompt("重疾险怎么选")),
+      msg("assistant", "1. **要不要买**：先看缺口\n2. **保额**：按收入定"),
+      msg("user", "家里有房贷"),
+      msg("assistant", "好的。"),
+    ]);
+    expect(kickoffSkeleton(kick)).toEqual([
+      "要不要买：先看缺口",
+      "保额：按收入定",
+    ]);
+    expect(
+      kickoffSkeleton(note(board, [msg("assistant", "你知道多少？")])),
+    ).toEqual([]);
+    expect(kickoffSkeleton(undefined)).toEqual([]);
+    // The tutor's numbered questions to the learner are not a skeleton.
+    const asked = note(board, [
+      msg(
+        "assistant",
+        "1. 你现在了解多少？\n2. 你想弄懂到什么程度？\n\n核心概念有**保额**和**责任**。",
+      ),
+    ]);
+    expect(kickoffSkeleton(asked)).toEqual([]);
   });
 });

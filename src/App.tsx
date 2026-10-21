@@ -65,6 +65,7 @@ import {
   firstLevelPrompt,
   kickoffNote,
   kickoffPrompt,
+  kickoffSkeleton,
   learnerAnswers,
   isQuestionRoot,
   needsKickoff,
@@ -978,7 +979,11 @@ export default function App() {
   const proposeFirstLevel = useCallback(() => {
     const b = boardRef.current;
     if (!b || locked()) return;
-    generateMap(b, firstLevelPrompt(b.topic, learnerAnswers(kickoffNote(b))));
+    const note = kickoffNote(b);
+    generateMap(
+      b,
+      firstLevelPrompt(b.topic, learnerAnswers(note), kickoffSkeleton(note)),
+    );
   }, [generateMap]);
   const resetBoardView = useCallback(() => {
     setPast([]);

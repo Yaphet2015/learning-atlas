@@ -1,4 +1,5 @@
 import type { Board, StickyNote } from "../shared/types";
+import { outlineOf, plain } from "./answer";
 
 /** Top-level cards, left to right. A board can grow several roots side by side. */
 export const rootsOf = <T extends { parentId: string | null; order: number }>(
@@ -69,6 +70,30 @@ export function learnerAnswers(note: StickyNote | undefined): string[] {
     .map((m) => m.text.trim())
     .filter(Boolean)
     .slice(-3);
+}
+
+/**
+ * The skeleton the tutor proposed in the kickoff: the outline of its latest answer
+ * that has one (two or more items, not a list of questions to the learner), as
+ * "head：gist" lines. Empty when none.
+ */
+export function kickoffSkeleton(note: StickyNote | undefined): string[] {
+  const replies = (note?.messages ?? []).filter((m) => m.role === "assistant");
+  for (let i = replies.length - 1; i >= 0; i--) {
+    const items = outlineOf(replies[i].text);
+    // A numbered list of questions to the learner ("你现在了解多少？") is not a skeleton.
+    const asks = replies[i].text.match(
+      /^\s*(?:\d+[.、)）]|[-*])\s.*[？?]\s*$/gm,
+    );
+    if (items.length > 1 && (asks?.length ?? 0) * 2 < items.length)
+      return items.map((item) => {
+        const gist = plain(item.rest)
+          .replace(/^[：:\s]+/, "")
+          .trim();
+        return gist ? `${item.head}：${gist}` : item.head;
+      });
+  }
+  return [];
 }
 
 /**
