@@ -307,6 +307,7 @@ export function buildMapFromAI(
       item.parentId,
       Math.max(nextOrder.get(item.parentId) ?? 0, item.order + 1),
     );
+  const planIds = new Set(board.plan?.blocks.map((b) => b.id));
   const placed = map.nodes.map((item) => {
     const id = resolvedIds.get(item.id)!;
     const parent = parents.get(id) ?? null;
@@ -314,6 +315,7 @@ export function buildMapFromAI(
     nextOrder.set(parent, order + 1);
     return {
       ...node(id, item.title, item.body, parent, order),
+      ...(item.block && planIds.has(item.block) ? { planBlock: item.block } : {}),
       ...(item.visual
         ? { visual: { ...item.visual, labels: [...item.visual.labels] } }
         : {}),
