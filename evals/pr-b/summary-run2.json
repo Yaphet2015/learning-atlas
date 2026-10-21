@@ -1,0 +1,550 @@
+{
+  "stamp": "2026-10-21T04-21-39",
+  "model": "deepseek-flash",
+  "topics": 12,
+  "wallMs": 1967958,
+  "usage": {
+    "prompt": 627432,
+    "completion": 384822,
+    "reasoning": 332750,
+    "cached": 214784,
+    "calls": 159,
+    "failures": 0
+  },
+  "overall": {
+    "n": 12,
+    "goalFit": 4.42,
+    "coverage": 3.17,
+    "depth": 4.17,
+    "nonRedundancy": 3.5,
+    "checklistCoverage": 0.76,
+    "planChecklistCoverage": 0.7,
+    "blockCoverage": 0.96,
+    "cards": 30.17,
+    "textDupRate": 0,
+    "newInfoL2": 0.82,
+    "newInfoL3": 0.8,
+    "bodyL1": 70.67,
+    "bodyL3": 55.67
+  },
+  "byType": {
+    "concept": {
+      "n": 2,
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 3.5,
+      "checklistCoverage": 0.79,
+      "planChecklistCoverage": 0.79,
+      "blockCoverage": 1,
+      "cards": 29.5,
+      "textDupRate": 0,
+      "newInfoL2": 0.8,
+      "newInfoL3": 0.8,
+      "bodyL1": 83,
+      "bodyL3": 54.5
+    },
+    "mechanism": {
+      "n": 2,
+      "goalFit": 5,
+      "coverage": 3,
+      "depth": 4.5,
+      "nonRedundancy": 3.5,
+      "checklistCoverage": 0.73,
+      "planChecklistCoverage": 0.74,
+      "blockCoverage": 1,
+      "cards": 34,
+      "textDupRate": 0,
+      "newInfoL2": 0.74,
+      "newInfoL3": 0.78,
+      "bodyL1": 66,
+      "bodyL3": 57
+    },
+    "decision": {
+      "n": 2,
+      "goalFit": 4.5,
+      "coverage": 3.5,
+      "depth": 4.5,
+      "nonRedundancy": 3.5,
+      "checklistCoverage": 0.68,
+      "planChecklistCoverage": 0.66,
+      "blockCoverage": 1,
+      "cards": 35,
+      "textDupRate": 0,
+      "newInfoL2": 0.84,
+      "newInfoL3": 0.8,
+      "bodyL1": 59,
+      "bodyL3": 60.5
+    },
+    "howto": {
+      "n": 2,
+      "goalFit": 4,
+      "coverage": 2.5,
+      "depth": 4,
+      "nonRedundancy": 3.5,
+      "checklistCoverage": 0.63,
+      "planChecklistCoverage": 0.63,
+      "blockCoverage": 0.9,
+      "cards": 26.5,
+      "textDupRate": 0,
+      "newInfoL2": 0.81,
+      "newInfoL3": 0.81,
+      "bodyL1": 66.5,
+      "bodyL3": 58.5
+    },
+    "learning-path": {
+      "n": 2,
+      "goalFit": 4.5,
+      "coverage": 3.5,
+      "depth": 4,
+      "nonRedundancy": 3.5,
+      "checklistCoverage": 0.93,
+      "planChecklistCoverage": 0.65,
+      "blockCoverage": 1,
+      "cards": 36,
+      "textDupRate": 0,
+      "newInfoL2": 0.85,
+      "newInfoL3": 0.82,
+      "bodyL1": 64,
+      "bodyL3": 51
+    },
+    "compare": {
+      "n": 2,
+      "goalFit": 4.5,
+      "coverage": 3.5,
+      "depth": 4,
+      "nonRedundancy": 3.5,
+      "checklistCoverage": 0.79,
+      "planChecklistCoverage": 0.71,
+      "blockCoverage": 0.85,
+      "cards": 20,
+      "textDupRate": 0,
+      "newInfoL2": 0.85,
+      "newInfoL3": 0.79,
+      "bodyL1": 85.5,
+      "bodyL3": 52.5
+    }
+  },
+  "byTopic": [
+    {
+      "id": "opportunity-cost",
+      "type": "concept",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 3,
+      "checklistCoverage": 0.714,
+      "planChecklistCoverage": 0.714,
+      "planIntent": "concept",
+      "planIntentFit": 5,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 31,
+      "byLevel": {
+        "1": 4,
+        "2": 12,
+        "3": 13,
+        "4": 2
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.781,
+        "3": 0.783,
+        "4": 0.768
+      },
+      "avgBody": {
+        "1": 81,
+        "2": 51,
+        "3": 53,
+        "4": 45
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "定义这一核心做得扎实：只取最大值、显性/隐性拆分、沉没成本与不可得选项的排除都有机制、数字与反例，深度明显超出背定义。主要短板是覆盖面——边际思维与比较优势/分工两大要点完全缺席，且画布只停在\"怎么算\"，没走到\"经济利润/决策算式\"这一步。另有一片 L3 卡片在反复说\"互斥才算放弃\"，重复感较明显。"
+    },
+    {
+      "id": "entropy",
+      "type": "concept",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.857,
+      "planChecklistCoverage": 0.857,
+      "planIntent": "concept",
+      "planIntentFit": 5,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 28,
+      "byLevel": {
+        "1": 4,
+        "2": 9,
+        "3": 13,
+        "4": 2
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.827,
+        "3": 0.808,
+        "4": 0.62
+      },
+      "avgBody": {
+        "1": 85,
+        "2": 73,
+        "3": 56,
+        "4": 45
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "统计物理主线（W 计数、对数来历、概率式熵增、局部熵减账本）扎实且有例子、有数字，误解纠正也到位。但清单第6条“时间箭头”完全缺失，而第1条热力学宏观定义只被一句带过，导致“熵到底是什么”少了一半答案，覆盖与贴题因此明显扣分。"
+    },
+    {
+      "id": "attention",
+      "type": "mechanism",
+      "goalFit": 5,
+      "coverage": 3,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.75,
+      "planChecklistCoverage": 0.625,
+      "planIntent": "mechanism",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 31,
+      "byLevel": {
+        "1": 4,
+        "2": 12,
+        "3": 14,
+        "4": 1
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.822,
+        "3": 0.794,
+        "4": 0.809
+      },
+      "avgBody": {
+        "1": 60,
+        "2": 60,
+        "3": 57,
+        "4": 55
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "这棵树紧扣“注意力机制如何运作”，从固定权重的痛点切入，QKV、缩放点积、多头、复杂度与并行性都有实质解释，深层卡片也能给出机制与数字。主要问题是覆盖不完整：自注意力 vs 交叉注意力、位置编码完全缺失，因果掩码也只是在复杂度卡片里顺带提到。整体是机制讲解很强但清单覆盖有缺口的学习画布。"
+    },
+    {
+      "id": "tcp-handshake",
+      "type": "mechanism",
+      "goalFit": 5,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 3,
+      "checklistCoverage": 0.714,
+      "planChecklistCoverage": 0.857,
+      "planIntent": "mechanism",
+      "planIntentFit": 5,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 37,
+      "byLevel": {
+        "1": 5,
+        "2": 14,
+        "3": 17,
+        "4": 1
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.668,
+        "3": 0.763,
+        "4": 0.681
+      },
+      "avgBody": {
+        "1": 72,
+        "2": 65,
+        "3": 57,
+        "4": 48
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整体紧扣“为什么是三次”，用两步不够、四次多余、丢包与旧报文边界把必要性讲清楚了，机制解释较多。主要缺口是漏掉 ISN 随机化与序列号预测安全动机，连接状态名不全，且重传/超时内容在不同分支间有明显重复。"
+    },
+    {
+      "id": "critical-illness",
+      "type": "decision",
+      "goalFit": 5,
+      "coverage": 3,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.5,
+      "planChecklistCoverage": 0.75,
+      "planIntent": "decision",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 38,
+      "byLevel": {
+        "1": 5,
+        "2": 12,
+        "3": 18,
+        "4": 3
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.847,
+        "3": 0.822,
+        "4": 0.817
+      },
+      "avgBody": {
+        "1": 56,
+        "2": 64,
+        "3": 56,
+        "4": 51
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布整体紧扣“怎么选”，按是否需买、保额期限、条款、预算、健康告知的顺序展开，决策导向强且细节充足。但清单中的意外险/家庭支柱优先、等待期、身故责任、统一定义与除外责任等关键项未实质覆盖或只覆盖一半。部分预算与返本话术有轻度重复。"
+    },
+    {
+      "id": "laptop-choice",
+      "type": "decision",
+      "goalFit": 4,
+      "coverage": 4,
+      "depth": 4,
+      "nonRedundancy": 3,
+      "checklistCoverage": 0.857,
+      "planChecklistCoverage": 0.571,
+      "planIntent": "compare",
+      "planIntentFit": 4,
+      "planStructure": 3,
+      "blockCoverage": 1,
+      "cards": 32,
+      "byLevel": {
+        "1": 4,
+        "2": 11,
+        "3": 17
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.833,
+        "3": 0.771
+      },
+      "avgBody": {
+        "1": 62,
+        "2": 53,
+        "3": 65
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "骨架是标准决策树（选项—维度—证据—结论），比泛泛介绍领域强很多，统一内存、Rosetta、WSL 差异、总拥有成本几张卡都有机制和代价，L3 确实在加新信息。主要问题是“该比哪些关键维度”下面四张卡滑向通用跨平台踩坑知识（CRLF、BSD/GNU），对“买哪台”区分度有限；二手残值这一条完全没写，企业环境与 ML/CUDA 生态也只是点名未展开；同一事实（Unix 终端、内存定死、Xcode 硬条件）在 L1/L2/L3 之间反复复述。"
+    },
+    {
+      "id": "marathon",
+      "type": "howto",
+      "goalFit": 4,
+      "coverage": 2,
+      "depth": 4,
+      "nonRedundancy": 3,
+      "checklistCoverage": 0.5,
+      "planChecklistCoverage": 0.75,
+      "planIntent": "howto",
+      "planIntentFit": 4,
+      "planStructure": 3,
+      "blockCoverage": 0.8,
+      "cards": 23,
+      "byLevel": {
+        "1": 3,
+        "2": 9,
+        "3": 11
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.833,
+        "3": 0.786
+      },
+      "avgBody": {
+        "1": 75,
+        "2": 57,
+        "3": 61
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "训练主线（安全筛查—四阶段—周计划—疼痛红灯）结构清楚、数字具体，深度明显高于同类泛泛介绍；但对照清单，比赛日补给/配速/撞墙/跑鞋/膝跟腱ITB 这几块几乎空白，半马过渡与心率区间也缺，导致“从训练到起跑线之后”的一半流程断档，且减量与疼痛判断在两三张卡间来回重复。"
+    },
+    {
+      "id": "first-website",
+      "type": "howto",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.75,
+      "planChecklistCoverage": 0.5,
+      "planIntent": "howto",
+      "planIntentFit": 5,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 30,
+      "byLevel": {
+        "1": 4,
+        "2": 9,
+        "3": 16,
+        "4": 1
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.787,
+        "3": 0.844,
+        "4": 0.769
+      },
+      "avgBody": {
+        "1": 58,
+        "2": 51,
+        "3": 56,
+        "4": 53
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "主线非常贴题：目的→选型→做页面→部署绑域名开 HTTPS→验收排错，是一条可执行的“从零上线”路径，且 DNS、混合内容、无痕验收、报错归因等细节有真实信息量。主要短板在覆盖：域名购买被跳过、SEO/访问统计整块缺失、持续更新只剩一句“推送自动发布”、HTML/CSS 与静态站点生成器没有实质内容，因此学完能“上线”，但不完全能“持续运营和被发现”。"
+    },
+    {
+      "id": "microecon",
+      "type": "learning-path",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.857,
+      "planChecklistCoverage": 0.429,
+      "planIntent": "learning-path",
+      "planIntentFit": 5,
+      "planStructure": 5,
+      "blockCoverage": 1,
+      "cards": 39,
+      "byLevel": {
+        "1": 5,
+        "2": 9,
+        "3": 20,
+        "4": 5
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.843,
+        "3": 0.815,
+        "4": 0.842
+      },
+      "avgBody": {
+        "1": 62,
+        "2": 54,
+        "3": 53,
+        "4": 54
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "路线骨架清晰，数学先修—核心—练习—验收的顺序设计较好，深度和练习细节也够。但进阶模块整体缺失，教材梯度与课程资源偏弱，部分验收子卡有重复，因此只能算良好但不完整。"
+    },
+    {
+      "id": "english-speaking",
+      "type": "learning-path",
+      "goalFit": 5,
+      "coverage": 4,
+      "depth": 4,
+      "nonRedundancy": 3,
+      "checklistCoverage": 1,
+      "planChecklistCoverage": 0.875,
+      "planIntent": "learning-path",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 33,
+      "byLevel": {
+        "1": 4,
+        "2": 14,
+        "3": 14,
+        "4": 1
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.861,
+        "3": 0.831,
+        "4": 0.923
+      },
+      "avgBody": {
+        "1": 66,
+        "2": 60,
+        "3": 49,
+        "4": 42
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "贴题度很高：整棵树围绕“诊断—分阶段—每日怎么练—怎么验收”推进，每层都服务学习路径而非泛泛介绍英语。主要短板在覆盖的“厚度”——语调/影子跟读、真人对话渠道、外部反馈闭环、语块概念与考试场景都只是擦边带过；同时“七成可懂”“卡住就用简单词绕过”“达标线可数化”在相邻层级被反复改写，L3 部分条目（录法、命名存档）滑向操作细节而非口语能力本身。"
+    },
+    {
+      "id": "react-vue",
+      "type": "compare",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.714,
+      "planChecklistCoverage": 0.571,
+      "planIntent": "compare",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 0.7,
+      "cards": 15,
+      "byLevel": {
+        "1": 3,
+        "2": 5,
+        "3": 7
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.859,
+        "3": 0.779
+      },
+      "avgBody": {
+        "1": 98,
+        "2": 63,
+        "3": 55
+      },
+      "failedSteps": 1,
+      "emptyExpansions": 0,
+      "verdict": "画布围绕 React/Vue 差异与选型展开，渲染模型、响应式机制和性能测量有较实质的机制解释，方向不跑偏。但作为 compare 缺失组件写法（Hooks vs Composition/Options API）和具体生态方案（路由、Redux/Zustand vs Pinia），学习曲线也只是一笔带过。选型部分上下层有重复，部分“阈值”偏空泛，整体及格偏上但不够完整。"
+    },
+    {
+      "id": "index-vs-active",
+      "type": "compare",
+      "goalFit": 5,
+      "coverage": 4,
+      "depth": 4,
+      "nonRedundancy": 3,
+      "checklistCoverage": 0.857,
+      "planChecklistCoverage": 0.857,
+      "planIntent": "compare",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 25,
+      "byLevel": {
+        "1": 3,
+        "2": 10,
+        "3": 12
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.838,
+        "3": 0.802
+      },
+      "avgBody": {
+        "1": 73,
+        "2": 58,
+        "3": 50
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "结构高度贴题：先定义收益来源，再落到可验证的长期跑赢证据（含幸存者偏差、胜率vs超额、加权口径、全收益基准），最后转成自检问题与核心-卫星式配置，比较型问题该有的决策维度基本齐了。主要短板是清单第 6 条几乎落空——跟踪误差只在标题里出现，风险与分散度没有实质内容；费率复利只用一句“还未算复利”带过。另外 L1 卡片大量预告 L2 内容，三问、定投四步与再平衡之间有明显换说法重复，可压缩合并。"
+    }
+  ]
+}

@@ -4,7 +4,7 @@
  * (buildMapFromAI) against an OpenAI-compatible model from env, then scores the trees.
  *
  * Env (required): LLM_TEST_API_KEY, LLM_TEST_BASE_URL, LLM_TEST_MODEL.
- * Optional: EVAL_TOPICS=id,id  EVAL_CONCURRENCY=3  EVAL_ROUND2=first|all  EVAL_OUT=dir
+ * Optional: EVAL_TOPICS=id,id  EVAL_PLAN=0  EVAL_CONCURRENCY=3  EVAL_ROUND2=first|all  EVAL_OUT=dir
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";

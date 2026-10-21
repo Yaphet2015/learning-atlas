@@ -61,6 +61,8 @@ The app's default model is `gpt-4o-mini`. This eval uses the env model, so absol
 
 Six topics have a scripted learner reply (`kickoff` in `topics.ts`). They go through 「让 AI 带我开始」 first: two drawer turns using the canvas-tutor prompt (no tools in the harness). Then the first level is built from the learner's answer and the tutor's skeleton. Set `EVAL_KICKOFF=0` to skip this.
 
+Plan, then expand (PR-B): every topic then makes one `plan` request (after the kickoff, or straight from the question), auto-confirms the draft, and lays the first level from the plan's top-level blocks. Expansions carry the plan, the card's block and the uncovered blocks. A second judge call scores the plan alone against the checklist (`planChecklistCoverage`, plus `intentFit` and `structure`). `blockCoverage` is the share of plan blocks that some card realises (code metric). Set `EVAL_PLAN=0` for the PR-A path.
+
 ```sh
 node evals/compare.mjs --a evals/baseline/summary.json,evals/baseline/summary-run2.json \
   --b evals/results/<run1>/summary.json,evals/results/<run2>/summary.json [--topics id,id | --exclude id,id] [--out file.md]
