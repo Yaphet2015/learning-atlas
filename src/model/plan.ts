@@ -131,6 +131,18 @@ export function renderPlan(board: Board, anchorId: string | null): string | unde
   const own = mine
     ? [mine, ...plan.blocks.filter((b) => b.parent === mine.id)]
     : [];
+  // Cards already in this block (excluding the anchor's own subtree path): the expansion must not restate them.
+  const ownIds = new Set(own.map((b) => b.id));
+  const inBlock = mine
+    ? board.nodes
+        .filter(
+          (n) =>
+            n.id !== anchorId &&
+            ownIds.has(blockOf(board, n.id)?.id ?? "") &&
+            n.title,
+        )
+        .slice(0, 14)
+    : [];
   const uncovered = plan.blocks.filter((b) => !covered.has(b.id));
   const ownOpen = own.filter((b) => !covered.has(b.id));
   return [
@@ -142,6 +154,9 @@ export function renderPlan(board: Board, anchorId: string | null): string | unde
     mine
       ? `当前卡片属于块 [${mine.id}] ${mine.title}${ownOpen.length ? `；这个块下尚未覆盖：${ownOpen.map((b) => `[${b.id}] ${b.title}`).join("、")}` : "；这个块下的子块都已覆盖，继续深入它的原因、机制、例子、误区或判断标准"}。`
       : "当前卡片不属于具体的块。",
+    inBlock.length
+      ? `同一块里已有这些卡片，新卡片不要重复它们的内容，只补它们没讲到的：\n${inBlock.map((n) => `  · ${n.title}：${(n.body ?? "").slice(0, 80)}`).join("\n")}`
+      : "",
     uncovered.length
       ? `整张画布尚未覆盖的块：${uncovered.map((b) => `[${b.id}] ${b.title}`).join("、")}。`
       : "所有块都已有卡片。",

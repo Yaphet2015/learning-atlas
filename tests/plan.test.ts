@@ -89,10 +89,54 @@ describe("learning plan", () => {
   });
   it("the plan prompt holds the type guidance and the core-coverage rule", () => {
     const p = tutorInstructions("plan");
-    expect(p).toContain("howto：时间线");
+    expect(p).toContain("howto：必须把这些具体事项各自列为独立的顶层核心块");
+    expect(p).toContain("仍是 howto，不是 learning-path");
     expect(p).toContain("learning-path：阶段路线");
     expect(p).toContain("核心覆盖规则");
     expect(p).toContain("不得删去");
     expect(tutorInstructions("expand")).toContain('"block":"块id"');
   });
+});
+
+describe("new-card hygiene", () => {
+  it("drops near-duplicate cards and skips relations to unknown cards", () => {
+    const board = createEmptyBoard("React 和 Vue 有什么区别");
+    const first = buildMapFromAI(
+      JSON.stringify({
+        nodes: [{ id: "a", title: "模板与 JSX", body: "JSX 里直接写 JS，Vue 模板是带指令的 HTML。" }],
+        relations: [],
+      }),
+      board,
+    );
+    const next = buildMapFromAI(
+      JSON.stringify({
+        nodes: [
+          { id: "b", title: "模板与JSX！", body: "完全不同的正文内容在这里。" },
+          { id: "b1", title: "子卡", body: "随重复卡一起丢弃", parent: "b" },
+          { id: "c", title: "JSX 与模板写法", body: "JSX 里直接写 JS，Vue 模板是带指令的 HTML。" },
+          { id: "d", title: "状态管理", body: "React 不可变更新，Vue 响应式直接修改。" },
+        ],
+        relations: [{ source: "d", target: "concept_missing", label: "x" }],
+      }),
+      first,
+    );
+    expect(next.nodes.map((n) => n.title).slice(2)).toEqual(["状态管理"]);
+    expect(next.relations).toHaveLength(first.relations.length);
+  });
+});
+
+it("a self or unknown relation is skipped, the cards still land", () => {
+  const board = createEmptyBoard("学习");
+  const next = buildMapFromAI(
+    JSON.stringify({
+      nodes: [{ id: "s", title: "结构", body: "内容" }],
+      relations: [
+        { source: "s", target: "s", label: "self" },
+        { source: "s", target: "unrelated-board-node", label: "invalid" },
+      ],
+    }),
+    board,
+  );
+  expect(next.nodes).toHaveLength(2);
+  expect(next.relations).toHaveLength(0);
 });

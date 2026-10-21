@@ -424,20 +424,6 @@ describe("constrained AI map parsing", () => {
       nodes: [{ id: "n1", title: "代码", body: "```js\nalert(1)\n```" }],
       relations: [],
     }),
-    JSON.stringify({
-      ...map(),
-      relations: [
-        {
-          source: "structure",
-          target: "unrelated-board-node",
-          label: "invalid",
-        },
-      ],
-    }),
-    JSON.stringify({
-      ...map(),
-      relations: [{ source: "structure", target: "structure", label: "self" }],
-    }),
     JSON.stringify({ nodes: [map().nodes[0], map().nodes[0]], relations: [] }),
     JSON.stringify({
       nodes: Array.from({ length: 7 }, (_, i) => ({
