@@ -1,0 +1,467 @@
+{
+  "stamp": "2026-10-21T02-49-54",
+  "model": "deepseek-flash",
+  "topics": 12,
+  "wallMs": 1036506,
+  "usage": {
+    "prompt": 848249,
+    "completion": 539668,
+    "reasoning": 452721,
+    "cached": 240640,
+    "calls": 140,
+    "failures": 0
+  },
+  "overall": {
+    "n": 12,
+    "goalFit": 4.17,
+    "coverage": 2.92,
+    "depth": 3.83,
+    "nonRedundancy": 3.92,
+    "checklistCoverage": 0.67,
+    "cards": 36.42,
+    "textDupRate": 0,
+    "newInfoL2": 0.82,
+    "newInfoL3": 0.78,
+    "bodyL1": 44,
+    "bodyL3": 54.25
+  },
+  "byType": {
+    "concept": {
+      "n": 2,
+      "goalFit": 5,
+      "coverage": 3,
+      "depth": 4.5,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.79,
+      "cards": 36,
+      "textDupRate": 0,
+      "newInfoL2": 0.83,
+      "newInfoL3": 0.79,
+      "bodyL1": 46,
+      "bodyL3": 50.5
+    },
+    "mechanism": {
+      "n": 2,
+      "goalFit": 5,
+      "coverage": 3.5,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.72,
+      "cards": 31.5,
+      "textDupRate": 0,
+      "newInfoL2": 0.77,
+      "newInfoL3": 0.75,
+      "bodyL1": 45,
+      "bodyL3": 54.5
+    },
+    "decision": {
+      "n": 2,
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.67,
+      "cards": 38.5,
+      "textDupRate": 0,
+      "newInfoL2": 0.83,
+      "newInfoL3": 0.8,
+      "bodyL1": 49.5,
+      "bodyL3": 59
+    },
+    "howto": {
+      "n": 2,
+      "goalFit": 3.5,
+      "coverage": 2.5,
+      "depth": 3.5,
+      "nonRedundancy": 3.5,
+      "checklistCoverage": 0.56,
+      "cards": 34.5,
+      "textDupRate": 0,
+      "newInfoL2": 0.84,
+      "newInfoL3": 0.81,
+      "bodyL1": 38.5,
+      "bodyL3": 52.5
+    },
+    "learning-path": {
+      "n": 2,
+      "goalFit": 3.5,
+      "coverage": 2.5,
+      "depth": 3.5,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.58,
+      "cards": 38.5,
+      "textDupRate": 0,
+      "newInfoL2": 0.86,
+      "newInfoL3": 0.81,
+      "bodyL1": 41.5,
+      "bodyL3": 51.5
+    },
+    "compare": {
+      "n": 2,
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 3.5,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.71,
+      "cards": 39.5,
+      "textDupRate": 0,
+      "newInfoL2": 0.8,
+      "newInfoL3": 0.75,
+      "bodyL1": 43.5,
+      "bodyL3": 57.5
+    }
+  },
+  "byTopic": [
+    {
+      "id": "opportunity-cost",
+      "type": "concept",
+      "goalFit": 5,
+      "coverage": 3,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.714,
+      "cards": 35,
+      "byLevel": {
+        "1": 5,
+        "2": 16,
+        "3": 12,
+        "4": 2
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.821,
+        "3": 0.766,
+        "4": 0.817
+      },
+      "avgBody": {
+        "1": 46,
+        "2": 49,
+        "3": 52,
+        "4": 48
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布对定义、会计/隐性成本、沉没成本和日常时间估值覆盖扎实，层次和例子较多；但边际决策只在局部被带过，比较优势/分工完全缺失，覆盖不完整。个别上下层有同义展开，L2“备选越多，放弃越贵”也需由下级修正，整体仍属高质量概念画布。"
+    },
+    {
+      "id": "entropy",
+      "type": "concept",
+      "goalFit": 5,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.857,
+      "cards": 37,
+      "byLevel": {
+        "1": 5,
+        "2": 16,
+        "3": 16
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.842,
+        "3": 0.811
+      },
+      "avgBody": {
+        "1": 46,
+        "2": 47,
+        "3": 49
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整棵树紧扣“熵到底是什么”，从混乱直觉到热力学、第二定律、统计解释、信息熵层层递进，L3 有墨滴、两球、公平硬币 1 比特等具体材料，深度和结构都不错。主要问题是完全漏掉“时间箭头与熵”这条要点，仅在“为什么熵总是不减少”里含糊提到“过程有方向”，没有把不可逆性与时间之矢联系起来；另外有少量概率论证在两层重复。补上时间箭头一层、并显式写出 dS=δQ/T 与 S=k ln W 的公式形式，覆盖率即可达标。"
+    },
+    {
+      "id": "attention",
+      "type": "mechanism",
+      "goalFit": 5,
+      "coverage": 4,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.875,
+      "cards": 36,
+      "byLevel": {
+        "1": 5,
+        "2": 14,
+        "3": 16,
+        "4": 1
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.825,
+        "3": 0.792,
+        "4": 0.885
+      },
+      "avgBody": {
+        "1": 42,
+        "2": 51,
+        "3": 51,
+        "4": 61
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整体紧扣注意力机制的计算与结构，QKV、加权汇总、多头、掩码和复杂度都有实质解释，深层卡片也能给出机制与反例。主要短板是位置编码完全缺失，缩放点积的公式与 √d_k 的方差解释不够明确，且少数卡片重复同一套 QKV 汇总说法。"
+    },
+    {
+      "id": "tcp-handshake",
+      "type": "mechanism",
+      "goalFit": 5,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.571,
+      "cards": 27,
+      "byLevel": {
+        "1": 4,
+        "2": 9,
+        "3": 13,
+        "4": 1
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.717,
+        "3": 0.699,
+        "4": 0.652
+      },
+      "avgBody": {
+        "1": 48,
+        "2": 63,
+        "3": 58,
+        "4": 67
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整体紧扣“为什么是三次”，围绕双向确认、序号同步、旧 SYN 误建连接和第三次 ACK 的闭合作用展开，主线清楚且深层卡片有实质机制。主要短板是清单中的 ISN 随机化/安全、命名状态迁移、SYN flood 与 SYN cookies 未实质覆盖，完整度不足；另有少量上下层同义复述。"
+    },
+    {
+      "id": "critical-illness",
+      "type": "decision",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.625,
+      "cards": 39,
+      "byLevel": {
+        "1": 5,
+        "2": 17,
+        "3": 17
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.851,
+        "3": 0.818
+      },
+      "avgBody": {
+        "1": 43,
+        "2": 51,
+        "3": 53
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整棵树紧扣“怎么选”，从保额、期限、责任到核保、比价层层落地，L3 层（三同条款、间隔期、保额口径、年缴与总保费）确有新增信息，深度在及格线以上。主要短板是决策链缺了两环：没有回答“要不要买、与医疗险意外险的先后”，也回避了消费型与返还型的取舍和保费占收入的比例上限，导致无法收敛成一个完整选择方案。此外多处仍是“要看条款”式提醒，缺具体数字与判断阈值。"
+    },
+    {
+      "id": "laptop-choice",
+      "type": "decision",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.714,
+      "cards": 38,
+      "byLevel": {
+        "1": 5,
+        "2": 17,
+        "3": 15,
+        "4": 1
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.8,
+        "3": 0.784,
+        "4": 0.785
+      },
+      "avgBody": {
+        "1": 56,
+        "2": 70,
+        "3": 65,
+        "4": 66
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整体围绕“怎么选”展开，从硬门槛到日常终端、硬件、总成本、迁移成本几层切分清楚，L2/L3 多数有机制和判断标准，深度在线。主要短板是清单覆盖不全：GPU/机器学习与 CUDA 只有关键词，统一内存架构和续航未落地，后端/前端方向也未点名；另外缺少一张把各维度收敛成决策建议的收尾卡。"
+    },
+    {
+      "id": "marathon",
+      "type": "howto",
+      "goalFit": 3,
+      "coverage": 2,
+      "depth": 3,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.5,
+      "cards": 33,
+      "byLevel": {
+        "1": 4,
+        "2": 13,
+        "3": 16
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.848,
+        "3": 0.814
+      },
+      "avgBody": {
+        "1": 39,
+        "2": 48,
+        "3": 47
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布在比赛日执行、睡眠与周安排上有一些可用细节，但整体偏向赛事选择和当天流程；作为零基础首马准备，缺少力量与伤病预防、装备、4–6个月时间线和LSD配速/心率等关键训练模块。多处建议停留在原则层，数字和判断标准不足。"
+    },
+    {
+      "id": "first-website",
+      "type": "howto",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 3,
+      "checklistCoverage": 0.625,
+      "cards": 36,
+      "byLevel": {
+        "1": 5,
+        "2": 15,
+        "3": 16
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.842,
+        "3": 0.805
+      },
+      "avgBody": {
+        "1": 38,
+        "2": 58,
+        "3": 58
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "主干流程（目的→做法→域名托管→发布→维护）顺序正确、动作可执行，入口文件、相对路径、大小写、推送≠已上线这类细节有明显价值，深度在及格线以上。但清单兑现不完整：技术选型漏掉静态站点生成器，HTTPS 只当打勾项没讲做法，SEO 与访问统计整块缺失，导致“上线后”这条线断在半途。加上发布与更新两处内容明显自我重复，整体属于结构正确但覆盖不全的中上水平。"
+    },
+    {
+      "id": "microecon",
+      "type": "learning-path",
+      "goalFit": 3,
+      "coverage": 2,
+      "depth": 3,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.286,
+      "cards": 38,
+      "byLevel": {
+        "1": 5,
+        "2": 17,
+        "3": 16
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.86,
+        "3": 0.786
+      },
+      "avgBody": {
+        "1": 35,
+        "2": 47,
+        "3": 52
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布在基本概念骨架和练习自查上有一定设计，但整体更像微观内容入门，而不是“如何学好”的路径：缺少先修数学、教材梯度、进阶专题和关键卡点（无差异曲线），核心模块也不完整。若用于学习规划，需补上路线图、资源与评估闭环。"
+    },
+    {
+      "id": "english-speaking",
+      "type": "learning-path",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.875,
+      "cards": 39,
+      "byLevel": {
+        "1": 5,
+        "2": 18,
+        "3": 16
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.87,
+        "3": 0.844
+      },
+      "avgBody": {
+        "1": 48,
+        "2": 55,
+        "3": 51
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整棵树在发音、独白/复述、录音纠错和习惯养成这几块做得扎实，卡片多有机制、数字和具体做法，明显超出复述层面。但作为“系统提升口语”的路径，它漏掉了听力输入这一基础支柱，真人对话只有一句带过，水平评估也近乎点缀，导致体系有缺口。建议补一条“听什么、听多少”的输入线，并把找语伴/外教、课前准备与开口焦虑的具体应对写实。"
+    },
+    {
+      "id": "react-vue",
+      "type": "compare",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.571,
+      "cards": 39,
+      "byLevel": {
+        "1": 5,
+        "2": 18,
+        "3": 16
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.716,
+        "3": 0.727
+      },
+      "avgBody": {
+        "1": 33,
+        "2": 58,
+        "3": 63
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布围绕“差异”展开，响应式/渲染机制和性能更新粒度讲得较实，但设计理念、组件写法与选型方法三块没有实质落地。生态部分偏罗列，缺少决策框架和底层编译/实战误区，整体及格偏上但不够完整。"
+    },
+    {
+      "id": "index-vs-active",
+      "type": "compare",
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 3,
+      "nonRedundancy": 4,
+      "checklistCoverage": 0.857,
+      "cards": 40,
+      "byLevel": {
+        "1": 5,
+        "2": 17,
+        "3": 17,
+        "4": 1
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.877,
+        "3": 0.768,
+        "4": 0.667
+      },
+      "avgBody": {
+        "1": 54,
+        "2": 53,
+        "3": 52,
+        "4": 49
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "结构很贴题：从“靠什么决策”到“成本→公平比较→长期证据→该选谁”，每层都指向同一个决策，没有泛泛科普。但关键实证缺位——没有 SPIVA 数据、没有 A 股对比、没有跟踪误差和分散度的量化，使“谁更常赢”停留在先验推理；部分决策层卡片退化为常识建议，深度不够。补齐数据与操作标准后，可从中上提到优秀。"
+    }
+  ]
+}
