@@ -56,3 +56,14 @@ Results go to `evals/results/<timestamp>/`, which is gitignored: one JSON per to
 The reference baseline summary is committed under `evals/baseline/`. Compare new runs against it in each generation PR.
 
 The app's default model is `gpt-4o-mini`. This eval uses the env model, so absolute scores depend on that model. Compare runs only when they use the same model.
+
+## Kickoff topics and comparing runs
+
+Six topics have a scripted learner reply (`kickoff` in `topics.ts`). They go through 「让 AI 带我开始」 first: two drawer turns using the canvas-tutor prompt (no tools in the harness). Then the first level is built from the learner's answer and the tutor's skeleton. Set `EVAL_KICKOFF=0` to skip this.
+
+```sh
+node evals/compare.mjs --a evals/baseline/summary.json,evals/baseline/summary-run2.json \
+  --b evals/results/<run1>/summary.json,evals/results/<run2>/summary.json [--topics id,id | --exclude id,id] [--out file.md]
+```
+
+The comparison prints means per dimension, per question type and per topic. It also prints the run-to-run spread inside each group, so a delta can be read against the noise.
