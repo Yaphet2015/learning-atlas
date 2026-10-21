@@ -85,3 +85,20 @@ describe("rich cards", () => {
     expect(tutorInstructions("expand")).toContain("每张新卡片都必须带来新信息");
   });
 });
+
+it("tag names in prose survive as full-width brackets; up to 8 nodes", () => {
+  const board = createEmptyBoard("React 和 Vue");
+  const next = buildMapFromAI(
+    JSON.stringify({
+      nodes: Array.from({ length: 8 }, (_, i) => ({
+        id: `n${i}`,
+        title: `卡${i}`,
+        body: i === 0 ? "Vue 写在 <template> 里" : `正文${i}`,
+      })),
+      relations: [],
+    }),
+    board,
+  );
+  expect(next.nodes).toHaveLength(9);
+  expect(next.nodes[1].body).toBe("Vue 写在 ＜template＞ 里");
+});

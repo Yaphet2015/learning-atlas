@@ -72,20 +72,31 @@ export const richCardFields = {
   sources: z.array(cardSourceSchema).max(4).optional(),
 };
 /**
+ * Model text that names a tag in prose (“写在 <template> 里”) is kept readable with full-width
+ * brackets instead of failing the map; it is plain text either way.
+ */
+const ACTIVE_MARKUP =
+  /<\/?\s*(script|iframe|img|svg|style|object|embed|a|link|meta|form|input|video|audio|math)\b|\son\w+\s*=|javascript:/i;
+const defang = (v: unknown) =>
+  typeof v === "string" && !ACTIVE_MARKUP.test(v)
+    ? v.replace(/</g, "＜").replace(/>/g, "＞")
+    : v; // Anything that looks like active markup is still rejected by plainText.
+const aiText = (max: number) => z.preprocess(defang, plainText(max));
+/**
  * The same fields as the model sends them: a bad or over-long optional field is trimmed or dropped
  * instead of failing the whole map (plain-text checks still apply, so nothing unsafe is kept).
  */
 const aiRichCardFields = {
-  summary: richCardFields.summary.catch(undefined),
+  summary: aiText(160).optional().catch(undefined),
   keyPoints: z
     .preprocess(
       (v) => (Array.isArray(v) ? v.slice(0, 4) : v),
-      richCardFields.keyPoints,
+      z.array(aiText(160)).max(4).optional(),
     )
     .catch(undefined),
-  whyItMatters: richCardFields.whyItMatters.catch(undefined),
-  example: richCardFields.example.catch(undefined),
-  misconception: richCardFields.misconception.catch(undefined),
+  whyItMatters: aiText(300).optional().catch(undefined),
+  example: aiText(400).optional().catch(undefined),
+  misconception: aiText(300).optional().catch(undefined),
   depthType: richCardFields.depthType.catch(undefined),
   sources: z
     .preprocess(
@@ -544,7 +555,7 @@ export const aiMapSchema = z
           .object({
             id: idSchema,
             title: plainText(100),
-            body: plainText(1_200),
+            body: aiText(1_200),
             /** "anchor", an existing card id, a generated id, or null for a root. */
             parent: idSchema.nullable().optional(),
             emoji: z.string().max(16).optional(),
@@ -557,7 +568,7 @@ export const aiMapSchema = z
           .strict(),
       )
       .min(1)
-      .max(6),
+      .max(8),
     relations: z
       .array(
         z
