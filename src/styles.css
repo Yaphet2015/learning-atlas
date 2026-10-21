@@ -4000,3 +4000,116 @@ kbd,
     animation: none;
   }
 }
+/* Learning plan draft in the kickoff drawer */
+.plan-editor {
+  margin: 10px 7px 4px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  display: grid;
+  gap: 8px;
+}
+.plan-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--ink);
+}
+.plan-kind {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  white-space: nowrap;
+}
+.plan-goal {
+  font-weight: 600;
+  line-height: 1.45;
+}
+.plan-learner,
+.plan-out,
+.plan-why {
+  font-size: 12.5px;
+  color: var(--ink);
+  opacity: 0.68;
+  line-height: 1.45;
+}
+.plan-blocks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  counter-reset: plan;
+}
+.plan-block {
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  border-top: 1px solid var(--rule);
+}
+.plan-block:not(.sub) {
+  counter-increment: plan;
+}
+.plan-block:not(.sub) .plan-title::before {
+  content: counter(plan) ". ";
+  color: var(--accent-ink);
+}
+.plan-block.sub {
+  margin-left: 18px;
+  border-top: 1px dashed var(--rule);
+}
+.plan-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.plan-title {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  cursor: text;
+}
+.plan-title:disabled {
+  cursor: default;
+}
+.plan-title-input {
+  flex: 1;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xs);
+  padding: 2px 6px;
+}
+.plan-core {
+  font-size: 11px;
+  color: var(--accent-ink);
+  border: 1px solid var(--accent-wash);
+  border-radius: var(--r-pill);
+  padding: 0 6px;
+}
+.plan-del {
+  background: none;
+  border: 0;
+  color: var(--ink);
+  opacity: 0.5;
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+}
+.plan-del:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--accent);
+}
+.plan-acts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

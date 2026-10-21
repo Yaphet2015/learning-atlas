@@ -1,3 +1,5 @@
+import { PlanEditor } from "./PlanEditor";
+import type { BoardPlan } from "../shared/types";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -352,6 +354,17 @@ function Menu({
 }
 
 /** The action row under one answer: split primary, copy, re-answer. */
+/** The root's kickoff conversation: plan first, then the first level. */
+export type KickoffProps = {
+  onAccept: () => void;
+  busy: boolean;
+  planning?: boolean;
+  plan?: BoardPlan;
+  onPlanChange?: (plan: BoardPlan) => void;
+  onPlanConfirm?: () => void;
+  onReplan?: () => void;
+};
+
 function AnswerActs({
   message,
   outline,
@@ -371,7 +384,7 @@ function AnswerActs({
   onLocate: () => void;
   /** The answer has an outline and the anchor has no children yet. */
   recommendLay: boolean;
-  kickoff?: { onAccept: () => void; busy: boolean };
+  kickoff?: KickoffProps;
   selected: () => string;
   onLay: () => void;
   onPromote: (text: string) => void;
@@ -379,35 +392,42 @@ function AnswerActs({
 }) {
   const [open, setOpen] = useState(false);
   // Kickoff without an outline in the answer: AI drafts the first level.
-  const lay =
-    outline.length > 1 && !placed
+  // The kickoff always goes through the learning plan, never the answer's own list.
+  const lay = kickoff
+    ? kickoff.onAccept
+    : outline.length > 1 && !placed
       ? onLay
-      : kickoff
-        ? kickoff.onAccept
-        : undefined;
+      : undefined;
+  const planStep = !!kickoff && kickoff.plan?.status !== "confirmed";
   const primary = recommendLay || kickoff ? lay : undefined;
   return (
     <div className="acts">
       <span className="split">
         <button
           className="btn sm primary"
-          disabled={kickoff?.busy}
+          disabled={kickoff?.busy || kickoff?.planning || (planStep && !!kickoff?.plan)}
           title={
             primary
-              ? outline.length > 1
+              ? planStep
+                ? "先拟一份学习计划，确认后再铺第一层"
+                : outline.length > 1 && !kickoff
                 ? `骨架 ${outline.length} 块铺成第一层`
                 : "让 AI 拆出第一层"
               : "整段作为一张卡"
           }
           onClick={() => (primary ? primary() : onPromote(message.text))}
         >
-          {kickoff?.busy ? (
+          {kickoff?.busy || kickoff?.planning ? (
             <LoaderCircle size={15} className="ico spin" />
           ) : (
             <Plus size={15} className="ico" />
           )}
           {kickoff?.busy
             ? "正在拆出第一层…"
+            : kickoff?.planning
+              ? "正在拟定学习计划…"
+              : planStep
+                ? "拟定学习计划"
             : kickoff && primary
               ? "铺成第一层"
               : "把回答加进地图"}
@@ -531,7 +551,7 @@ export function Drawer({
   onChange: (patch: Partial<StickyNote>) => void;
   onAsk: (prompt: string) => boolean;
   /** Present while this is the root's kickoff conversation and the root has no children yet. */
-  kickoff?: { onAccept: () => void; busy: boolean };
+  kickoff?: KickoffProps;
   onStop: () => void;
   onPromote: (text: string) => void;
   /** Lay items as unseen cards under the anchor; with messageId, that answer counts as laid. */
@@ -877,9 +897,19 @@ export function Drawer({
             )}
           </div>
         )}
-        {kickoff && lastAnswer && !busy && (
+        {kickoff && (kickoff.plan || kickoff.planning) && (
+          <PlanEditor
+            plan={kickoff.plan}
+            planning={!!kickoff.planning}
+            busy={kickoff.busy}
+            onChange={(p) => kickoff.onPlanChange?.(p)}
+            onConfirm={() => kickoff.onPlanConfirm?.()}
+            onReplan={() => kickoff.onReplan?.()}
+          />
+        )}
+        {kickoff && lastAnswer && !busy && !kickoff.plan && !kickoff.planning && (
           <span className="lab kickoff-tip">
-            先在下面回答它的问题，拆得会更贴合你；也可以直接铺成第一层，之后再调整。
+            先在下面回答它的问题，拆得会更贴合你；也可以直接拟定学习计划，确认前都能修改。
           </span>
         )}
         <div className="fadeBot" aria-hidden="true" />

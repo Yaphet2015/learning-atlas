@@ -36,7 +36,27 @@ export async function installFakeAtlas(
       // So are the quiet diagram/overview follow-ups after new cards land.
       const enriches: any[] = [];
       (window as any).__atlasEnriches = enriches;
+      // The learning-plan request before the first level.
+      const plans: any[] = [];
+      (window as any).__atlasPlans = plans;
       const answer = (request: any) => {
+        if (request.mode === "plan")
+          return (
+            (window as any).__atlasPlanAnswers?.shift() ??
+            JSON.stringify({
+              intent: "mechanism",
+              goal: "学完后，能解释彩虹为什么是一道有固定颜色顺序的弧。",
+              learner: "知道折射，不懂为什么会弯",
+              blocks: [
+                { id: "b1", title: "阳光里有哪些颜色？", why: "色散的前提", parent: null, prerequisites: [], core: true },
+                { id: "b2", title: "水滴怎样让光拐弯？", why: "核心机制", parent: null, prerequisites: ["b1"], core: true },
+                { id: "b2a", title: "折射率为什么随颜色变？", why: "颜色分开的原因", parent: "b2", prerequisites: [], core: true },
+                { id: "b3", title: "为什么是一道弧？", why: "几何角度", parent: null, prerequisites: ["b2"], core: true },
+                { id: "b3a", title: "副虹从哪来？", why: "常见追问", parent: "b3", prerequisites: [], core: false },
+              ],
+              outOfScope: ["光的波粒二象性"],
+            })
+          );
         if (request.mode === "enrich")
           return (
             (window as any).__atlasEnrichAnswers?.shift() ??
@@ -62,16 +82,19 @@ export async function installFakeAtlas(
             nodes: [
               {
                 id: "light",
+                block: "b1",
                 title: "阳光里有哪些颜色？",
                 body: "白光其实混着很多颜色。",
               },
               {
                 id: "bend",
+                block: "b2",
                 title: "水滴怎样让光拐弯？",
                 body: "进出水滴时光会折射。",
               },
               {
                 id: "arc",
+                block: "b3",
                 title: "为什么是一道弧？",
                 body: "只有特定角度的光会进到眼里。",
               },
@@ -293,7 +316,9 @@ export async function installFakeAtlas(
             ? hints
             : request.mode === "enrich"
               ? enriches
-              : asks
+              : request.mode === "plan"
+                ? plans
+                : asks
           ).push(request);
           if (request.canvas && (window as any).__atlasChatCanvas) {
             void startCanvas(request.boardId, "chat", request.requestId);
