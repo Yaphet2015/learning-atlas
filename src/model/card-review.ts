@@ -68,8 +68,17 @@ export function cardReview(
         if (excluded.has(`node:${node.id}`)) {
           card.body = "";
           card.bodyExcluded = true;
-        } else if (node.visual) {
-          card.visual = node.visual;
+        } else {
+          if (node.visual) card.visual = node.visual;
+          for (const k of [
+            "summary",
+            "keyPoints",
+            "whyItMatters",
+            "example",
+            "misconception",
+            "depthType",
+          ] as const)
+            if (node[k] !== undefined) (card as any)[k] = node[k];
         }
         return card;
       }),

@@ -46,6 +46,31 @@ export const visualDiagramSchema = z
     basis: z.enum(["literal", "analogy"]),
   })
   .strict();
+export const depthTypeSchema = z.enum([
+  "what",
+  "why",
+  "how",
+  "edge",
+  "apply",
+  "compare",
+]);
+const sourceUrl = z
+  .string()
+  .max(500)
+  .refine((u) => /^https?:\/\/[^\s<>"]+$/i.test(u), "http(s) URL only");
+export const cardSourceSchema = z
+  .object({ title: plainText(120), url: sourceUrl.optional() })
+  .strict();
+/** Rich card fields, shared by stored cards and AI output. */
+export const richCardFields = {
+  summary: plainText(160).optional(),
+  keyPoints: z.array(plainText(160)).max(4).optional(),
+  whyItMatters: plainText(300).optional(),
+  example: plainText(400).optional(),
+  misconception: plainText(300).optional(),
+  depthType: depthTypeSchema.optional(),
+  sources: z.array(cardSourceSchema).max(4).optional(),
+};
 export const conceptNodeSchema = z
   .object({
     id: idSchema,
@@ -73,6 +98,7 @@ export const conceptNodeSchema = z
       .strict()
       .optional(),
     planBlock: idSchema.optional(),
+    ...richCardFields,
   })
   .strict();
 /** v1 node shape, accepted only as migration input. */
@@ -377,6 +403,12 @@ export const contextBundleSchema = z
                 title: true,
                 body: true,
                 visual: true,
+                summary: true,
+                keyPoints: true,
+                whyItMatters: true,
+                example: true,
+                misconception: true,
+                depthType: true,
               })
               .extend({
                 level: z
@@ -497,6 +529,7 @@ export const aiMapSchema = z
             visual: visualDiagramSchema.optional(),
             /** The plan block this card realises. */
             block: idSchema.optional(),
+            ...richCardFields,
           })
           .strict(),
       )

@@ -42,6 +42,20 @@ export interface ConceptNode {
   visual?: VisualDiagram;
   /** The board plan block this card realises (board.plan); optional. */
   planBlock?: string;
+  /** Rich card content (PR-C); every field optional, older boards have none. */
+  summary?: string;
+  keyPoints?: string[];
+  whyItMatters?: string;
+  example?: string;
+  misconception?: string;
+  depthType?: DepthType;
+  sources?: CardSource[];
+}
+/** The depth ladder: what → why → how → edge → apply; compare sits beside it. */
+export type DepthType = "what" | "why" | "how" | "edge" | "apply" | "compare";
+export interface CardSource {
+  title: string;
+  url?: string;
 }
 export interface Relation {
   id: string;
