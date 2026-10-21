@@ -408,6 +408,8 @@ describe("constrained AI map parsing", () => {
     );
     expect(result.nodes).toHaveLength(3);
     expect(JSON.stringify(result)).not.toContain("script");
+    const { relations: _r, ...noRelations } = map();
+    expect(buildMapFromAI(JSON.stringify(noRelations), board).nodes).toHaveLength(3);
   });
   it("connects disconnected components without fabricating semantic edges", () => {
     const board = createEmptyBoard("学习");

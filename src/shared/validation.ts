@@ -512,7 +512,9 @@ export const aiMapSchema = z
           })
           .strict(),
       )
-      .max(12),
+      .max(12)
+      // A map without relations is still a map.
+      .default([]),
     overviews: aiOverviewsSchema,
   })
   // Stray top-level notes (e.g. "relations_note") are dropped rather than failing the whole map;

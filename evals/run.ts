@@ -88,6 +88,15 @@ async function chat(
   for (let i = 0; i < tries; i++) {
     const started = Date.now();
     try {
+      const abort = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          abort.abort();
+          reject(new Error("timeout"));
+        }, Number(process.env.EVAL_TIMEOUT_MS ?? 150_000));
+      });
+      deadline.catch(() => {});
       const res = await fetch(`${BASE}/chat/completions`, {
         method: "POST",
         headers: {
@@ -102,9 +111,15 @@ async function chat(
             : {}),
           messages: [{ role: "system", content: system }, ...turns],
         }),
-        signal: AbortSignal.timeout(Number(process.env.EVAL_TIMEOUT_MS ?? 150_000)),
+        signal: abort.signal,
       });
-      const json: any = await res.json().catch(() => ({}));
+      // The deadline also covers the body: a stalled stream (keep-alive bytes, no end) used to
+      // hold a step for ~9 minutes and then come back empty.
+      const json: any = await Promise.race([
+        res.json().catch(() => ({})),
+        deadline,
+      ]);
+      clearTimeout(timer);
       totals.calls++;
       if (!res.ok) {
         last = `HTTP ${res.status}: ${String(json?.error?.message ?? "").slice(0, 200)}`;
