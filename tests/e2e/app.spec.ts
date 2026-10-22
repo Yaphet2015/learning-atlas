@@ -74,7 +74,8 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
   page,
 }) => {
   await card(page, "样式计算").click();
-  await page.getByRole("radio", { name: "我能解释" }).click();
+  await page.locator(".select-toolbar").getByRole("button", { name: "更多操作" }).click();
+  await page.getByRole("menuitemradio", { name: "我能解释" }).click();
   await expect(
     card(page, "样式计算").getByRole("img", { name: "我能解释" }),
   ).toBeVisible();

@@ -48,7 +48,8 @@ test("an expanded AI card can add more concepts and report no useful additions",
   await expect(expand).toBeEnabled();
   const requests = await page.evaluate(() => (window as any).__atlasAsks);
   expect(requests).toHaveLength(2);
-  expect(requests[1].context.structure).toContain("理赔需要什么证明");
+  // The review already covers every card, so the lean generation context drops the duplicate outline.
+  expect(requests[1].context.structure).toBeUndefined();
   expect(requests[0].context.topic).toBe(board.topic);
   expect(requests[0].context.review).toMatchObject({
     radius: 4,

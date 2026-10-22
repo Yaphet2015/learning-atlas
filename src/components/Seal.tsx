@@ -1,12 +1,12 @@
 /** The 「我能解释」 seal: the round-cap A from the app icon on a vermilion rounded square. */
-export const Seal = ({ size = 26 }: { size?: number }) => (
+export const Seal = ({ size = 26, light = false }: { size?: number; light?: boolean }) => (
   <svg
-    className="seal"
+    className={`seal ${light ? "light" : ""}`}
     width={size}
     height={size}
     viewBox="-50 -50 100 100"
     role="img"
-    aria-label="我能解释"
+    aria-label={light ? "你已经会了（摸底推断）" : "我能解释"}
   >
     <rect x="-46" y="-46" width="92" height="92" rx="24" fill="var(--accent)" />
     <rect

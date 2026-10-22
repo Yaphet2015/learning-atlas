@@ -921,7 +921,7 @@ describe("event reconciliation and prompt safety", () => {
       "不要用 relations 表示先后或层级",
     );
     expect(tutorInstructions("map")).not.toContain("第一条入边");
-    expect(tutorInstructions("expand")).toContain("2–4 个");
+    expect(tutorInstructions("expand")).toContain("2–3 个");
     expect(tutorInstructions("expand")).toContain('"anchor"');
     expect(tutorInstructions("map")).toContain("不要输出或执行 HTML");
     expect(tutorInstructions("enrich")).toContain('basis:"analogy"');

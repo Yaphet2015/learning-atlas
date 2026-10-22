@@ -468,8 +468,10 @@ kbd,
 .card.s-explained .card-heading {
   padding-right: 30px;
 }
+/* Selection everywhere: one 1.5px vermilion border plus --shadow-2, no outer glow. */
 .card.is-selected {
-  box-shadow: var(--ring), var(--shadow-1);
+  border: 1.5px solid var(--accent);
+  box-shadow: var(--shadow-2);
 }
 .card.dimmed {
   opacity: 0.4;
@@ -652,11 +654,8 @@ kbd,
   box-shadow: var(--shadow-2);
 }
 .origin.is-selected {
-  box-shadow:
-    0 0 0 4px var(--paper),
-    0 0 0 5.5px var(--accent),
-    0 0 0 10px var(--accent-wash),
-    var(--shadow-2);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-2);
 }
 .origin-head {
   display: flex;
@@ -4346,4 +4345,292 @@ kbd,
 }
 .coverage .missing .cov-row:disabled {
   cursor: progress;
+}
+
+/* ── Flow: numbered route, next step, four beats ──────────────── */
+.card .station {
+  position: absolute;
+  left: -9px;
+  top: -9px;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font: 700 11.5px var(--kai);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  background: var(--card);
+  border: 1.25px solid var(--border-strong);
+}
+.card .station.next {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.card .station.sealed {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.card .next-tag {
+  position: absolute;
+  left: 12px;
+  top: -20px;
+  font: 400 11.5px var(--kai);
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.react-flow__node:has(.station.next) .card {
+  border-color: var(--accent);
+}
+.card .face-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card .start-stop {
+  height: 26px;
+  margin-top: 8px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+.card .beat-line {
+  display: block;
+  height: 3px;
+  margin-top: 9px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  overflow: hidden;
+}
+.card .beat-line i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 240ms ease;
+}
+.seal.light {
+  opacity: 0.45;
+}
+.next-step .btn.primary,
+.stop .btn.primary,
+.card .start-stop {
+  background: var(--accent);
+  color: #fff;
+}
+.next-step .btn.primary .kbd,
+.stop .btn.primary .kbd {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+}
+/* Docked just above the toolbar (dock height + 8px). */
+.next-step {
+  left: 50%;
+  bottom: calc(var(--gutter) + var(--dock-h, 44px) + 8px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(520px, calc(100vw - 2 * var(--gutter)));
+  padding: 9px 12px;
+  box-shadow: var(--shadow-2);
+}
+.next-step .ns-no {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  font: 700 15px var(--kai);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.next-step .ns-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.next-step .ns-k {
+  font: 400 11.5px var(--kai);
+  color: var(--accent);
+}
+.next-step .ns-main {
+  font: 700 14px/1.4 var(--kai);
+  color: var(--ink);
+}
+.next-step .ns-why {
+  font: 400 12px/1.4 var(--kai);
+  color: var(--ink-3);
+}
+.next-step .ns-text {
+  min-width: 0;
+}
+.next-step .ns-main,
+.next-step .ns-why {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.next-step .btn {
+  flex: none;
+}
+.btn.quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-2);
+}
+.stop {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+.stop .beats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stop .beat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  font: 400 13px var(--kai);
+  color: var(--ink-3);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.stop .beat.done {
+  color: var(--ink-2);
+  background: color-mix(in srgb, var(--accent) 9%, var(--card));
+}
+.stop .beat.on {
+  color: #fff;
+  background: var(--accent);
+  font-weight: 700;
+}
+.stop .beat-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+.stop .beat-q {
+  margin: 0;
+  font: 700 14.5px/1.6 var(--kai);
+  color: var(--ink);
+}
+.stop .beat-note,
+.stop .beat-foot {
+  margin: 0;
+  font: 400 12.5px/1.5 var(--kai);
+  color: var(--ink-3);
+}
+.stop .beat-foot {
+  text-align: center;
+}
+.stop .beat-input {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  font: 400 14px/1.6 var(--kai);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.stop .beat-input:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.stop .beat-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stop .opt {
+  padding: 8px 12px;
+  text-align: left;
+  font: 400 14px/1.5 var(--kai);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.stop .opt.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+.stop .beat-feedback {
+  margin: 0;
+  font: 400 13px/1.5 var(--kai);
+  color: var(--accent-ink, var(--accent));
+}
+.stop .beat-acts {
+  display: flex;
+  gap: 8px;
+}
+.stop .beat-acts .btn.primary {
+  flex: 1;
+  justify-content: center;
+}
+.stop .beat-sealed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: 700 14px var(--kai);
+  color: var(--ink-2);
+}
+.seal-a {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: #fff;
+  background: var(--accent);
+  font: 700 13px var(--kai);
+}
+.card-list {
+  margin: 0;
+  padding-left: 1.2em;
+  font: 400 14.5px/1.75 var(--kai);
+  color: var(--ink);
+}
+/* On the route the beat line replaces the generic 探索中 line. */
+.card.s-exploring:has(.beat-line)::after {
+  display: none;
+}
+
+.select-toolbar .more {
+  position: relative;
+  display: inline-flex;
+}
+.menu.card-menu {
+  left: auto;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 188px;
+}
+.menu.card-menu .dig-head {
+  padding: 4px 10px 6px;
+  font: 400 12px var(--kai);
+  color: var(--ink-3);
+}
+.menu.card-menu .ico-gap {
+  display: inline-block;
+  width: 14px;
 }

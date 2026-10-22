@@ -15,6 +15,8 @@ import {
 } from "@xyflow/react";
 import {
   ArrowRight,
+  Check,
+  MoreHorizontal,
   BookOpen,
   ChevronRight,
   Image,
@@ -28,7 +30,7 @@ import {
 import type { CardHints, ConceptNode, SceneState } from "../shared/types";
 import type { HintSide } from "../model/hints";
 import { Seal } from "./Seal";
-import { DepthTag } from "./CardDetail";
+import { beatProgress } from "../model/next-step";
 import { BorderBeam } from "./BorderBeam";
 import { tip } from "./Tooltip";
 
@@ -71,6 +73,11 @@ export type CardData = {
   /** Root only, while an AI board has no first level yet: the obvious next step. */
   onKickoff?: () => void;
   kickoffStarted?: boolean;
+  /** Station number on the learning route (第 n 站). */
+  station?: number;
+  /** This card is the one next step: red outline + 下一步 label. */
+  isNext?: boolean;
+  onStartNext?: () => void;
 };
 export type GhostData = { [key: string]: unknown; w: number };
 export type CardNode = Node<CardData, "concept" | "root">;
@@ -358,8 +365,12 @@ function SelectToolbar({
 }) {
   const n = data.concept;
   const [digOpen, setDigOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => {
-    if (!visible) setDigOpen(false);
+    if (!visible) {
+      setDigOpen(false);
+      setMoreOpen(false);
+    }
   }, [visible]);
   return (
     <NodeToolbar
@@ -368,20 +379,6 @@ function SelectToolbar({
       offset={20}
       className="select-toolbar"
     >
-      <div className="seg" role="radiogroup" aria-label="掌握度">
-        {STATUS.map(([s, label]) => (
-          <button
-            key={s}
-            role="radio"
-            aria-checked={n.status === s}
-            className={n.status === s ? "on" : ""}
-            onClick={() => data.onStatus?.(n.id, s)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <span className="sep" />
       <button
         className="icon"
         {...tip("改标题", "F2")}
@@ -436,8 +433,48 @@ function SelectToolbar({
       >
         <Sparkles size={15} className="ico" />
       </button>
+      <span className="more">
+        <button
+          className="icon"
+          {...tip("更多操作")}
+          aria-haspopup="menu"
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen((o) => !o)}
+        >
+          <MoreHorizontal size={15} className="ico" />
+        </button>
+        {moreOpen && (
+          <Menu className="card-menu" onClose={() => setMoreOpen(false)}>
+            {/* Mastery comes from the four beats; this is only a manual override. */}
+            <div className="dig-head">手动标记掌握度</div>
+            {STATUS.map(([s, label]) => (
+              <button
+                key={s}
+                className="it"
+                role="menuitemradio"
+                aria-checked={n.status === s}
+                onClick={() => {
+                  data.onStatus?.(n.id, s);
+                  setMoreOpen(false);
+                }}
+              >
+                {n.status === s ? <Check size={14} className="ico" /> : <span className="ico-gap" />}
+                {label}
+              </button>
+            ))}
+          </Menu>
+        )}
+      </span>
     </NodeToolbar>
   );
+}
+
+/** The card face shows the first one or two sentences of the body. */
+export function faceText(body: string): string {
+  const parts = body.replace(/\s*\n+\s*/g, " ").match(/[^。！？!?]+[。！？!?]?/g) ?? [body];
+  let out = parts[0] ?? "";
+  if (parts[1] && [...out].length + [...parts[1]].length <= 70) out += parts[1];
+  return out.trim();
 }
 
 export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
@@ -462,20 +499,37 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
       {data.generating && <BorderBeam />}
       {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />
-      {n.status === "explained" && <Seal />}
+      {n.status === "explained" && <Seal light={n.seal === "probe"} />}
+      {data.station !== undefined && (
+        <span className={`station ${data.isNext ? "next" : ""} ${n.status === "explained" ? "sealed" : ""}`} aria-label={`第 ${data.station} 站`}>
+          {data.station}
+        </span>
+      )}
+      {data.isNext && <span className="next-tag">下一步</span>}
       <div className="card-heading">
         <Title data={data} as="h3" />
         {data.no && <span className="no">{data.no}</span>}
       </div>
-      {/* Compact face: the one-line summary when the card has one; the drawer shows the rest. */}
-      {(n.summary || n.body) && (
-        <p className={n.summary ? "face-summary" : undefined}>
-          {n.summary || n.body}
-        </p>
+      {/* Compact face: the first sentence or two of the prose; the drawer shows all of it. */}
+      {n.body && <p className="face-body">{faceText(n.body)}</p>}
+      {data.isNext && data.onStartNext && (
+        <button
+          className="btn primary start-stop nodrag nopan"
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onStartNext?.();
+          }}
+        >
+          {n.beat ? "继续这一站" : "开始这一站"}
+        </button>
       )}
-      {(data.onNote || n.visual || n.hand || n.depthType) && (
+      {data.station !== undefined && n.status !== "explained" && (n.beat || data.isNext) && (
+        <span className="beat-line" aria-hidden="true">
+          <i style={{ width: `${beatProgress(n) * 100}%` }} />
+        </span>
+      )}
+      {(data.onNote || n.visual || n.hand) && (
         <div className="meta">
-          <DepthTag card={n} />
           {data.onNote && (
             <button className="chip-fig nodrag nopan" onClick={openNote}>
               <BookOpen size={13} className="ico" />

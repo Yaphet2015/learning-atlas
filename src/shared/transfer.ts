@@ -109,6 +109,25 @@ export function completeMessages(
   ];
 }
 
+/**
+ * What leaves the app: the board without internal card data. node.meta holds the new-knowledge
+ * gate's working fields (newIdea, substance, addsBeyond, claims, scores) and check marking keys;
+ * none of it is ever rendered or exported.
+ */
+export function publicBoard(board: Board): Board {
+  const strip = <T extends { meta?: unknown }>(n: T): T => {
+    const { meta: _meta, ...rest } = n;
+    return rest as T;
+  };
+  return {
+    ...board,
+    nodes: board.nodes.map(strip),
+    ...(board.cardArchives
+      ? { cardArchives: board.cardArchives.map((a) => ({ ...a, node: strip(a.node) })) }
+      : {}),
+  };
+}
+
 export async function collectBoardTransfer(
   input: Board,
   getHistory: (
@@ -116,7 +135,7 @@ export async function collectBoardTransfer(
     noteId: string,
   ) => Promise<{ messages: ChatMessage[]; running: boolean }>,
 ): Promise<BoardTransfer> {
-  const board = boardSchema.parse(input);
+  const board = publicBoard(boardSchema.parse(input));
   const conversations: BoardTransfer["conversations"] = [];
   for (const note of board.notes) {
     const history = await getHistory(board.id, note.id);
@@ -202,6 +221,7 @@ export function transferMarkdown(transfer: BoardTransfer): string {
           text(n.body),
           "",
         );
+        if (n.check?.q) out.push(`检查题：${text(n.check.q)}`, "");
         if (n.hand) out.push(`我的批注：${text(n.hand)}`, "");
         if (n.visual)
           out.push(

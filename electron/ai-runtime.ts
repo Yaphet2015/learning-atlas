@@ -75,6 +75,7 @@ import {
   canvasTutorInstructions,
   maxOutputTokens,
   modeTemperature,
+  modeThinking,
   renderScopedContext,
   tutorInstructions,
 } from "./prompts.js";
@@ -389,7 +390,9 @@ function buildProvider(baseUrl: string, model: string): Provider {
         provider: "openai",
         api: "openai-completions",
         baseUrl,
-        reasoning: false,
+        // DeepSeek V4 thinks by default; marking it a reasoning model lets pi-ai send
+        // thinking:{type:"disabled"} when no thinking level is set (cheap structured modes).
+        reasoning: deepSeekV4,
         input: ["text"],
         contextWindow: deepSeekV4 ? 1_000_000 : 32768,
         maxTokens: maxOutputTokens(model),
@@ -1112,7 +1115,7 @@ export class AIRuntime {
               useCanvas ? undefined : modeTemperature(request.mode),
             ),
           },
-          thinkingLevel: useCanvas ? "low" : undefined,
+          thinkingLevel: useCanvas ? "low" : modeThinking(request.mode),
           extensions: [
             tutor,
             ...(useCanvas ? [this.canvasExtension!] : []),

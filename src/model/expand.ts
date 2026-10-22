@@ -56,3 +56,9 @@ function basePrompt(title: string, ladder: string, known: string[]): string {
   return `围绕「${title}」补充 2–4 个有帮助的新概念或具体子问题。先检查白板结构和已有子概念，避免重复或换句话重述已有内容；已展开过仍可继续补充。按知识关系设置 parent：同层概念放到共同父节点下，组成、原理或细节才放到对应概念下。先解释它如何工作或用一个例子拆开，不要一次铺开整个领域；不要按提问先后逐层往下挂。${ladder ? `\n${ladder}` : ""}${known.length ? `\n以下要点已经在画布上，新卡片不要重复它们，只补它们没讲到的新事实、机制、例子或判断标准：\n${known.map((k) => `- ${k}`).join("\n")}` : ""}
 输出前自查：每张新卡片至少带来一条上面没有的新信息，否则删去。如果这次没有值得补充的新内容，返回 {"nodes":[],"relations":[]}，不要勉强凑数。`;
 }
+
+/** A ghost hint the learner picked: exactly one card on that point, through the usual gate. */
+export function hintCardNote(title: string): string {
+  return `
+学习者从提示里选了这个方向：「${title.slice(0, 80)}」。只生成这 1 张卡：标题可以改写成一句结论，但必须讲这个点；正文和检查题照常给出。`;
+}

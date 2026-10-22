@@ -181,3 +181,35 @@ export function plannedBoard() {
   return board;
 }
 
+
+/** The insurance board on a numbered route: stop 1 sealed, stop 2 carries a choice check question. */
+export function routedBoard() {
+  const board: any = insuranceBoard(true);
+  board.route = ["c-what", "c-when-not", "c-how", "c-money"];
+  for (const n of board.nodes) if (n.status === "explained") n.status = "exploring";
+  const what = board.nodes.find((n: any) => n.id === "c-what");
+  Object.assign(what, { status: "explained", seal: "test", beat: "done" });
+  const when = board.nodes.find((n: any) => n.id === "c-when-not");
+  Object.assign(when, {
+    status: "unseen",
+    title: "等待期内确诊，保险公司通常不赔",
+    body: "合同生效后有一段等待期，比如 90 天（示例），这期间确诊合同列明的重疾，通常只退保费不赔保额。它防的是“带病投保”：知道自己快病了才去买。",
+    check: {
+      q: "小李投保第 2 个月确诊合同列明的重疾，最可能卡在哪一条？",
+      options: ["疾病定义", "等待期", "免责条款"],
+    },
+    meta: {
+      gate: {
+        newIdea: "SECRET-NEWIDEA 等待期防带病投保",
+        addsBeyond: "SECRET-ADDSBEYOND 比父卡多了等待期",
+        claims: ["SECRET-CLAIM 等待期内确诊通常不赔"],
+        simParent: 0.123,
+        simMax: 0.456,
+        decidedBy: "judge",
+        judgeAdds: "SECRET-JUDGE",
+      },
+      check: { keyPoints: ["SECRET-KEYPOINT 等待期内确诊不赔"], answer: 1 },
+    },
+  });
+  return board;
+}
