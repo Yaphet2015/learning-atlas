@@ -4473,7 +4473,7 @@ kbd,
 .next-step .btn {
   flex: none;
 }
-.btn.ghost {
+.btn.quiet {
   background: transparent;
   border-color: transparent;
   color: var(--ink-2);

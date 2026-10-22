@@ -2062,7 +2062,7 @@ export default function App() {
           isNext: nextId === n.id,
           ...(nextId === n.id ? { onStartNext: () => startNextRef.current() } : {}),
           // Ghost hints only on the current stop or a card the learner picked (no 大海感).
-          ...(settings.configured && tool === "select" && (nextId === n.id || selectedNodeId === n.id)
+          ...(settings.configured && tool === "select" && (!board.route?.length || nextId === n.id || selectedNodeId === n.id)
             ? {
                 hints: cachedHints(board, n.id),
                 onWantHints: wantHints,

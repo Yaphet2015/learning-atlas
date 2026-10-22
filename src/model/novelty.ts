@@ -128,7 +128,7 @@ export function cheapGate(
     reasons.push("正文里的示例数字旁要写明“比如/示例”");
   // 5. The check question must use a new situation.
   const q = card.check?.q ?? "";
-  if (q && (containment(q, body) >= 0.5 || /是什么[？?]?$|重要吗[？?]?$/.test(q.trim())))
+  if (q && (containment(q, body) >= 0.5 || /是什么[？?]?$|重要吗[？?]?$|^什么是/.test(q.trim())))
     reasons.push("检查题在复述正文，要换成新情境");
   const answer = card.check?.options?.[card.check.answer ?? -1];
   if (answer && answer.length >= 6 && norm(body).includes(norm(answer)))

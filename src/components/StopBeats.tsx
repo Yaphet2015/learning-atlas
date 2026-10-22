@@ -14,31 +14,20 @@ export interface StudyProps {
   stuck?: React.ReactNode;
 }
 
-const prose = (body: string) =>
-  body
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+const BULLET = /^\s*([-•·]|\d+[.、])\s*/;
 
-/** Title + one natural paragraph; a list only when the text itself is one. */
+/** Title + natural prose (pre-wrap keeps paragraphs); a list only when every line is an item. */
 export function CardProse({ body }: { body: string }) {
-  return (
-    <>
-      {prose(body).map((p, i) =>
-        /^([-•·]|\d+[.、])\s/m.test(p) && p.includes("\n") ? (
-          <ul key={i} className="card-list">
-            {p.split("\n").map((l, j) => (
-              <li key={j}>{l.replace(/^([-•·]|\d+[.、])\s*/, "")}</li>
-            ))}
-          </ul>
-        ) : (
-          <p key={i} className="card-body">
-            {p}
-          </p>
-        ),
-      )}
-    </>
-  );
+  const lines = body.split("\n").filter((l) => l.trim());
+  if (lines.length >= 2 && lines.every((l) => BULLET.test(l)))
+    return (
+      <ul className="card-list">
+        {lines.map((l, i) => (
+          <li key={i}>{l.replace(BULLET, "")}</li>
+        ))}
+      </ul>
+    );
+  return <p className="card-body">{body}</p>;
 }
 
 /** The four beats of one stop: 先猜 → 学 → 讲 → 测; passing 测 earns the A seal. */

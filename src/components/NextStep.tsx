@@ -63,7 +63,7 @@ export function NextStepBar({
         开始 <span className="kbd">↵</span>
       </button>
       {onSkip && step.kind !== "wrap" && (
-        <button className="btn ghost" onClick={onSkip}>
+        <button className="btn quiet" onClick={onSkip}>
           换一个
         </button>
       )}
