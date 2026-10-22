@@ -57,7 +57,7 @@ export type CardData = {
   /** AI ghost hints for the '+' handles (only with a provider configured). */
   hints?: CardHints;
   onWantHints?: (id: string, on: boolean) => void;
-  onHint?: (id: string, side: HintSide, title: string) => void;
+  onHint?: (id: string, side: HintSide, title: string, angle?: DigAngle) => void;
   onPreviewAdd?: (id: string | null) => void;
   onScene?: (patch: Partial<SceneState>) => void;
   onNote?: (id: string) => void;
@@ -174,13 +174,54 @@ function GhostHint({ data, side }: { data: CardData; side: HintSide }) {
     side === "right" && data.concept.parentId === null
       ? "加并列的起点"
       : HINT_LABEL[side];
+  const angle = data.hints?.angles?.[side];
+  const more = side === "below" ? (data.hints?.more ?? []) : [];
+  return (
+    <>
+      <GhostButton
+        className={`ghost-hint ${side}`}
+        label={label}
+        text={text}
+        angle={angle}
+        onPick={() => data.onHint?.(data.concept.id, side, text, angle)}
+      />
+      {more.map((m, i) => (
+        <GhostButton
+          key={m.angle}
+          className={`ghost-hint alt alt-${i + 1}`}
+          label={label}
+          text={m.text}
+          angle={m.angle}
+          onPick={() => data.onHint?.(data.concept.id, "below", m.text, m.angle)}
+        />
+      ))}
+    </>
+  );
+}
+
+function GhostButton({
+  className,
+  label,
+  text,
+  angle,
+  onPick,
+}: {
+  className: string;
+  label: string;
+  text: string;
+  angle?: DigAngle;
+  onPick: () => void;
+}) {
+  // The angle tag is drawn by CSS from data-angle-label, so the button's text stays the title.
   return (
     <button
-      className={`ghost-hint ${side} nodrag nopan`}
-      aria-label={`AI 提示 · ${label}：${text}`}
+      className={`${className} nodrag nopan`}
+      data-angle={angle}
+      data-angle-label={angle ? ANGLE_LABEL[angle] : undefined}
+      aria-label={`AI 提示 · ${label}${angle ? ` · ${ANGLE_LABEL[angle]}` : ""}：${text}`}
       onClick={(e) => {
         e.stopPropagation();
-        data.onHint?.(data.concept.id, side, text);
+        onPick();
       }}
     >
       <Sparkles size={11} className="ico" aria-hidden="true" />

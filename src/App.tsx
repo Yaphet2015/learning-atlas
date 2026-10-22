@@ -60,7 +60,7 @@ import {
 import { tip, TooltipLayer } from "./components/Tooltip";
 import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
-import type { DigAngle } from "./model/angles";
+import { ANGLE_DEPTH, type DigAngle } from "./model/angles";
 import { expandPrompt } from "./model/expand";
 import { applyEnrichment, enrichPrompt } from "./model/enrich";
 import {
@@ -1700,7 +1700,7 @@ export default function App() {
   }, []);
   /** Clicking a ghost hint grows that card with the suggested title. */
   const growFromHint = useCallback(
-    (from: string, side: HintSide, title: string) => {
+    (from: string, side: HintSide, title: string, angle?: DigAngle) => {
       const b = boardRef.current;
       const node = b?.nodes.find((n) => n.id === from);
       if (!b || !node) return;
@@ -1719,7 +1719,11 @@ export default function App() {
                 : addSibling(current, from, id);
         return {
           ...grown,
-          nodes: grown.nodes.map((n) => (n.id === id ? { ...n, title } : n)),
+          nodes: grown.nodes.map((n) =>
+            n.id === id
+              ? { ...n, title, ...(angle ? { depthType: ANGLE_DEPTH[angle] } : {}) }
+              : n,
+          ),
         };
       });
       setSelection({ kind: "node", id });

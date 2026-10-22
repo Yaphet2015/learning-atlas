@@ -25,6 +25,7 @@ export const pointSchema = z
   .strict();
 export const understandingSchema = z.enum(["unseen", "exploring", "explained"]);
 export const colorSchema = z.enum(["sage", "blue", "peach", "lavender"]);
+const hintAngleSchema = z.enum(["why", "how", "example", "edge", "compare", "apply"]);
 const timestampSchema = z.iso.datetime({ offset: true });
 const nonemptyText = (max: number) =>
   z
@@ -124,6 +125,20 @@ export const conceptNodeSchema = z
         below: z.string().max(40).optional(),
         right: z.string().max(40).optional(),
         above: z.string().max(40).optional(),
+        angles: z
+          .object({
+            below: hintAngleSchema.optional(),
+            right: hintAngleSchema.optional(),
+            above: hintAngleSchema.optional(),
+          })
+          .strict()
+          .optional(),
+        more: z
+          .array(
+            z.object({ angle: hintAngleSchema, text: z.string().max(40) }).strict(),
+          )
+          .max(2)
+          .optional(),
       })
       .strict()
       .optional(),

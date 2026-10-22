@@ -1,7 +1,7 @@
-import type { DepthType } from "../shared/types";
+import type { DepthType, HintAngle } from "../shared/types";
 
 /** Which way to dig under a card: chosen by the learner, it steers the expand prompt. */
-export type DigAngle = "why" | "how" | "example" | "edge" | "compare" | "apply";
+export type DigAngle = HintAngle;
 export const DIG_ANGLES: DigAngle[] = ["why", "how", "example", "edge", "compare", "apply"];
 
 export const ANGLE_LABEL: Record<DigAngle, string> = {
