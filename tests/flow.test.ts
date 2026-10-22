@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Board, ConceptNode } from "../src/shared/types";
-import { cheapGate, clearJudgeCache, runGate, similarity, type RawCard } from "../src/model/novelty";
+import { cheapGate, clearJudgeCache, evasionRisk, runGate, similarity, type RawCard } from "../src/model/novelty";
 import { applyGate } from "../src/model/gate";
 import { nextStep } from "../src/model/next-step";
 import { defaultRoute } from "../src/model/route";
@@ -59,6 +59,21 @@ const GOOD: RawCard = {
 };
 
 describe("new-knowledge gate: cheap checks (no LLM)", () => {
+  it("rejects advice to evade disclosure, tax or legal duties; soft phrasing goes to the judge", () => {
+    const tail = "（示例）比如年收入 20 万。";
+    const strong = { ...GOOD, body: "等待期内体检要小心，稳妥做法是把非紧急体检挪到等待期后，避免留下争议记录。" + tail };
+    const v = cheapGate(strong, insurance(), "pay");
+    expect(v.kind).toBe("reject");
+    expect(v.kind === "reject" && v.reasons.join()).toMatch(/规避如实告知/);
+    expect(cheapGate({ ...GOOD, title: "小毛病可以隐瞒不报" }, insurance(), "pay").kind).toBe("reject");
+    // Soft phrasing in an insurance topic: borderline, not silently accepted.
+    const soft = { ...GOOD, body: GOOD.body + "有人会把体检推迟到投保之后。" };
+    expect(cheapGate(soft, insurance(), "pay").kind).toBe("borderline");
+    expect(evasionRisk("把复查推迟到下周", "怎么学好钢琴")).toBeNull();
+    // Explaining the duty itself is fine.
+    expect(evasionRisk("投保前必须如实告知体检异常，否则保险公司可以拒赔。", "重疾险")).toBeNull();
+    expect(cheapGate(GOOD, insurance(), "pay").kind).toBe("accept");
+  });
   it("accepts a good, deep card", () => {
     expect(cheapGate(GOOD, insurance(), "pay").kind).toBe("accept");
   });
