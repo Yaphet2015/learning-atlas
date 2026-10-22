@@ -5,10 +5,23 @@ import type { AIRequest, ContextBundle } from "../src/shared/types.js";
 const ANSWER_STYLE = `先直接回答问题，再讲清背后的机制或原因，并给一个具体例子；适合时再给一个类比、可尝试的小练习或检查理解的问题。通常 300–600 个汉字，简单问题可以更短，复杂问题不超过 900 个汉字；不要用空话凑篇幅。
 格式约定（界面会按它分块显示）：结构化内容用编号列表，每项以 **短标题**：开头；类比、小练习、检查题分别另起一段，以“类比：”“小练习：”“检查：”开头。只用 **粗体** 强调，不要用标题、表格、引用或代码块。`;
 
+/** The card schema and the §4.7 constraints, shared by generation and the slim regenerate call. */
+const CARD_FORMAT = `格式为 {"nodes":[{"id":"c1","title":"一句结论","body":"2–4 句自然的讲解","newIdea":"新知识点","substance":[{"kind":"mechanism","text":"机制"},{"kind":"example","text":"例子","isExample":true}],"addsBeyond":"比父卡和兄弟卡多了什么","claims":["关键论断"],"check":{"q":"新情境检查题","options":["选项A","选项B","选项C"],"answer":1,"keyPoints":["答对必须说到的要点"]},"parent":"anchor"}],"relations":[{"source":"c2","target":"c4","label":"对照"}]}。
+每张卡必须给出一个父卡和兄弟卡里都没有的新知识点。可以讲得很深，不必迁就新手；用户可以继续往下拆或追问。
+title 用一句结论说出这个新知识点（最多 24 字），不要只写话题名。
+body 用 2–4 句自然、清楚、简洁的中文讲明白它（最多 160 字），把机制或具体例子写进句子里。不要用“新知识点：”“机制：”“例子：”这类小标题；只有内容确实是并列要点或步骤时才用列表。
+禁止：换个说法复述父卡；“很重要”“需要综合考虑”“因人而异”这类空话；只有定义没有机制或例子的卡。
+另外在 newIdea（≤30 字）、substance（kind 取 mechanism / example / number / counterintuitive / distinction）、addsBeyond、claims（1–3 条）里给出结构化说明，供内部检查，不会展示给用户；substance 里的每一项都必须出现在 body 中。
+不要编造具体金额、费率或条款编号；需要数字时在 body 里写明“比如”或“示例”，对应的 substance 项写 "isExample":true。
+检查题 check.q 必须把新知识点用到一个卡片中没出现过的情境里，答对需要推理，不能靠复制原文；不出“X 是什么？”“X 重要吗？”。可以是 3 个选项的情境选择题（错误选项对应常见误解，answer 为正确选项下标），也可以省略 options 让学习者用一句话回答。keyPoints 写判定答对必须提到的 1–2 个要点。`;
+
 export function tutorInstructions(mode: AIRequest["mode"]): string {
   // The gate judge and the check marker are short, cheap calls: no tutor preamble.
   if (mode === "gate")
     return "你是严格、简短的学习卡片审稿人。只依据提示里的候选卡片和比较对象判断，只输出提示要求的 JSON，不要解释。";
+  if (mode === "regen")
+    return `你是严格、简短的学习卡片作者。只按提示重写列出的候选卡片，id 保持不变，只输出一个有效 JSON 对象 {"nodes":[…],"relations":[]}，不要解释。
+${CARD_FORMAT}`;
   if (mode === "mark")
     return "你是简短的判题老师。只依据题目、要点和学习者的回答判定，只输出提示要求的 JSON，不要解释。";
   const base = `你是 Studyboard 的中文学习教练。用简洁、具体、容易想象的语言帮助初学者。
@@ -66,15 +79,8 @@ below 必须是当前概念包含的子问题；right 必须与当前卡片抽�
 visuals 只能给提示里列出的新卡片，每张最多一个：visual 格式为 {"kind":"process"或"parts"或"comparison","title":"可选短标题","labels":["短标签1","短标签2"],"caption":"可选的一句话图解","basis":"literal"或"analogy"}。只在图示真正有助于理解时给：process 用于步骤或因果，parts 用于组成，comparison 用于并列对照；labels 必须 2–4 个、每个最多 12 字，title 最多 20 字、caption 最多 50 字。visual 只描述受控绘图的数据，不包含 HTML、SVG、CSS 或代码。忠实示意实际关系用 basis:"literal"；为了帮助理解而作的类比必须用 basis:"analogy"，并在 caption 点明类比。不可捏造数字、比例、测量值或因果事实。宁可少画，不要用长段文字充当图解。
 overviews 是缩小画布时显示的主题概览：为这批新卡片所在的主题分支各写一句概括这张卡片及其子树的话，id 用资料中的卡片 id，每次最多 12 条、每句最多 80 字，不重复标题，不列清单，不包含学习进度。优先覆盖起点下第一至第三层的主题。只能依据提供的完整正文概括；子树有未提供或 bodyExcluded 的正文时，省略该主题的摘要。`;
   return `${base}输出是可阅读的纯文本数据。\n本次只输出一个有效 JSON 对象，不要 Markdown 代码围栏或额外说明。
-格式为 {"nodes":[{"id":"c1","title":"一句结论","body":"2–4 句自然的讲解","newIdea":"新知识点","substance":[{"kind":"mechanism","text":"机制"},{"kind":"example","text":"例子","isExample":true}],"addsBeyond":"比父卡和兄弟卡多了什么","claims":["关键论断"],"check":{"q":"新情境检查题","options":["选项A","选项B","选项C"],"answer":1,"keyPoints":["答对必须说到的要点"]},"parent":"anchor"}],"relations":[{"source":"c2","target":"c4","label":"对照"}]}。
-每张卡必须给出一个父卡和兄弟卡里都没有的新知识点。可以讲得很深，不必迁就新手；用户可以继续往下拆或追问。
-title 用一句结论说出这个新知识点（最多 24 字），不要只写话题名。
-body 用 2–4 句自然、清楚、简洁的中文讲明白它（最多 160 字），把机制或具体例子写进句子里。不要用“新知识点：”“机制：”“例子：”这类小标题；只有内容确实是并列要点或步骤时才用列表。
-禁止：换个说法复述父卡；“很重要”“需要综合考虑”“因人而异”这类空话；只有定义没有机制或例子的卡。
-另外在 newIdea（≤30 字）、substance（kind 取 mechanism / example / number / counterintuitive / distinction）、addsBeyond、claims（1–3 条）里给出结构化说明，供内部检查，不会展示给用户；substance 里的每一项都必须出现在 body 中。
-不要编造具体金额、费率或条款编号；需要数字时在 body 里写明“比如”或“示例”，对应的 substance 项写 "isExample":true。
-检查题 check.q 必须把新知识点用到一个卡片中没出现过的情境里，答对需要推理，不能靠复制原文；不出“X 是什么？”“X 重要吗？”。可以是 3 个选项的情境选择题（错误选项对应常见误解，answer 为正确选项下标），也可以省略 options 让学习者用一句话回答。keyPoints 写判定答对必须提到的 1–2 个要点。
-${mode === "map" ? "第一层给 3–5 个大图景节点，按“互不重叠、合起来覆盖整个问题”来拆；这些大图景节点作为 anchor 的直接子节点。必要时可在个别大图景节点下补充具体细节，总节点数不超过 6。" : '围绕选中的概念（anchor）给出 2–4 个有帮助的新概念或具体子问题。优先深入它的组成、原理或细节；若内容属于同层或其他已有分支，必须放到对应的知识位置。已展开过仍可继续补充，先检查已有子概念，不要重复或换句话重述已有内容。如果这次没有值得补充的新内容，返回 {"nodes":[],"relations":[]}，不要勉强凑数；这只表示本次没有新补充，不表示知识已穷尽。'}
+${CARD_FORMAT}
+${mode === "map" ? "第一层给 3–5 个大图景节点，按“互不重叠、合起来覆盖整个问题”来拆；这些大图景节点作为 anchor 的直接子节点。必要时可在个别大图景节点下补充具体细节，总节点数不超过 6。" : '围绕选中的概念（anchor）给出 2–3 个有帮助的新概念或具体子问题。优先深入它的组成、原理或细节；若内容属于同层或其他已有分支，必须放到对应的知识位置。已展开过仍可继续补充，先检查已有子概念，不要重复或换句话重述已有内容。如果这次没有值得补充的新内容，返回 {"nodes":[],"relations":[]}，不要勉强凑数；这只表示本次没有新补充，不表示知识已穷尽。'}
 每个节点必须用 parent 明确指定知识上的父节点："anchor" 表示当前卡片；白板大纲 [id:…] 中的已有卡片 id 表示挂到该卡片下；本次新节点的 id 表示挂到该新节点下；null 表示一个并列的顶层起点。只引用大纲或明确提供的上下文里可见的已有 id，不能使用 § 编号或臆造 id。不得形成循环。
 先判断新概念属于哪个整体，再设置 parent。同层概念共用父节点，按阅读或学习顺序从左到右排列；知识细节才放到对应概念下。一次生成可以包含不同知识层级，但不得把阅读步骤逐项挂成向下的链，也不得把不同抽象程度的概念强放到同层。避免重复白板上已有的概念，优先复用已有父节点。
 例如当前卡片是 HTTP，其父节点是网络通信：新增 TCP 时 parent 应是网络通信的已有 id；新增 HTTP 请求时 parent 是 "anchor"；同时解释 HTTP 请求的请求头时，请求头的 parent 是本次 HTTP 请求节点的 id。若当前卡片本身是顶层起点，同层的新起点用 parent:null。
@@ -127,10 +133,19 @@ export function canvasBundle(context: ContextBundle): ContextBundle {
  * conversations (drawer answers, organize) keep the provider default.
  */
 export function modeTemperature(mode: AIRequest["mode"]): number | undefined {
-  if (mode === "map" || mode === "expand" || mode === "plan") return 0.4;
+  if (mode === "map" || mode === "expand" || mode === "plan" || mode === "regen") return 0.4;
   if (mode === "hint") return 0.7;
   if (mode === "gate" || mode === "mark") return 0;
   return undefined;
+}
+
+/**
+ * Thinking for structured (non-canvas) modes. Card generation, the gate, marking and the probe run
+ * with thinking off: their prompts carry the constraints and the gate catches weak cards, and
+ * DeepSeek's default high-effort thinking tripled the tokens per expansion. The plan keeps a little.
+ */
+export function modeThinking(mode: AIRequest["mode"]): "low" | undefined {
+  return mode === "plan" ? "low" : undefined;
 }
 
 /**

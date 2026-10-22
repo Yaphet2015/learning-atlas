@@ -307,7 +307,8 @@ export interface AIRequest {
     | "enrich"
     | "plan"
     | "gate"
-    | "mark";
+    | "mark"
+    | "regen";
 }
 export interface AIUpdate {
   boardId: string;

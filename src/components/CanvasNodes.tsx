@@ -15,6 +15,8 @@ import {
 } from "@xyflow/react";
 import {
   ArrowRight,
+  Check,
+  MoreHorizontal,
   BookOpen,
   ChevronRight,
   Image,
@@ -363,8 +365,12 @@ function SelectToolbar({
 }) {
   const n = data.concept;
   const [digOpen, setDigOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => {
-    if (!visible) setDigOpen(false);
+    if (!visible) {
+      setDigOpen(false);
+      setMoreOpen(false);
+    }
   }, [visible]);
   return (
     <NodeToolbar
@@ -373,20 +379,6 @@ function SelectToolbar({
       offset={20}
       className="select-toolbar"
     >
-      <div className="seg" role="radiogroup" aria-label="掌握度">
-        {STATUS.map(([s, label]) => (
-          <button
-            key={s}
-            role="radio"
-            aria-checked={n.status === s}
-            className={n.status === s ? "on" : ""}
-            onClick={() => data.onStatus?.(n.id, s)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <span className="sep" />
       <button
         className="icon"
         {...tip("改标题", "F2")}
@@ -441,6 +433,38 @@ function SelectToolbar({
       >
         <Sparkles size={15} className="ico" />
       </button>
+      <span className="more">
+        <button
+          className="icon"
+          {...tip("更多操作")}
+          aria-haspopup="menu"
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen((o) => !o)}
+        >
+          <MoreHorizontal size={15} className="ico" />
+        </button>
+        {moreOpen && (
+          <Menu className="card-menu" onClose={() => setMoreOpen(false)}>
+            {/* Mastery comes from the four beats; this is only a manual override. */}
+            <div className="dig-head">手动标记掌握度</div>
+            {STATUS.map(([s, label]) => (
+              <button
+                key={s}
+                className="it"
+                role="menuitemradio"
+                aria-checked={n.status === s}
+                onClick={() => {
+                  data.onStatus?.(n.id, s);
+                  setMoreOpen(false);
+                }}
+              >
+                {n.status === s ? <Check size={14} className="ico" /> : <span className="ico-gap" />}
+                {label}
+              </button>
+            ))}
+          </Menu>
+        )}
+      </span>
     </NodeToolbar>
   );
 }

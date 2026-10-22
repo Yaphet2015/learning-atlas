@@ -124,7 +124,7 @@ describe("new-knowledge gate: the full pipeline", () => {
       },
       "base",
     );
-    expect(calls).toEqual(["expand"]);
+    expect(calls).toEqual(["regen"]);
     expect(out.kept.map((k) => k.card.id)).toEqual(["gap"]);
     expect(out.dropped.map((d) => d.card.id)).toEqual(["bad"]);
     expect(out.calls).toEqual({ regen: 1, judge: 0 });

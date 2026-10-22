@@ -554,6 +554,7 @@ export const aiRequestSchema = z
       "plan",
       "gate",
       "mark",
+      "regen",
     ]),
   })
   .strict();

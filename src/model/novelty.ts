@@ -214,9 +214,22 @@ export const judgeKey = (card: RawCard, against: string) =>
   `${against}|${norm(card.title)}|${norm(String(card.body)).slice(0, 200)}`;
 
 /** The regenerate prompt: rewrite just the rejected cards, with the reasons. */
-export function regeneratePrompt(base: string, rejected: { card: RawCard; reasons: string[] }[], board: Board): string {
-  const existing = board.nodes.flatMap((n) => claimsOf(n)).slice(0, 40);
-  return `${base}
+/**
+ * The one regenerate call: self-contained and slim (no board context, no tutor preamble). It carries
+ * the topic, the parent card, the sibling titles and the existing claims; the slim "regen" system
+ * prompt carries the card schema.
+ */
+export function regeneratePrompt(
+  base: string,
+  rejected: { card: RawCard; reasons: string[] }[],
+  board: Board,
+  anchorId: string | null = null,
+): string {
+  const existing = board.nodes.flatMap((n) => claimsOf(n)).slice(0, 30);
+  const parent = anchorId ? board.nodes.find((n) => n.id === anchorId) : undefined;
+  const siblings = board.nodes.filter((n) => anchorId && n.parentId === anchorId).map((n) => n.title).slice(0, 12);
+  return `起点问题：${board.topic.slice(0, 200)}
+${parent ? `父卡（anchor）：「${parent.title}」${parent.body ? `：${parent.body.slice(0, 300)}` : ""}\n` : ""}${siblings.length ? `已有兄弟卡：${JSON.stringify(siblings)}\n` : ""}原始要求（节选）：${base.slice(0, 300)}
 上一轮有 ${rejected.length} 张候选没有通过新知识检查，请只重写这几张（同样的 JSON 格式，id 保持不变），逐条改掉问题：
 ${rejected.map(({ card, reasons }) => `- ${card.id}「${card.title}」：${reasons.join("；")}`).join("\n")}
 已有卡片的关键论断如下，不要重复：${JSON.stringify(existing)}`;
@@ -257,7 +270,7 @@ export async function runGate(
   text: string,
   board: Board,
   anchorId: string | null,
-  ask: (mode: "expand" | "gate", prompt: string) => Promise<string>,
+  ask: (mode: "regen" | "gate", prompt: string) => Promise<string>,
   regenBase: string,
 ): Promise<GateOutcome & { rest: Record<string, unknown> }> {
   const { cards, rest } = parseCards(text);
@@ -278,10 +291,10 @@ export async function runGate(
   };
   const rejected = pass(cards, false);
   if (rejected.length) {
-    const prompt = regeneratePrompt(regenBase, rejected, board);
+    const prompt = regeneratePrompt(regenBase, rejected, board, anchorId);
     out.calls.regen++;
     try {
-      const again = await ask("expand", prompt);
+      const again = await ask("regen", prompt);
       out.tokens += roughTokens(prompt, again);
       const ids = new Set(rejected.map((r) => r.card.id));
       const redo = parseCards(again).cards.filter((c) => ids.has(c.id));

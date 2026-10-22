@@ -98,7 +98,7 @@ export async function installFakeAtlas(
           );
         if (request.mode === "mark")
           return (window as any).__atlasMarkAnswers?.shift() ?? JSON.stringify({ pass: true, missing: "" });
-        if (request.mode === "expand")
+        if (request.mode === "expand" || request.mode === "regen")
           return gateFill(
             (window as any).__atlasExpansionAnswers?.shift() ??
             JSON.stringify({ nodes: [], relations: [] })
@@ -368,7 +368,7 @@ export async function installFakeAtlas(
             throw new Error("整理请求失败，请重试。");
           (request.mode === "hint"
             ? hints
-            : request.mode === "gate" || request.mode === "mark" || String(request.stickyId).includes("-gate-")
+            : request.mode === "gate" || request.mode === "mark" || request.mode === "regen" || String(request.stickyId).includes("-gate-")
               ? gates
             : request.mode === "enrich"
               ? enriches

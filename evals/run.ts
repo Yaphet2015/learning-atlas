@@ -114,6 +114,11 @@ async function chat(
             ? { temperature: opts.temperature }
             : {}),
           ...(opts.effort ? { reasoning_effort: opts.effort } : {}),
+          // Same as the app: DeepSeek V4 runs structured calls with thinking off unless asked
+          // (EVAL_THINKING=on reproduces the old default-thinking baseline).
+          ...(/deepseek/i.test(BASE) && process.env.EVAL_THINKING !== "on"
+            ? { thinking: { type: opts.effort ? "enabled" : "disabled" } }
+            : {}),
           messages: [{ role: "system", content: system }, ...turns],
         }),
         signal: abort.signal,
@@ -605,7 +610,7 @@ async function gateSample(t: EvalTopic, out: string) {
     const system = (m: string) => `${tutorInstructions(m as any)}\n\n${renderScopedContext(context)}`;
     const first = await chat(system(mode), prompt, { temperature: modeTemperature(mode) });
     const outcome = await runGate(first.content, board, anchorId, async (m, p) =>
-      (await chat(m === "gate" ? tutorInstructions("gate") : system("expand"), p, { temperature: modeTemperature(m) })).content, prompt);
+      (await chat(tutorInstructions(m), p, { temperature: modeTemperature(m) })).content, prompt);
     const applied = applyGate(board, anchorId, outcome, mode, context);
     board = applied.board;
     const after = usageNow();
