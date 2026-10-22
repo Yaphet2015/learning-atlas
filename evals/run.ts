@@ -25,7 +25,6 @@ import {
   kickoffSkeleton,
   learnerAnswers,
 } from "../src/model/kickoff";
-import { applyCritique, critiquePrompt } from "../src/model/critique";
 import {
   confirmPlan,
   coveredBlocks,
@@ -166,10 +165,8 @@ async function chat(
 }
 
 interface Step {
-  kind: "map" | "expand" | "kickoff" | "plan" | "critique";
+  kind: "map" | "expand" | "kickoff" | "plan";
   parseRetries?: number;
-  dropped?: number;
-  revised?: number;
   round: number;
   anchor: string;
   anchorTitle: string;
@@ -227,11 +224,9 @@ async function generate(
         ms: r.ms,
         usage: r.usage,
       });
-      let next = buildMapFromAI(r.content, board, anchorId, mode, context);
+      const next = buildMapFromAI(r.content, board, anchorId, mode, context);
       step.added = next.nodes.length - board.nodes.length;
       delete step.error;
-      if (step.added > 0 && process.env.EVAL_CRITIQUE !== "0")
-        next = await critique(next, anchorId, board, steps, round);
       return next;
     } catch (e) {
       step.error = String((e as Error).message ?? e);
@@ -242,51 +237,6 @@ async function generate(
   return board;
 }
 
-/** The critique pass as App.tsx critiqueRef sends it (references scope, low effort). */
-async function critique(
-  board: Board,
-  anchorId: string,
-  before: Board,
-  steps: Step[],
-  round: number,
-): Promise<Board> {
-  const known = new Set(before.nodes.map((n) => n.id));
-  const ids = board.nodes.filter((n) => !known.has(n.id)).map((n) => n.id);
-  const virtual = newNote(board, { x: 0, y: 0 }, { kind: "node", id: anchorId });
-  const context = contextForNote(
-    { ...board, notes: [...board.notes, virtual] },
-    virtual.id,
-    undefined,
-    false,
-    "references",
-  );
-  const system = `${tutorInstructions("critique")}\n\n${renderScopedContext(context)}`;
-  const prompt = critiquePrompt(board, anchorId, ids);
-  const step: Step = {
-    kind: "critique",
-    round,
-    anchor: anchorId,
-    anchorTitle: board.nodes.find((n) => n.id === anchorId)?.title ?? "",
-    systemChars: system.length,
-    prompt,
-    added: 0,
-  };
-  steps.push(step);
-  try {
-    const r = await chat(system, prompt, {
-      temperature: modeTemperature("critique"),
-      effort: "low",
-    });
-    Object.assign(step, { raw: r.content, ms: r.ms, usage: r.usage, reasoningChars: r.reasoningChars });
-    const res = applyCritique(r.content, board, ids, board);
-    step.dropped = res.dropped.length;
-    step.revised = res.revised.length;
-    return res.board;
-  } catch (e) {
-    step.error = String((e as Error).message ?? e);
-    return board;
-  }
-}
 
 function levels(board: Board): EvalNode[] {
   const byId = new Map(board.nodes.map((n) => [n.id, n]));
@@ -686,8 +636,6 @@ async function main() {
       newInfo: r.metrics.newInfoRatio,
       avgBody: r.metrics.avgBodyChars,
       failedSteps: r.steps.filter((s: Step) => s.error).length,
-      critiqueDropped: r.steps.reduce((a: number, s: Step) => a + (s.dropped ?? 0), 0),
-      critiqueRevised: r.steps.reduce((a: number, s: Step) => a + (s.revised ?? 0), 0),
       parseRetries: r.steps.reduce((a: number, s: Step) => a + (s.parseRetries ?? 0), 0),
       emptyExpansions: r.steps.filter(
         (s: Step) => s.kind === "expand" && !s.error && s.added === 0,

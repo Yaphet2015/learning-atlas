@@ -32,9 +32,6 @@ ${ANSWER_STYLE}`;
 这些是画布上 '+' 旁的淡色提示，学习者点一下就会变成一张新卡片：每项是一个具体的短问题或短概念名，最多 14 个汉字，不加标点以外的修饰。
 只填提示里要求的方向，其余省略；不要重复白板上已有的卡片标题，参考“白板结构”让它和已有的兄弟、子卡片互不重叠。
 below 必须是当前概念包含的子问题；right 必须与当前卡片抽象程度相近；above 只补充理解最初起点主题必需的上位概念，不能借此扩展主题。某个方向没有符合主题和层级要求的新内容时，省略该方向，不勉强推荐。`;
-  if (mode === "critique")
-    return `${base}
-本次是生成后的快速审稿：只审用户提示里列出的新卡片，不生成新卡片。判断要严格但简短：偏离起点问题或学习目标、与画布已有要点重复、没有新信息的卡片要 revise 或 drop；合格的 keep。revise 时只改需要改的字段，keyPoints 只留新信息。只输出一个有效 JSON 对象，不要代码围栏或解释。`;
   if (mode === "plan")
     return `${base}
 本次只为起点问题拟定学习计划，不生成卡片。只输出一个有效 JSON 对象，不要 Markdown 代码围栏或额外说明：
@@ -121,7 +118,6 @@ export function canvasBundle(context: ContextBundle): ContextBundle {
 export function modeTemperature(mode: AIRequest["mode"]): number | undefined {
   if (mode === "map" || mode === "expand" || mode === "plan") return 0.4;
   if (mode === "hint") return 0.7;
-  if (mode === "critique") return 0.2;
   return undefined;
 }
 

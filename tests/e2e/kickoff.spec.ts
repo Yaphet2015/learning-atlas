@@ -61,10 +61,7 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   expect(asks[2].prompt).toContain("[b1] 白光由哪些颜色组成？");
   expect(asks[2].prompt).not.toContain("副虹");
   expect(asks[2].context.plan).toContain("学习目标：学完后，能解释彩虹");
-  // New cards get one quiet critique pass, then the enrich follow-up for the survivors.
-  await expect
-    .poll(() => page.evaluate(() => (window as any).__atlasCritiques.length))
-    .toBe(1);
+  // New cards get the quiet enrich follow-up.
   await expect
     .poll(() => page.evaluate(() => (window as any).__atlasEnriches.length))
     .toBe(1);

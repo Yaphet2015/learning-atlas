@@ -1112,8 +1112,7 @@ export class AIRuntime {
               useCanvas ? undefined : modeTemperature(request.mode),
             ),
           },
-          thinkingLevel:
-            useCanvas || request.mode === "critique" ? "low" : undefined,
+          thinkingLevel: useCanvas ? "low" : undefined,
           extensions: [
             tutor,
             ...(useCanvas ? [this.canvasExtension!] : []),
