@@ -25,31 +25,101 @@ for (const mode of ["light", "dark"] as const) {
   test(`摸底 · ${mode}`, async ({ page }) => {
     await setup(page, mode);
     await installFakeAtlas(page);
-    await page.addInitScript(() => {
-      (window as any).__atlasMarkAnswers = [JSON.stringify({ verdict: "wrong", missing: "" }), JSON.stringify({ verdict: "correct", missing: "" })];
-    });
+    await page.addInitScript(() => ((window as any).__atlasHold = true));
     await gotoApp(page);
+    await theme(page, mode);
+    const step = async () => {
+      await page.waitForFunction(() => typeof (window as any).__atlasRelease === "function");
+      await page.evaluate(() => {
+        const r = (window as any).__atlasRelease;
+        (window as any).__atlasRelease = undefined;
+        r();
+      });
+    };
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByRole("button", { name: /新的问题/ }).click();
     await page.getByLabel("新白板问题").fill("重疾险有哪些重要条款？");
     await page.getByRole("button", { name: "开始探索", exact: true }).click();
     const probe = page.locator(".drawer").getByRole("region", { name: "摸底" });
-    await expect(probe.locator(".rung.asking")).toContainText("L3");
-    await probe.getByLabel("我的回答").fill("确诊了就能赔");
-    await probe.getByRole("button", { name: /确定/ }).click();
-    await probe.getByLabel("我的回答").fill("给付型确诊就给钱，报销型按花费报");
-    await probe.getByRole("button", { name: /确定/ }).click();
-    await expect(probe.locator(".rung.asking")).toContainText("L2");
-    await theme(page, mode);
+    // (a) first question skeleton.
+    await expect(probe).toContainText("正在为「重疾险有哪些重要条款？」出第一道题…");
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${dir}/probe-skeleton-a-${mode}.png` });
+    await step();
+    // Question.
+    await expect(probe).toContainText("第 1 题");
+    await probe.getByRole("radio", { name: /说法乙/ }).click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${dir}/probe-question-${mode}.png` });
+    await probe.getByRole("button", { name: "确定" }).click();
+    await probe.getByRole("radio", { name: /说法甲/ }).click();
+    await probe.getByRole("button", { name: "确定" }).click();
     await probe.getByRole("radio", { name: /等待期/ }).click();
+    await probe.getByRole("button", { name: "确定" }).click();
+    // Refine skeleton (b, 在缩小范围…).
+    await expect(probe).toContainText("在缩小范围…");
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${dir}/probe-skeleton-b-refine-${mode}.png` });
+    await step();
+    await probe.getByRole("radio", { name: /说法甲/ }).click();
+    await probe.getByRole("button", { name: "确定" }).click();
+    // (c) computing the result (plan held).
+    await expect(probe).toContainText("正在确定你的起点…");
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${dir}/probe-skeleton-c-${mode}.png` });
+    await step();
+    await expect(probe).toContainText("你已经懂到");
     await page.waitForTimeout(400);
-    await page.screenshot({ path: `${dir}/01-probe-${mode}.png` });
-    await probe.getByRole("button", { name: /确定/ }).click();
-    const plan = page.locator(".drawer .plan-editor");
-    await plan.getByRole("button", { name: "确认计划，铺成第一层" }).click();
-    await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
-    await page.waitForTimeout(900);
-    await page.screenshot({ path: `${dir}/02-route-${mode}.png` });
+    await page.screenshot({ path: `${dir}/probe-result-${mode}.png` });
+  });
+
+  test(`摸底 expert · ${mode}`, async ({ page }) => {
+    await setup(page, mode);
+    await installFakeAtlas(page);
+    await page.addInitScript(() => ((window as any).__atlasHold = true));
+    await gotoApp(page);
+    await theme(page, mode);
+    const step = async () => {
+      await page.waitForFunction(() => typeof (window as any).__atlasRelease === "function");
+      await page.evaluate(() => {
+        const r = (window as any).__atlasRelease;
+        (window as any).__atlasRelease = undefined;
+        r();
+      });
+    };
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.getByRole("button", { name: /新的问题/ }).click();
+    await page.getByLabel("新白板问题").fill("重疾险有哪些重要条款？");
+    await page.getByRole("button", { name: "开始探索", exact: true }).click();
+    const probe = page.locator(".drawer").getByRole("region", { name: "摸底" });
+    await step();
+    // Expert: always right. Never shown the intro point first; expands deeper.
+    await expect(probe).toContainText("给付型 vs 报销型");
+    let shotB = false;
+    for (let i = 0; i < 60; i++) {
+      if (await probe.getByText("答对了，在往更深处找…").count()) {
+        if (!shotB) {
+          await page.waitForTimeout(500);
+          await page.screenshot({ path: `${dir}/probe-skeleton-b-${mode}.png` });
+          shotB = true;
+        }
+        await step();
+          }
+      if (await probe.getByText("正在确定你的起点…").count()) break;
+      const radio = probe.getByRole("radio", { name: /说法乙|等待期/ });
+      if (!(await radio.count())) {
+        await page.waitForTimeout(150);
+        continue;
+      }
+      await radio.first().click();
+      await probe.getByRole("button", { name: "确定" }).click();
+      await page.waitForTimeout(150);
+    }
+    await step();
+    await expect(probe).toContainText(/你懂得挺深|你已经懂到/);
+    await expect(probe.locator(".probe-start")).not.toContainText("生病了保险给钱");
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${dir}/probe-expert-result-${mode}.png` });
   });
 
   test(`卡住 · ${mode}`, async ({ page }) => {

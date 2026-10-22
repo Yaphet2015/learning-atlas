@@ -110,16 +110,19 @@ export async function installFakeAtlas(
           if (queued) return queued;
           if (request.prompt.includes("类比"))
             return JSON.stringify({ analogy: "就像新办的健身卡有一段冷静期：这段时间里出的事，不算在卡的保障里。" });
-          const descs = ["生病了保险给钱", "给付型 vs 报销型", "合同结构", "条款细读", "产品取舍", "专家细节"];
+          if (request.prompt.includes("这两点之间")) return JSON.stringify({ adjacent: true, points: [] });
+          const deeper = /学习者已经懂「([^」]+)」/.exec(request.prompt);
+          const descs = deeper
+            ? ["精算定价", "核保规则", "再保险安排", "监管口径"].map((d) => `${d}${((window as any).__atlasDeep = ((window as any).__atlasDeep ?? 0) + 1) > 4 ? " · " + Math.ceil((window as any).__atlasDeep / 4) : ""}`)
+            : ["生病了保险给钱", "给付型 vs 报销型", "合同结构", "条款细读", "产品取舍"];
           return JSON.stringify({
-            ladder: descs.map((desc, level) => ({
-              level,
-              desc,
-              keyPoints: ["要点" + level],
+            points: descs.map((desc, i) => ({
+              concept: desc,
+              keyPoints: ["要点" + i],
               probe:
-                level === 2
-                  ? { type: "choice", q: "小李投保第 2 个月确诊了合同列明的重疾。最可能卡在哪一条？", options: ["疾病定义：这种病不在合同里", "等待期：投保后一段时间内确诊不赔或只退保费", "免责条款：所有癌症都不赔"], answer: 1 }
-                  : { type: "explain", q: "一句话：" + desc + "是怎么回事？" },
+                !deeper && i === 2
+                  ? { q: "小李投保第 2 个月确诊了合同列明的重疾。最可能卡在哪一条？", options: ["疾病定义：这种病不在合同里", "等待期：投保后一段时间内确诊不赔或只退保费", "免责条款：所有癌症都不赔"], answer: 1 }
+                  : { q: `关于「${desc}」，下面哪个说法对？`, options: [`${desc}：说法甲`, `${desc}：说法乙`, `${desc}：说法丙`], answer: 1 },
             })),
           });
         }
@@ -425,6 +428,9 @@ export async function installFakeAtlas(
                 ? plans
                 : asks
           ).push(request);
+          // Screenshot hook: hold a probe generation until __atlasRelease() (to catch the skeletons).
+          if ((request.mode === "probe" || request.mode === "plan") && (window as any).__atlasHold)
+            await new Promise<void>((r) => ((window as any).__atlasRelease = r));
           if (request.canvas && (window as any).__atlasChatCanvas) {
             void startCanvas(request.boardId, "chat", request.requestId);
           }
