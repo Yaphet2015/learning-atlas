@@ -1,4 +1,4 @@
-import type { Board, BoardProgress } from "../shared/types";
+import type { Board, BoardProgress } from "../shared/types.js";
 
 /**
  * The sidebar's per-canvas progress, matching the 理解进度 pill: every card below the root is one
