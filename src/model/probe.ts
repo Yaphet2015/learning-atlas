@@ -154,7 +154,7 @@ export function probeResult(state: ProbeState, stations: number): string {
   if (state.status === "skipped") return "跳过也没关系，我会从最基础的开始排。";
   if (f <= 0) return "我们从最直观的地方开始。";
   if (f >= n) return "你已经很熟了。路线只留最深的专家细节，然后直接合起来讲。";
-  return `你已经懂「${state.ladder[f - 1].desc}」了。所以我们从「${state.ladder[f].desc}」开始，共 ${stations} 站。`;
+  return `你已经懂「${state.ladder[f - 1].desc}」了。所以我们从「${state.ladder[f].desc}」开始${stations ? `，共 ${stations} 站` : ""}。`;
 }
 
 /** The learner profile the plan and first level are written for. */

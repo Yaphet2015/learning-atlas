@@ -10,22 +10,20 @@ async function newQuestion(page: Page, topic: string) {
   await page.getByRole("button", { name: "开始探索", exact: true }).click();
 }
 
-test("a new question starts the guided kickoff and accepts the first level onto the canvas", async ({
+test("a new question starts the 摸底; skipping it drafts a plan and the first level lands on the canvas", async ({
   page,
 }) => {
   await installFakeAtlas(page);
   await newQuestion(page, "彩虹是怎么形成的？");
   const drawer = page.locator(".drawer");
-  // The AI asks what the learner already knows; the long instructions stay out of the thread.
-  await expect(drawer.locator(".msg.user")).toHaveText(
-    "我想从这里开始学，带我起步吧。",
-  );
-  await expect(drawer.locator(".msg.assistant")).toContainText("你听说过光的");
-  await drawer.getByLabel("向 AI 提问").fill("知道折射，但不懂为什么是弯的");
-  await drawer.getByLabel("发送提问").click();
-  await expect(drawer.locator(".msg.assistant")).toHaveCount(2);
-  // The primary action drafts a learning plan first; the learner edits it, then confirms.
-  await drawer.getByRole("button", { name: "拟定学习计划", exact: true }).click();
+  // The bisection probe replaces the open-ended kickoff questions.
+  const probe = drawer.getByRole("region", { name: "摸底" });
+  await expect(probe).toContainText("摸底 · 找到你的起点");
+  await expect(probe).toContainText("第 1 题 / 约 3 题");
+  await expect(probe.locator(".rung.asking")).toContainText("L3");
+  await probe.getByRole("button", { name: "跳过摸底" }).click();
+  await expect(probe).toContainText("跳过也没关系，我会从最基础的开始排。");
+  // The plan is drafted for a beginner; the learner edits it, then confirms.
   const plan = drawer.locator(".plan-editor");
   await expect(plan).toContainText("学完后，能解释彩虹");
   await expect(plan.locator(".plan-block")).toHaveCount(5);
@@ -37,7 +35,7 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   await expect(plan).toContainText("白光由哪些颜色组成？");
   const plans = await page.evaluate(() => (window as any).__atlasPlans);
   expect(plans).toHaveLength(1);
-  expect(plans[0].prompt).toContain("知道折射，但不懂为什么是弯的");
+  expect(plans[0].prompt).toContain("跳过了摸底");
   await plan.getByRole("button", { name: "确认计划，铺成第一层" }).click();
   await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
   // Side by side on the first level, not a vertical chain.
@@ -54,26 +52,21 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   await expect(page.locator(".react-flow__node-concept").first()).toContainText(
     "阳光里有哪些颜色？",
   );
-  // The map request carries what the learner said; the kickoff entry is gone once the level exists.
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
-  expect(asks.map((a: any) => a.mode)).toEqual(["answer", "answer", "map"]);
-  // The map request lays the confirmed skeleton, and later requests carry the plan.
-  expect(asks[2].prompt).toContain("[b1] 白光由哪些颜色组成？");
-  expect(asks[2].prompt).not.toContain("副虹");
-  expect(asks[2].context.plan).toContain("学习目标：学完后，能解释彩虹");
+  expect(asks.map((a: any) => a.mode)).toEqual(["map"]);
+  // The map request lays the confirmed skeleton, with the ladder levels, and carries the plan.
+  expect(asks[0].prompt).toContain("[b1] 白光由哪些颜色组成？");
+  expect(asks[0].prompt).not.toContain("副虹");
+  expect(asks[0].prompt).toContain("理解深度阶梯");
+  expect(asks[0].context.plan).toContain("学习目标：学完后，能解释彩虹");
   // New cards get the quiet enrich follow-up.
   await expect
     .poll(() => page.evaluate(() => (window as any).__atlasEnriches.length))
     .toBe(1);
-  // Conversation requests carry the outline; card bodies are read through tools.
-  expect(asks[1].canvas).toBe(true);
-  expect(asks[1].context.structure).toContain("白板结构");
-  expect(asks[1].context.review).toBeUndefined();
-  expect(asks[1].context.review).toBeUndefined();
-  expect(asks[2].context.topic).toBe("彩虹是怎么形成的？");
-  expect(asks[2].context.review.radius).toBe(4);
-  expect(asks[2].context.review.nodes).toHaveLength(1);
-  expect(asks[2].context.review.nodes[0].body).toBeTruthy();
+  expect(asks[0].context.topic).toBe("彩虹是怎么形成的？");
+  expect(asks[0].context.review.radius).toBe(4);
+  expect(asks[0].context.review.nodes).toHaveLength(1);
+  expect(asks[0].context.review.nodes[0].body).toBeTruthy();
   await expect(
     page.locator(".react-flow").getByRole("button", { name: /AI 带我开始/ }),
   ).toHaveCount(0);
@@ -82,18 +75,20 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   ).toHaveCount(0);
 });
 
-test("the lone root offers 「让 AI 带我开始」 and resumes the same conversation", async ({
+test("closing the drawer mid-摸底 leaves it as the next step, and 开始 resumes the same question", async ({
   page,
 }) => {
   await installFakeAtlas(page);
   await newQuestion(page, "彩虹是怎么形成的？");
-  await expect(page.locator(".drawer .msg.assistant")).toHaveCount(1);
+  await expect(page.locator(".drawer .rung.asking")).toContainText("L3");
   await page.locator(".drawer").getByLabel("关闭").click();
-  const kickoff = page.getByRole("button", { name: "继续：AI 带我开始" });
-  await expect(kickoff).toBeVisible();
-  await kickoff.click();
-  await expect(page.locator(".drawer .msg.assistant")).toHaveCount(1);
-  expect(await page.evaluate(() => (window as any).__atlasAsks.length)).toBe(1);
+  const bar = page.getByRole("region", { name: "下一步" });
+  await expect(bar).toContainText("继续摸底，找到你的起点");
+  await bar.getByRole("button", { name: /开始/ }).click();
+  await expect(page.locator(".drawer .rung.asking")).toContainText("L3");
+  const gates = await page.evaluate(() => (window as any).__atlasGates);
+  expect(gates.filter((g: any) => g.mode === "probe")).toHaveLength(1);
+  expect(await page.evaluate(() => (window as any).__atlasAsks.length)).toBe(0);
 });
 
 test("without an AI provider the kickoff leads to settings", async ({

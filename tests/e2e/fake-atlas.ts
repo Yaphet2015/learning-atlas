@@ -96,8 +96,33 @@ export async function installFakeAtlas(
               verdicts: [...request.prompt.matchAll(/"id":"([^"]+)","card"/g)].map((m: any) => ({ id: m[1], adds: "多了一个具体机制", pass: true })),
             })
           );
-        if (request.mode === "mark")
-          return (window as any).__atlasMarkAnswers?.shift() ?? JSON.stringify({ pass: true, missing: "" });
+        if (request.mode === "mark") {
+          const queued = (window as any).__atlasMarkAnswers?.shift();
+          if (queued) return queued;
+          if (request.prompt.startsWith("探测题"))
+            return JSON.stringify({ verdict: "correct", missing: "" });
+          if (request.prompt.startsWith("起点问题"))
+            return JSON.stringify({ lit: [...request.prompt.matchAll(/"id":"(s\d+)"/g)].map((m: any) => m[1]), pass: true, missing: "" });
+          return JSON.stringify({ pass: true, missing: "" });
+        }
+        if (request.mode === "probe") {
+          const queued = (window as any).__atlasProbeAnswers?.shift();
+          if (queued) return queued;
+          if (request.prompt.includes("类比"))
+            return JSON.stringify({ analogy: "就像新办的健身卡有一段冷静期：这段时间里出的事，不算在卡的保障里。" });
+          const descs = ["生病了保险给钱", "给付型 vs 报销型", "合同结构", "条款细读", "产品取舍", "专家细节"];
+          return JSON.stringify({
+            ladder: descs.map((desc, level) => ({
+              level,
+              desc,
+              keyPoints: ["要点" + level],
+              probe:
+                level === 2
+                  ? { type: "choice", q: "小李投保第 2 个月确诊了合同列明的重疾。最可能卡在哪一条？", options: ["疾病定义：这种病不在合同里", "等待期：投保后一段时间内确诊不赔或只退保费", "免责条款：所有癌症都不赔"], answer: 1 }
+                  : { type: "explain", q: "一句话：" + desc + "是怎么回事？" },
+            })),
+          });
+        }
         if (request.mode === "expand")
           return gateFill(
             (window as any).__atlasExpansionAnswers?.shift() ??
@@ -368,7 +393,7 @@ export async function installFakeAtlas(
             throw new Error("整理请求失败，请重试。");
           (request.mode === "hint"
             ? hints
-            : request.mode === "gate" || request.mode === "mark" || String(request.stickyId).includes("-gate-")
+            : request.mode === "gate" || request.mode === "mark" || request.mode === "probe" || String(request.stickyId).includes("-gate-")
               ? gates
             : request.mode === "enrich"
               ? enriches
