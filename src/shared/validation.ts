@@ -273,7 +273,9 @@ export const probeStateSchema = z
       .array(
         z
           .object({
-            level: z.number().int().min(0).max(5),
+            level: z.number().int().min(0).max(39),
+            id: z.string().max(16).optional(),
+            buildsOn: z.string().max(16).optional(),
             desc: z.string().max(80),
             keyPoints: z.array(z.string().max(120)).max(3),
             probe: z
@@ -287,12 +289,13 @@ export const probeStateSchema = z
           })
           .strict(),
       )
-      .max(6),
+      .max(40),
     answers: z
       .array(
         z
           .object({
-            level: z.number().int().min(0).max(5),
+            level: z.number().int().min(0).max(39),
+            pointId: z.string().max(16).optional(),
             verdict: probeVerdictSchema,
             text: z.string().max(1_000).optional(),
             missing: z.string().max(80).optional(),
@@ -300,8 +303,19 @@ export const probeStateSchema = z
           })
           .strict(),
       )
-      .max(8),
-    frontier: z.number().int().min(0).max(6).optional(),
+      .max(16),
+    frontier: z.number().int().min(0).max(39).optional(),
+    meta: z
+      .object({
+        expansions: z.number().int().min(0).max(10),
+        refines: z.number().int().min(0).max(10),
+        refined: z.array(z.string().max(40)).max(20),
+        adjacent: z.array(z.string().max(40)).max(20),
+        stopReason: z.enum(["precise+wrong3", "precise+idk", "precise", "idk", "skip", "cap"]).optional(),
+        tokens: z.object({ gen: z.number().min(0), grade: z.number().min(0) }).strict().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export const chatMessageSchema = z

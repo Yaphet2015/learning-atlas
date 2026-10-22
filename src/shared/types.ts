@@ -196,26 +196,47 @@ export interface Board {
   progress?: BoardProgress;
 }
 export type ProbeVerdict = "correct" | "partial" | "wrong" | "unsure";
+/** One concept point of the probe's internal chain (shallow → deep). Never shown as a level. */
 export interface LadderLevel {
+  /** Index in the chain (renumbered when points are inserted). */
   level: number;
+  /** Stable id; answers point at it (v1 boards have none: p<level>). */
+  id?: string;
+  /** The point this one builds on. */
+  buildsOn?: string;
   desc: string;
   keyPoints: string[];
   probe: { type: "choice" | "explain"; q: string; options?: string[]; answer?: number };
 }
 export interface ProbeAnswer {
+  /** Chain index when answered (v1); pointId is authoritative. */
   level: number;
+  pointId?: string;
   verdict: ProbeVerdict;
   text?: string;
   missing?: string;
-  /** The monotonicity recheck (the allowed 4th question). */
+  /** A contradiction recheck. */
   recheck?: boolean;
+}
+/** Internal bookkeeping (README §4); never rendered or exported. */
+export interface ProbeMeta {
+  expansions: number;
+  refines: number;
+  /** Pairs "lo|hi" a refine was tried on. */
+  refined: string[];
+  /** Pairs judged adjacent (nothing independent in between). */
+  adjacent: string[];
+  stopReason?: "precise+wrong3" | "precise+idk" | "precise" | "idk" | "skip" | "cap";
+  tokens?: { gen: number; grade: number };
 }
 export interface ProbeState {
   status: "asking" | "done" | "skipped";
+  /** The concept chain, shallow → deep. */
   ladder: LadderLevel[];
   answers: ProbeAnswer[];
-  /** The first level to learn: lo + 1 (0 = from the start). */
+  /** Chain index of the start point. */
   frontier?: number;
+  meta?: ProbeMeta;
 }
 export type PlanIntent =
   | "concept"
