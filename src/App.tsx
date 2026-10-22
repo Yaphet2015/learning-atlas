@@ -1296,6 +1296,7 @@ export default function App() {
           }
         } catch {
           setProbePhase(null);
+          if (boardRef.current?.probe?.status !== "asking") return;
           if (!state.ladder.length) {
             showToast("没出好题，先从头开始。可以在画布右上角 ⋯ 里重新摸底。");
             return finishProbe(skipProbe(undefined));
@@ -1305,6 +1306,8 @@ export default function App() {
         } finally {
           setProbePhase(null);
         }
+        // Skipped (or restarted) while the call ran: drop this result.
+        if (boardRef.current?.probe?.status !== "asking") return;
         // Keep the latest tokens written by genPoints.
         const t = boardRef.current?.probe?.meta?.tokens;
         if (t && state.meta) state = { ...state, meta: { ...state.meta, tokens: t } };

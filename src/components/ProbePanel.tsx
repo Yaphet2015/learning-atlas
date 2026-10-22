@@ -83,7 +83,7 @@ function Skeleton({ phase, topic, slow }: { phase: Exclude<ProbePhase, null>; to
 }
 
 /** 摸底 v2 (README): no levels, no scores, no right/wrong marks; one question at a time. */
-export function ProbePanel({ state, busy, phase, topic, onAnswer, onSkip, onStart, onRestart }: ProbeProps) {
+export function ProbePanel({ state, busy, phase, topic, stations, onAnswer, onSkip, onStart, onRestart, onFromStart }: ProbeProps) {
   const [choice, setChoice] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [why, setWhy] = useState(false);
@@ -192,7 +192,8 @@ export function ProbePanel({ state, busy, phase, topic, onAnswer, onSkip, onStar
         )}
         {o.knownList.length > 0 && (
           <ul className="probe-known">
-            {o.knownList.map((k) => (
+            {o.knownList.length > 4 && <li className="probe-more">……还有 {o.knownList.length - 4} 个更基础的</li>}
+            {o.knownList.slice(-4).map((k) => (
               <li key={k.id ?? k.level}>{k.desc}</li>
             ))}
           </ul>
@@ -202,6 +203,7 @@ export function ProbePanel({ state, busy, phase, topic, onAnswer, onSkip, onStar
         <div className="probe-start">
           <span className="no">1</span>
           <b>{o.start.desc}</b>
+          {stations > 0 && <span className="probe-sub"> · 共 {stations} 站</span>}
         </div>
       )}
       <div className="probe-actions">
@@ -213,6 +215,11 @@ export function ProbePanel({ state, busy, phase, topic, onAnswer, onSkip, onStar
         {onRestart && (
           <button className="btn quiet" onClick={onRestart}>
             换个起点
+          </button>
+        )}
+        {onFromStart && (
+          <button className="btn quiet" onClick={onFromStart}>
+            我想从头学
           </button>
         )}
       </div>
