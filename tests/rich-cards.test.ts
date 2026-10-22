@@ -82,7 +82,7 @@ describe("rich cards", () => {
     expect(p).toContain("how（怎么做） 或 edge（边界）");
     expect(p).toContain("30 年复利后差距约 25%");
     expect(p).toContain("兄弟卡「风险差异」：跟踪误差小");
-    expect(tutorInstructions("expand")).toContain("每张新卡片都必须带来新信息");
+    expect(tutorInstructions("expand")).toContain("每张卡必须给出一个父卡和兄弟卡里都没有的新知识点");
   });
 });
 

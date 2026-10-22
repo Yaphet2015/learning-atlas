@@ -55,6 +55,51 @@ export interface ConceptNode {
   misconception?: string;
   depthType?: DepthType;
   sources?: CardSource[];
+  /** The 测 question: learner-visible text only (q and choice options). */
+  check?: CardCheck;
+  /** Where the learner is in this stop's four beats (先猜 → 学 → 讲 → 测). */
+  beat?: Beat;
+  /** Wrong 测 answers so far (two open the stuck exits). */
+  fails?: number;
+  /** The learner's own 先猜 and 讲 text. */
+  guess?: string;
+  explain?: string;
+  /** How the A seal was earned: by passing 测, or inferred from 摸底. */
+  seal?: "test" | "probe";
+  /** Internal data, never rendered or exported. */
+  meta?: CardMeta;
+}
+export type Beat = "guess" | "learn" | "explain" | "test" | "done";
+export interface CardCheck {
+  q: string;
+  options?: string[];
+}
+export interface GateSubstance {
+  kind: string;
+  text: string;
+  isExample?: boolean;
+  source?: string;
+}
+/** The new-knowledge gate's working data: structure, claims and scores. Never shown to the learner. */
+export interface GateMeta {
+  newIdea?: string;
+  substance?: GateSubstance[];
+  addsBeyond?: string;
+  claims?: string[];
+  /** Highest claim similarity to the parent card and to any card on the board. */
+  simParent?: number;
+  simMax?: number;
+  /** "cheap" when only local checks ran; "judge" when the LLM rubric judge decided. */
+  decidedBy?: "cheap" | "judge";
+  judgeAdds?: string;
+  regenerated?: boolean;
+}
+export interface CardMeta {
+  gate?: GateMeta;
+  /** 测 marking data: the key points and (for choice questions) the right option. */
+  check?: { keyPoints: string[]; answer?: number };
+  /** The 讲/测 marker said a key point was missed (next-step rule 5). */
+  missed?: string;
 }
 /** The depth ladder: what → why → how → edge → apply; compare sits beside it. */
 export type DepthType = "what" | "why" | "how" | "edge" | "apply" | "compare";
@@ -133,6 +178,8 @@ export interface Board {
   viewport?: { x: number; y: number; zoom: number };
   /** The learning plan behind the map (optional; older boards have none). */
   plan?: BoardPlan;
+  /** The numbered learning path: card ids in recommended order (第 1 站, 第 2 站…). */
+  route?: string[];
 }
 export type PlanIntent =
   | "concept"
@@ -258,7 +305,9 @@ export interface AIRequest {
     | "hint"
     | "organize"
     | "enrich"
-    | "plan";
+    | "plan"
+    | "gate"
+    | "mark";
 }
 export interface AIUpdate {
   boardId: string;

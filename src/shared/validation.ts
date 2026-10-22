@@ -148,6 +148,57 @@ export const conceptNodeSchema = z
       .optional(),
     planBlock: idSchema.optional(),
     ...richCardFields,
+    check: z
+      .object({
+        q: z.string().max(400),
+        options: z.array(z.string().max(120)).max(5).optional(),
+      })
+      .strict()
+      .optional(),
+    beat: z.enum(["guess", "learn", "explain", "test", "done"]).optional(),
+    fails: z.number().int().min(0).max(99).optional(),
+    guess: z.string().max(2_000).optional(),
+    explain: z.string().max(4_000).optional(),
+    seal: z.enum(["test", "probe"]).optional(),
+    meta: z
+      .object({
+        gate: z
+          .object({
+            newIdea: z.string().max(200).optional(),
+            substance: z
+              .array(
+                z
+                  .object({
+                    kind: z.string().max(40),
+                    text: z.string().max(400),
+                    isExample: z.boolean().optional(),
+                    source: z.string().max(400).optional(),
+                  })
+                  .strict(),
+              )
+              .max(8)
+              .optional(),
+            addsBeyond: z.string().max(400).optional(),
+            claims: z.array(z.string().max(200)).max(6).optional(),
+            simParent: z.number().min(0).max(1).optional(),
+            simMax: z.number().min(0).max(1).optional(),
+            decidedBy: z.enum(["cheap", "judge"]).optional(),
+            judgeAdds: z.string().max(400).optional(),
+            regenerated: z.boolean().optional(),
+          })
+          .strict()
+          .optional(),
+        check: z
+          .object({
+            keyPoints: z.array(z.string().max(200)).max(6),
+            answer: z.number().int().min(0).max(5).optional(),
+          })
+          .strict()
+          .optional(),
+        missed: z.string().max(200).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 /** v1 node shape, accepted only as migration input. */
@@ -320,6 +371,7 @@ export const boardSchema = z
     scene: sceneSchema,
     viewport: viewportSchema.optional(),
     plan: boardPlanSchema.optional(),
+    route: z.array(idSchema).max(LIMITS.nodes).optional(),
   })
   .strict()
   .superRefine((board, ctx) => {
@@ -500,6 +552,8 @@ export const aiRequestSchema = z
       "organize",
       "enrich",
       "plan",
+      "gate",
+      "mark",
     ]),
   })
   .strict();

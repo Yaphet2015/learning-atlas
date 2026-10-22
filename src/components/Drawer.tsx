@@ -1,4 +1,4 @@
-import { CardDetail, DepthTag } from "./CardDetail";
+import { CardProse, StopBeats, type StudyProps } from "./StopBeats";
 import { PlanEditor } from "./PlanEditor";
 import type { BoardPlan } from "../shared/types";
 import { useEffect, useRef, useState } from "react";
@@ -536,6 +536,7 @@ export function Drawer({
   nodes,
   onNewSession,
   onHistory,
+  study,
 }: {
   note: StickyNote;
   /** Reading a selected card keeps focus on the canvas for shortcuts. */
@@ -566,6 +567,8 @@ export function Drawer({
   onClose: () => void;
   onNewSession: () => void;
   onHistory: () => void;
+  /** The four beats, when the anchor is a card the learner studies. */
+  study?: StudyProps;
 }) {
   const [prompt, setPrompt] = useState("");
   const [menu, setMenu] = useState(false);
@@ -796,15 +799,17 @@ export function Drawer({
         {scrolled && <div className="fadeTop" aria-hidden="true" />}
         {anchor && (
           <section className="this-card" aria-label="这张卡">
-            <span className="lab">这张卡 · 完整内容</span>
-            <h2>
-              {anchor.title}
-              <DepthTag card={anchor} />
-            </h2>
-            {anchor.summary && <p className="card-summary">{anchor.summary}</p>}
-            {anchor.body && <p className="card-body">{anchor.body}</p>}
-            <CardDetail card={anchor} />
-            {anchor.visual && <StructuredVisual visual={anchor.visual} />}
+            <span className="lab">
+              {study?.station ? `第 ${study.station} 站 · ` : "这张卡 · "}
+              {study ? "一站 4 拍" : "完整内容"}
+            </span>
+            <h2>{anchor.title}</h2>
+            {study ? (
+              <StopBeats card={anchor} study={study} />
+            ) : (
+              anchor.body && <CardProse body={anchor.body} />
+            )}
+            {anchor.visual && (!study || anchor.status === "explained" || (anchor.beat ?? "guess") !== "guess") && <StructuredVisual visual={anchor.visual} />}
           </section>
         )}
         <label className={`my-note ${note.text ? "has" : ""}`}>

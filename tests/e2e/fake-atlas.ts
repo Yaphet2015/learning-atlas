@@ -32,6 +32,31 @@ export async function installFakeAtlas(
       (window as any).__atlasAsks = asks;
       // Ghost-hint requests are recorded apart so flows that count asks stay exact.
       const hints: any[] = [];
+      // Gate judge, regenerate and check-marking calls: recorded apart so ask counts stay exact.
+      const gates: any[] = [];
+      (window as any).__atlasGates = gates;
+      /**
+       * Test answers are written as plain cards; give them the gate's internal fields so they pass
+       * the new-knowledge gate's cheap checks (set __atlasRawCards to send them as written).
+       */
+      const gateFill = (text: string) => {
+        if ((window as any).__atlasRawCards) return text;
+        try {
+          const j = JSON.parse(text);
+          if (!Array.isArray(j.nodes)) return text;
+          j.nodes = j.nodes.map((n: any) => ({
+            newIdea: n.title,
+            substance: [{ kind: "mechanism", text: n.body || n.title }],
+            addsBeyond: "比父卡多了一个具体机制",
+            claims: [n.title],
+            check: { q: "假如换到一个完全不同的场景里，这一点还会照样成立吗？说出理由。", keyPoints: [n.title] },
+            ...n,
+          }));
+          return JSON.stringify(j);
+        } catch {
+          return text;
+        }
+      };
       (window as any).__atlasHints = hints;
       // So are the quiet diagram/overview follow-ups after new cards land.
       const enriches: any[] = [];
@@ -64,8 +89,17 @@ export async function installFakeAtlas(
           );
         if (request.mode === "organize")
           return (window as any).__atlasOrganizationAnswers?.shift() ?? "{}";
-        if (request.mode === "expand")
+        if (request.mode === "gate")
           return (
+            (window as any).__atlasGateAnswers?.shift() ??
+            JSON.stringify({
+              verdicts: [...request.prompt.matchAll(/"id":"([^"]+)","card"/g)].map((m: any) => ({ id: m[1], adds: "多了一个具体机制", pass: true })),
+            })
+          );
+        if (request.mode === "mark")
+          return (window as any).__atlasMarkAnswers?.shift() ?? JSON.stringify({ pass: true, missing: "" });
+        if (request.mode === "expand")
+          return gateFill(
             (window as any).__atlasExpansionAnswers?.shift() ??
             JSON.stringify({ nodes: [], relations: [] })
           );
@@ -87,7 +121,7 @@ export async function installFakeAtlas(
           });
         }
         if (request.mode === "map")
-          return JSON.stringify({
+          return gateFill((window as any).__atlasMapAnswers?.shift() ?? JSON.stringify({
             nodes: [
               {
                 id: "light",
@@ -124,7 +158,7 @@ export async function installFakeAtlas(
               { source: "light", target: "bend", label: "先看" },
               { source: "bend", target: "arc", label: "然后" },
             ],
-          });
+          }));
         return "在开始之前想先了解你：你听说过光的“折射”吗？你更想弄懂颜色从哪来，还是彩虹为什么是弯的？接下来我们会先拆成三个子问题：阳光的颜色、水滴里的折射、弧形的角度。";
       };
       let settings: any = {
@@ -334,6 +368,8 @@ export async function installFakeAtlas(
             throw new Error("整理请求失败，请重试。");
           (request.mode === "hint"
             ? hints
+            : request.mode === "gate" || request.mode === "mark" || String(request.stickyId).includes("-gate-")
+              ? gates
             : request.mode === "enrich"
               ? enriches
               : request.mode === "plan"

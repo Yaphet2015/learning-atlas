@@ -71,7 +71,7 @@ import {
   planFirstLevelPrompt,
   planPrompt,
 } from "./model/plan";
-import type { BoardPlan } from "./shared/types";
+import type { BoardPlan, ConceptNode } from "./shared/types";
 import {
   firstLevelPrompt,
   kickoffNote,
@@ -127,6 +127,13 @@ import {
   clampSidebarWidth,
 } from "./components/WorkspaceSidebar";
 import { Drawer } from "./components/Drawer";
+import { NextStepBar } from "./components/NextStep";
+import { nextStep } from "./model/next-step";
+import { defaultRoute, stationOf } from "./model/route";
+import { runGate, roughTokens } from "./model/novelty";
+import { applyGate } from "./model/gate";
+import { explainPoints, localMark, markPrompt, parseMark, testPoints, type Mark } from "./model/mark";
+import { questionNode } from "./shared/canvas";
 import { StudyMode } from "./components/StudyMode";
 import { Outline } from "./components/Outline";
 import { Settings } from "./components/Settings";
@@ -213,6 +220,7 @@ export default function App() {
     }),
     [switchingBoardId, setSwitchingBoardId] = useState<string | null>(null),
     [study, setStudy] = useState<{ startId?: string } | null>(null),
+    [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set()),
     [tool, setTool] = useState<Tool>("select"),
     [editingId, setEditingId] = useState<string | null>(null),
     [preview, setPreview] = useState<Board | null>(null),
@@ -290,6 +298,9 @@ export default function App() {
   const locked = () => editingLocked.current || canvasWriteLocked.current;
   const boardCache = useRef(new Map<string, Board>()),
     completionQueues = useRef(new Map<string, Promise<void>>());
+  const askQuietRef = useRef<
+    (mode: "gate" | "mark" | "expand", prompt: string, stickyId: string, context?: AIRequest["context"]) => Promise<string>
+  >(() => Promise.reject(new Error("not ready")));
   const boardRef = useRef<Board | null>(null),
     saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     requestMeta = useRef(
@@ -301,6 +312,9 @@ export default function App() {
           hintSignature?: string;
           /** enrich: the new cards it decorates. */
           newIds?: string[];
+          /** Quiet requests (gate judge, regenerate, check marking) resolve a promise. */
+          resolve?: (text: string) => void;
+          reject?: (error: Error) => void;
         }
       >(),
     ),
@@ -594,6 +608,14 @@ export default function App() {
     () =>
       api.onAIUpdate((update: AIUpdate) => {
         if (update.stickyId.startsWith("canvas-run-")) return;
+        const quiet = requestMeta.current.get(update.requestId);
+        if (quiet?.resolve) {
+          if (update.status === "streaming") return;
+          requestMeta.current.delete(update.requestId);
+          if (update.status === "done") quiet.resolve(update.text);
+          else quiet.reject?.(new Error(update.error ?? update.status));
+          return;
+        }
         // Ghost hints are a quiet cache: no thread, no toast, no busy state.
         const hintMeta = requestMeta.current.get(update.requestId);
         if (hintMeta?.request.mode === "hint") {
@@ -680,7 +702,41 @@ export default function App() {
             if (!target) return;
             let next = target;
             try {
-              if (meta && meta.request.mode !== "answer") {
+              if (meta && (meta.request.mode === "map" || meta.request.mode === "expand")) {
+                const mode = meta.request.mode;
+                const anchorId = meta.anchor ?? questionNode(target)?.id ?? target.nodes[0].id;
+                setMapBusy(true);
+                const outcome = await runGate(
+                  update.text,
+                  target,
+                  anchorId,
+                  (m, prompt) =>
+                    askQuietRef.current(m, prompt, `${m}-gate-${anchorId}`, m === "expand" ? meta.request.context : undefined),
+                  meta.request.prompt,
+                ).finally(() => setMapBusy(false));
+                const tokens = outcome.tokens + roughTokens(meta.request.prompt, JSON.stringify(meta.request.context));
+                if (import.meta.env.DEV)
+                  console.info(
+                    `[gate] ${mode} ~${tokens} tokens · kept ${outcome.kept.length} · merged ${outcome.merges.length} · dropped ${outcome.dropped.length} · regen ${outcome.calls.regen} · judge ${outcome.calls.judge}`,
+                  );
+                const applied = applyGate(target, anchorId, outcome, mode, meta.request.context);
+                next = applied.board;
+                if (mode === "map" && !target.route?.length && anchorId === questionNode(target)?.id) {
+                  const route = defaultRoute(next);
+                  if (route.length) next = { ...next, route };
+                }
+                showToast(
+                  applied.added.length
+                    ? applied.mergedInto.length
+                      ? `已展开新的概念；有一点已在「${next.nodes.find((n) => n.id === applied.mergedInto[0])?.title}」里，已补充进去。`
+                      : "已展开新的概念。你可以继续调整它们。"
+                    : applied.mergedInto.length
+                      ? `这一点已在「${next.nodes.find((n) => n.id === applied.mergedInto[0])?.title}」里，已补充进去。`
+                      : outcome.dropped.length
+                        ? "这一块暂时挖不出新东西了，试试换个角度？（再看一层旁的「往哪挖」）"
+                        : "这次没有找到值得补充的新概念。你仍可以继续提问或稍后再试。",
+                );
+              } else if (meta && meta.request.mode !== "answer") {
                 next = buildMapFromAI(
                   update.text,
                   target,
@@ -843,6 +899,29 @@ export default function App() {
     },
     [showToast],
   );
+  /** A quiet request (no thread, no toast) whose reply text resolves the promise. */
+  const askQuiet = useCallback(
+    (mode: "gate" | "mark" | "expand", prompt: string, stickyId: string, context?: AIRequest["context"]) =>
+      new Promise<string>((resolve, reject) => {
+        const b = boardRef.current;
+        if (!b) return reject(new Error("no board"));
+        const request: AIRequest = {
+          boardId: b.id,
+          stickyId,
+          requestId: uid(),
+          mode,
+          prompt,
+          context: context ?? { topic: b.topic, references: [], summary: "" },
+        };
+        requestMeta.current.set(request.requestId, { request, resolve, reject });
+        api.ask(request).catch((error) => {
+          requestMeta.current.delete(request.requestId);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
+      }),
+    [],
+  );
+  askQuietRef.current = askQuiet;
   const askNote = useCallback(
     (noteId: string, prompt: string, retry = false) => {
       if (editingLocked.current) return false;
@@ -1350,6 +1429,35 @@ export default function App() {
       })),
     [edit],
   );
+  const patchNode = useCallback(
+    (id: string, patch: Partial<ConceptNode>) =>
+      edit((b) => ({
+        ...b,
+        nodes: b.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+      })),
+    [edit],
+  );
+  /** Mark a 讲 or 测 answer: a choice locally when possible, else one short call with key points only. */
+  const markCard = useCallback(
+    async (id: string, kind: "explain" | "test", answer: string, choice: number | null): Promise<Mark | null> => {
+      const n = boardRef.current?.nodes.find((x) => x.id === id);
+      if (!n) return null;
+      if (kind === "test") {
+        const local = localMark(n, choice, answer.split("理由：").at(-1) ?? "");
+        if (local) return local;
+      }
+      const q = kind === "explain" ? `用自己的话讲清「${n.title}」` : (n.check?.q ?? n.title);
+      const prompt = markPrompt(q, kind === "explain" ? explainPoints(n) : testPoints(n), answer);
+      try {
+        const text = await askQuietRef.current("mark", prompt, `mark-${id}`);
+        if (import.meta.env.DEV) console.info(`[mark] ${kind} ~${roughTokens(prompt, text)} tokens`);
+        return parseMark(text);
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
   const rename = useCallback(
     (id: string, title: string) =>
       edit((b) => ({
@@ -1414,6 +1522,30 @@ export default function App() {
     else addNote(undefined);
   }, [selectedNodeId, addNote, openDrawer]);
   const rootId = (board && rootOf(board)?.id) ?? null;
+  const next = useMemo(
+    () => (board && board.kind === "ai" ? nextStep(board, skipped) : ({ kind: "none" } as const)),
+    [board, skipped],
+  );
+  const nextId = "card" in next ? next.card.id : null;
+  // 欢迎回来: the bar greets once per board open when a stop is half done.
+  const [welcome, setWelcome] = useState(true);
+  useEffect(() => setWelcome(true), [board?.id]);
+  const startNextRef = useRef(() => {});
+  startNextRef.current = () => {
+    setWelcome(false);
+    const b = boardRef.current;
+    if (!b) return;
+    if (next.kind === "wrap") {
+      const root = questionNode(b);
+      if (root) addNote({ kind: "node", id: root.id }, { cards: false });
+      return;
+    }
+    if (!("card" in next)) return;
+    const id = next.card.id;
+    if (!next.card.beat && next.card.status !== "explained") patchNode(id, { beat: "guess" });
+    setSelection({ kind: "node", id });
+    addNote({ kind: "node", id }, { cards: false });
+  };
   function removeSelected() {
     if (!selection) return;
     if (
@@ -1926,7 +2058,11 @@ export default function App() {
             ? { onAddParent: addParentOf, onAddRoot: addRootBeside }
             : {}),
           onPreviewAdd: hoverAdd,
-          ...(settings.configured && tool === "select"
+          station: stationOf(board, n.id),
+          isNext: nextId === n.id,
+          ...(nextId === n.id ? { onStartNext: () => startNextRef.current() } : {}),
+          // Ghost hints only on the current stop or a card the learner picked (no 大海感).
+          ...(settings.configured && tool === "select" && (nextId === n.id || selectedNodeId === n.id)
             ? {
                 hints: cachedHints(board, n.id),
                 onWantHints: wantHints,
@@ -1976,6 +2112,7 @@ export default function App() {
     addNote,
     expand,
     mapBusy,
+    nextId,
     pending,
     edit,
     kickoffReady,
@@ -2348,6 +2485,19 @@ export default function App() {
               onNewSession={() => addNote(undefined, { fresh: true })}
             />
             <Progress nodes={board.nodes} />
+            {!drawer && (
+              <NextStepBar
+                step={next}
+                welcome={welcome}
+                onStart={() => startNextRef.current()}
+                onSkip={
+                  "card" in next
+                    ? () => setSkipped((prev) => new Set([...prev, next.card.id]))
+                    : undefined
+                }
+                onRoute={() => edit((b) => ({ ...b, route: defaultRoute(b) }))}
+              />
+            )}
             <CoveragePanel board={board} busy={mapBusy} onCover={coverBlock} />
             <Dock
               tool={tool}
@@ -2532,6 +2682,18 @@ export default function App() {
           onPromote={(text) =>
             setPromote({ noteId: drawerNote.id, title: "新的发现", text })
           }
+          study={(() => {
+            const id = drawerNote.attachedTo?.kind === "node" ? drawerNote.attachedTo.id : undefined;
+            const card = id ? board.nodes.find((n) => n.id === id) : undefined;
+            // The four beats belong to cards on the route and anything below them; the question root has none.
+            if (!card || card.parentId === null || board.kind !== "ai" || !board.route?.length) return undefined;
+            return {
+              station: stationOf(board, card.id),
+              onPatch: (patch: Partial<ConceptNode>) => patchNode(card.id, patch),
+              onMark: (kind: "explain" | "test", answer: string, choice: number | null) =>
+                markCard(card.id, kind, answer, choice),
+            };
+          })()}
           anchorHasChildren={board.nodes.some(
             (n) => n.parentId === drawerAnchorOrRoot,
           )}
