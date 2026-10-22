@@ -75,6 +75,15 @@ export async function installFakeAtlas(
             below: "提示·子" + i,
             right: "提示·并列" + i,
             above: "提示·更大" + i,
+            ...((window as any).__atlasHintAngles
+              ? {
+                  angles: { below: "why", right: "compare", above: "apply" },
+                  more: [
+                    { angle: "example", text: "例子·子" + i },
+                    { angle: "edge", text: "边界·子" + i },
+                  ],
+                }
+              : {}),
           });
         }
         if (request.mode === "map")

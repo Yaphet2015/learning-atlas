@@ -200,3 +200,27 @@ export const confirmPlan = (plan: BoardPlan): BoardPlan => ({
   ...plan,
   status: "confirmed",
 });
+
+/** Where to grow a missing block, and the prompt: under its parent block's card, else the root. */
+export function coverTarget(
+  board: Board,
+  blockId: string,
+): { anchorId: string; prompt: string } | undefined {
+  const plan = board.plan;
+  const block = plan?.blocks.find((b) => b.id === blockId);
+  if (!plan || !block || coveredBlocks(board).has(blockId)) return undefined;
+  const parentCard =
+    block.parent !== null
+      ? board.nodes.find((n) => n.planBlock === block.parent)
+      : undefined;
+  const anchor =
+    parentCard ??
+    board.nodes.find((n) => n.parentId === null) ??
+    board.nodes[0];
+  if (!anchor) return undefined;
+  const prereq = block.prerequisites
+    .map((id) => plan.blocks.find((b) => b.id === id)?.title)
+    .filter(Boolean);
+  const prompt = `学习计划里「${block.title}」（block ${block.id}）还没有卡片。围绕「${anchor.title}」只补 1 张卡片来覆盖它${block.why ? `：它的作用是${block.why}` : ""}。${prereq.length ? `它建立在 ${prereq.map((t) => `「${t}」`).join("、")} 之上，可以直接引用。` : ""}这张卡片的 block 写 "${block.id}"，parent 写 "anchor"，标题直接点明这一块要学会什么，不要重复画布上已有的内容。`;
+  return { anchorId: anchor.id, prompt };
+}

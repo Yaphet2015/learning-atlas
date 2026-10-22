@@ -14,7 +14,12 @@ export interface CardHints {
   below?: string;
   right?: string;
   above?: string;
+  /** Which way each side's suggestion digs (why/how/example/edge/compare/apply). */
+  angles?: Partial<Record<"below" | "right" | "above", HintAngle>>;
+  /** Extra child suggestions, each from a different angle than `below`. */
+  more?: { angle: HintAngle; text: string }[];
 }
+export type HintAngle = "why" | "how" | "example" | "edge" | "compare" | "apply";
 export interface ConceptNode {
   id: string;
   kind: "concept" | "scene";

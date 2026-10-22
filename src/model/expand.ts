@@ -1,4 +1,5 @@
 import type { Board, ConceptNode, DepthType } from "../shared/types";
+import { angleRule, type DigAngle } from "./angles";
 
 export const DEPTH_LABEL: Record<DepthType, string> = {
   what: "是什么",
@@ -24,7 +25,11 @@ const points = (n: ConceptNode) =>
   n.body.slice(0, 80);
 
 /** Expand-mode user prompt for one card (the system rules live in tutorInstructions("expand")). */
-export function expandPrompt(board: Board | string, anchorId?: string): string {
+export function expandPrompt(
+  board: Board | string,
+  anchorId?: string,
+  angle?: DigAngle,
+): string {
   // Older callers pass only a title.
   if (typeof board === "string") return basePrompt(board, "", []);
   const anchor = board.nodes.find((n) => n.id === anchorId);
@@ -41,7 +46,9 @@ export function expandPrompt(board: Board | string, anchorId?: string): string {
     ...children.slice(0, 6).map((n) => `已有子卡「${n.title}」：${points(n)}`),
   ];
   const next = nextDepths(anchor.depthType);
-  const ladder = `深度阶梯：当前卡片是「${anchor.depthType ? DEPTH_LABEL[anchor.depthType] : "未标注"}」层。新卡片优先往下一阶走：${next.map((d) => `${d}（${DEPTH_LABEL[d]}）`).join(" 或 ")}，并在 depthType 里标出；不要再停留在“是什么”的同一层重复定义。`;
+  const ladder = angle
+    ? angleRule(angle)
+    : `深度阶梯：当前卡片是「${anchor.depthType ? DEPTH_LABEL[anchor.depthType] : "未标注"}」层。新卡片优先往下一阶走：${next.map((d) => `${d}（${DEPTH_LABEL[d]}）`).join(" 或 ")}，并在 depthType 里标出；不要再停留在“是什么”的同一层重复定义。`;
   return basePrompt(anchor.title, ladder, known);
 }
 

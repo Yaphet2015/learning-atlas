@@ -1,5 +1,6 @@
 import type { Board, CardHints, ConceptNode } from "../shared/types";
 import { fnv1a } from "../shared/hash";
+import { ANGLE_LABEL, DIG_ANGLES, isAngle, type DigAngle } from "./angles";
 
 /** Where a ghost hint sits: under the card (child), to its right (sibling / another root), above (a broader root). */
 export type HintSide = "below" | "right" | "above";
@@ -48,10 +49,15 @@ export function hintSides(n: Pick<ConceptNode, "parentId">): HintSide[] {
 export function hintPrompt(board: Board, id: string): string {
   const n = board.nodes.find((x) => x.id === id)!;
   const root = n.parentId === null;
-  return root
+  return (
+    root
     ? `为起点卡片「${n.title}」各给一个下一步提示：below 是它下面最值得先拆的一个子问题；right 是可以并列放在它旁边的另一个起点问题；above 是能把它包含进去的一个更大的问题。`
-    : `为卡片「${n.title}」各给一个下一步提示：below 是它下面最值得先拆的一个子问题；right 是与它并列、放在它右边的一个兄弟概念或问题。`;
+    : `为卡片「${n.title}」各给一个下一步提示：below 是它下面最值得先拆的一个子问题；right 是与它并列、放在它右边的一个兄弟概念或问题。`) + ANGLE_ASK;
 }
+
+const ANGLE_ASK = `
+每个提示都标出它往哪个角度挖：angles 里给每个方向写一个角度，取值只能是 ${DIG_ANGLES.map((a) => `${a}（${ANGLE_LABEL[a]}）`).join("、")}。再在 more 里给 below 方向补 1–2 个换角度的子问题（角度互不相同，也不同于 angles.below）。每条提示不超过 ${HINT_MAX} 个字。
+格式：{"below":"…","right":"…","angles":{"below":"why","right":"compare"},"more":[{"angle":"example","text":"…"}]}`;
 
 const clip = (s: string) =>
   [...s].length <= HINT_MAX ? s : `${[...s].slice(0, HINT_MAX - 1).join("")}…`;
@@ -89,6 +95,29 @@ export function parseHints(
       .trim();
     if (!t || taken.has(t)) continue;
     out[side] = clip(t);
+  }
+  const r = raw as Record<string, unknown>;
+  const angles = r.angles as Record<string, unknown> | undefined;
+  if (angles && typeof angles === "object") {
+    for (const side of hintSides(n)) {
+      const a = angles[side];
+      if (out[side] && isAngle(a)) (out.angles ??= {})[side] = a;
+    }
+  }
+  if (out.below && Array.isArray(r.more)) {
+    const used = new Set<DigAngle | string>([out.angles?.below ?? ""]);
+    const texts = new Set([out.below, out.right, out.above]);
+    for (const m of r.more as unknown[]) {
+      if (!m || typeof m !== "object") continue;
+      const { angle, text } = m as Record<string, unknown>;
+      if (!isAngle(angle) || used.has(angle) || typeof text !== "string") continue;
+      const t = text.replace(/\s+/g, " ").replace(/^[“"「]|[”"」]$/g, "").trim();
+      if (!t || taken.has(t) || texts.has(clip(t))) continue;
+      used.add(angle);
+      texts.add(clip(t));
+      (out.more ??= []).push({ angle, text: clip(t) });
+      if (out.more.length >= 2) break;
+    }
   }
   return out.below || out.right || out.above ? out : null;
 }

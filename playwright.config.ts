@@ -3,6 +3,9 @@ import { existsSync } from "node:fs";
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 30_000,
+  // CI runners occasionally stall for several seconds (hints/expand once all failed within one
+  // 50 s window waiting on fake-AI UI); give assertions headroom there without slowing local runs.
+  expect: { timeout: process.env.CI ? 10_000 : 5_000 },
   fullyParallel: false,
   use: {
     baseURL: "http://127.0.0.1:5173",

@@ -4181,3 +4181,169 @@ kbd,
   text-decoration-color: var(--rule);
   text-underline-offset: 3px;
 }
+
+/* ── Steering: dig-which-way menu ─────────────────────────────── */
+.select-toolbar .dig {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.select-toolbar .icon.caret {
+  width: 18px;
+  margin-left: -4px;
+  color: var(--ink-3);
+}
+.select-toolbar .icon.caret[aria-expanded="true"] {
+  color: var(--ink);
+}
+.menu.dig-menu {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  top: calc(100% + 10px);
+  width: 248px;
+}
+.menu.dig-menu .dig-head {
+  padding: 4px 10px 6px;
+  font: 400 12px var(--kai);
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+.menu.dig-menu .it {
+  justify-content: space-between;
+  align-items: baseline;
+}
+.menu.dig-menu .dig-name,
+.menu.dig-menu .dig-sub {
+  white-space: nowrap;
+}
+.menu.dig-menu .dig-sub {
+  font: 400 12px var(--kai);
+  color: var(--ink-3);
+}
+
+/* ── Steering: angle-labelled ghost hints ─────────────────────── */
+.ghost-hint[data-angle-label]::before {
+  content: attr(data-angle-label);
+  flex: none;
+  order: 1;
+  padding-right: 6px;
+  margin-right: 1px;
+  border-right: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  font-size: 11.5px;
+  color: color-mix(in srgb, var(--accent-ink, var(--accent)) 75%, var(--paper));
+}
+.ghost-hint .ico {
+  order: 0;
+}
+.ghost-hint span {
+  order: 2;
+}
+.ghost-hint.alt {
+  left: calc(50% + 22px);
+  height: 22px;
+  font-size: 12.5px;
+}
+.ghost-hint.alt-1 {
+  bottom: -67px;
+}
+.ghost-hint.alt-2 {
+  bottom: -93px;
+}
+
+/* ── Steering: plan coverage panel ────────────────────────────── */
+.coverage {
+  right: var(--gutter);
+  top: calc(var(--gutter) + 52px);
+  width: 248px;
+  padding: 0;
+  overflow: hidden;
+}
+.coverage .cov-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 14px;
+  text-align: left;
+}
+.coverage .cov-count {
+  margin-left: auto;
+  font: 400 12px var(--kai);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.coverage .cov-count b {
+  font: 700 14px var(--kai);
+  color: var(--ink);
+}
+.coverage .chev {
+  color: var(--ink-3);
+  transition: transform 160ms ease;
+}
+.coverage.open .chev {
+  transform: rotate(180deg);
+}
+.coverage .cov-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 6px 8px;
+  border-top: 1px solid var(--border);
+  max-height: min(52vh, 420px);
+  overflow: auto;
+}
+.coverage .cov-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--r-sm);
+  font: 400 13.5px/1.4 var(--kai);
+  color: var(--ink);
+  text-align: left;
+}
+.coverage .sub .cov-row {
+  padding-left: 26px;
+  font-size: 13px;
+}
+.coverage .cov-row .t {
+  flex: 1;
+  min-width: 0;
+}
+.coverage .covered .cov-row {
+  color: var(--ink-2);
+}
+.coverage .covered .mark {
+  color: var(--accent);
+  flex: none;
+}
+.coverage .mark.hollow {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin: 0 1px;
+  border-radius: 50%;
+  border: 1.25px dashed var(--dash);
+}
+.coverage .missing .cov-row {
+  color: var(--ink-3);
+}
+.coverage .missing .add {
+  flex: none;
+  opacity: 0;
+  color: var(--accent);
+  transition: opacity 120ms ease;
+}
+.coverage .missing .cov-row:hover:enabled,
+.coverage .missing .cov-row:focus-visible {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+  outline: none;
+}
+.coverage .missing .cov-row:is(:hover, :focus-visible) .add {
+  opacity: 1;
+}
+.coverage .missing .cov-row:disabled {
+  cursor: progress;
+}

@@ -1,3 +1,10 @@
+import { Menu } from "./Drawer";
+import {
+  ANGLE_HINT,
+  ANGLE_LABEL,
+  DIG_ANGLES,
+  type DigAngle,
+} from "../model/angles";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   Handle,
@@ -13,6 +20,7 @@ import {
   Image,
   Layers3,
   MessageCircle,
+  ChevronDown,
   PencilLine,
   Sparkles,
   StickyNote,
@@ -49,14 +57,14 @@ export type CardData = {
   /** AI ghost hints for the '+' handles (only with a provider configured). */
   hints?: CardHints;
   onWantHints?: (id: string, on: boolean) => void;
-  onHint?: (id: string, side: HintSide, title: string) => void;
+  onHint?: (id: string, side: HintSide, title: string, angle?: DigAngle) => void;
   onPreviewAdd?: (id: string | null) => void;
   onScene?: (patch: Partial<SceneState>) => void;
   onNote?: (id: string) => void;
   onStatus?: (id: string, status: ConceptNode["status"]) => void;
   onStartEdit?: (id: string) => void;
   onAsk?: (id: string) => void;
-  onExpand?: (id: string) => void;
+  onExpand?: (id: string, angle?: DigAngle) => void;
   canExpand?: boolean;
   expandBusy?: boolean;
   generating?: boolean;
@@ -166,13 +174,54 @@ function GhostHint({ data, side }: { data: CardData; side: HintSide }) {
     side === "right" && data.concept.parentId === null
       ? "加并列的起点"
       : HINT_LABEL[side];
+  const angle = data.hints?.angles?.[side];
+  const more = side === "below" ? (data.hints?.more ?? []) : [];
+  return (
+    <>
+      <GhostButton
+        className={`ghost-hint ${side}`}
+        label={label}
+        text={text}
+        angle={angle}
+        onPick={() => data.onHint?.(data.concept.id, side, text, angle)}
+      />
+      {more.map((m, i) => (
+        <GhostButton
+          key={m.angle}
+          className={`ghost-hint alt alt-${i + 1}`}
+          label={label}
+          text={m.text}
+          angle={m.angle}
+          onPick={() => data.onHint?.(data.concept.id, "below", m.text, m.angle)}
+        />
+      ))}
+    </>
+  );
+}
+
+function GhostButton({
+  className,
+  label,
+  text,
+  angle,
+  onPick,
+}: {
+  className: string;
+  label: string;
+  text: string;
+  angle?: DigAngle;
+  onPick: () => void;
+}) {
+  // The angle tag is drawn by CSS from data-angle-label, so the button's text stays the title.
   return (
     <button
-      className={`ghost-hint ${side} nodrag nopan`}
-      aria-label={`AI 提示 · ${label}：${text}`}
+      className={`${className} nodrag nopan`}
+      data-angle={angle}
+      data-angle-label={angle ? ANGLE_LABEL[angle] : undefined}
+      aria-label={`AI 提示 · ${label}${angle ? ` · ${ANGLE_LABEL[angle]}` : ""}：${text}`}
       onClick={(e) => {
         e.stopPropagation();
-        data.onHint?.(data.concept.id, side, text);
+        onPick();
       }}
     >
       <Sparkles size={11} className="ico" aria-hidden="true" />
@@ -308,6 +357,10 @@ function SelectToolbar({
   visible: boolean;
 }) {
   const n = data.concept;
+  const [digOpen, setDigOpen] = useState(false);
+  useEffect(() => {
+    if (!visible) setDigOpen(false);
+  }, [visible]);
   return (
     <NodeToolbar
       isVisible={visible}
@@ -337,14 +390,44 @@ function SelectToolbar({
         <PencilLine size={15} className="ico" />
       </button>
       {data.canExpand && (
-        <button
-          className="icon"
-          {...tip("再看一层")}
-          disabled={data.expandBusy}
-          onClick={() => data.onExpand?.(n.id)}
-        >
-          <Layers3 size={15} className="ico" />
-        </button>
+        <span className="dig">
+          <button
+            className="icon"
+            {...tip("再看一层")}
+            disabled={data.expandBusy}
+            onClick={() => data.onExpand?.(n.id)}
+          >
+            <Layers3 size={15} className="ico" />
+          </button>
+          <button
+            className="icon caret"
+            aria-label="往哪挖"
+            aria-haspopup="menu"
+            aria-expanded={digOpen}
+            title="往哪挖"
+            disabled={data.expandBusy}
+            onClick={() => setDigOpen((o) => !o)}
+          >
+            <ChevronDown size={12} className="ico" />
+          </button>
+          {digOpen && (
+            <Menu className="dig-menu" onClose={() => setDigOpen(false)}>
+              <div className="dig-head">往哪挖</div>
+              {DIG_ANGLES.map((a) => (
+                <button
+                  key={a}
+                  className="it"
+                  role="menuitem"
+                  data-angle={a}
+                  onClick={() => data.onExpand?.(n.id, a)}
+                >
+                  <span className="dig-name">{ANGLE_LABEL[a]}</span>
+                  <span className="dig-sub">{ANGLE_HINT[a]}</span>
+                </button>
+              ))}
+            </Menu>
+          )}
+        </span>
       )}
       <button
         className="icon accent"
