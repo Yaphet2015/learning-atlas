@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, LoaderCircle, RotateCcw, Trash2 } from "lucide-react";
 import type { BoardPlan } from "../shared/types";
-import { INTENT_LABEL, removeBlock, renameBlock } from "../model/plan";
+import { removeBlock, renameBlock } from "../model/plan";
 
 /** Draft learning plan in the kickoff drawer: rename or drop blocks, then confirm to lay the first level. */
 export function PlanEditor({
@@ -81,9 +81,8 @@ export function PlanEditor({
     );
   };
   return (
-    <section className="plan-editor" aria-label="学习计划">
+    <section className="plan-editor" aria-label="学习计划" data-intent={plan.intent}>
       <div className="plan-head">
-        <span className="plan-kind">{INTENT_LABEL[plan.intent]}</span>
         <span className="plan-goal">{plan.goal}</span>
       </div>
       {plan.learner && <div className="plan-learner">{plan.learner}</div>}

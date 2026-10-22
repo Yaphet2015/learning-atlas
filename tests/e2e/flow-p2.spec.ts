@@ -58,6 +58,9 @@ test("摸底 v2: brackets the edge without levels or marks; stations below the s
   // The plan is written for this learner, and the map is asked for ladder levels.
   const plan = page.locator(".drawer .plan-editor");
   await expect(plan).toContainText("学完后");
+  // Plain prose: no question-type chip (机制/决策/…) anywhere in the probe or plan UI.
+  await expect(page.locator(".drawer .plan-kind")).toHaveCount(0);
+  await expect(page.locator(".drawer")).not.toContainText(/概念：是什么|机制：如何运作|决策：怎么选|操作：怎么做|学习路径：怎么学|对比：有什么区别/);
   const plans = await page.evaluate(() => (window as any).__atlasPlans);
   expect(plans[0].prompt).toContain("摸底结果：学习者已经懂：「生病了保险给钱」、「给付型 vs 报销型」、「合同结构」。路线从「条款细读」开始");
   await plan.getByRole("button", { name: "确认计划，铺成第一层" }).click();

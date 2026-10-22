@@ -4016,14 +4016,6 @@ kbd,
   flex-wrap: wrap;
   color: var(--ink);
 }
-.plan-kind {
-  font-size: 12px;
-  padding: 1px 8px;
-  border-radius: var(--r-pill);
-  background: var(--accent-wash);
-  color: var(--accent-ink);
-  white-space: nowrap;
-}
 .plan-goal {
   font-weight: 600;
   line-height: 1.45;

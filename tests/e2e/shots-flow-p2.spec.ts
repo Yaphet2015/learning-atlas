@@ -167,6 +167,7 @@ for (const mode of ["light", "dark"] as const) {
     await expect(probe.locator(".probe-start")).not.toContainText(CHAIN[0].concept);
     await expect(probe).not.toContainText(/·\s*\d|L\d/);
     await expect(page.locator(".drawer")).not.toContainText("彩虹");
+    await expect(page.locator(".drawer .plan-kind")).toHaveCount(0);
     await page.waitForTimeout(400);
     await page.screenshot({ path: `${dir}/probe-expert-result-${mode}.png` });
   });

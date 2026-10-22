@@ -26,13 +26,13 @@ for (const mode of ["light", "dark"] as const)
     await page.getByLabel("新白板问题").fill("彩虹是怎么形成的？");
     await page.getByRole("button", { name: "开始探索", exact: true }).click();
     const drawer = page.locator(".drawer");
-    await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
-    await drawer.getByLabel("向 AI 提问").fill("知道折射，但不懂为什么是弯的");
-    await drawer.getByLabel("发送提问").click();
-    await expect(drawer.locator(".msg.assistant")).toHaveCount(2);
-    await drawer.getByRole("button", { name: "拟定学习计划", exact: true }).click();
+    // The 摸底 now opens the kickoff; skip it once the first question is up to reach the plan.
+    const probe = drawer.getByRole("region", { name: "摸底" });
+    await expect(probe.locator(".beat-q")).toBeVisible();
+    await probe.getByRole("button", { name: "跳过摸底" }).click();
     const plan = drawer.locator(".plan-editor");
     await expect(plan.locator(".plan-block")).toHaveCount(5);
+    await expect(plan.locator(".plan-kind")).toHaveCount(0);
     await plan.scrollIntoViewIfNeeded();
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${dir}/plan-draft-${mode}.png` });
