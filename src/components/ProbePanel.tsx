@@ -150,13 +150,17 @@ export function ProbePanel({ state, busy, phase, topic, stations, onAnswer, onSk
                 );
               })}
             </div>
-            {choice !== null && choice >= 0 && (why ? (
-              <textarea className="probe-why" placeholder="为什么这么选？（可不写）" value={text} onChange={(e) => setText(e.target.value)} rows={2} />
-            ) : (
-              <button className="link probe-why-btn" onClick={() => setWhy(true)}>
-                说说理由（可选）
-              </button>
-            ))}
+            <textarea
+              className={`probe-why ${why || text ? "open" : ""}`}
+              aria-label="说说理由（可选）"
+              placeholder="说说理由（可选）"
+              value={text}
+              disabled={choice === -1}
+              rows={why || text ? 3 : 1}
+              onFocus={() => setWhy(true)}
+              onBlur={() => setWhy(false)}
+              onChange={(e) => setText(e.target.value)}
+            />
           </div>
         ) : null}
         <div className="probe-actions">

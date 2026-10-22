@@ -5167,8 +5167,12 @@ h2.workspace-section span {
 .probe-st i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); opacity: 0.8; }
 .probe-sub { font-size: 12px; color: var(--ink-3); }
 .probe .opt.idk { color: var(--ink-2); border-style: dashed; }
-.probe-why { width: 100%; margin-top: 8px; }
-.probe-actions { display: flex; gap: 8px; margin-top: 12px; }
+.probe-why { display: block; width: 100%; margin-top: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; line-height: 1.5; resize: none; height: 38px; transition: height 0.15s var(--ease-out); }
+.probe-why.open { height: 84px; }
+.probe-why:focus { outline: none; border-color: var(--ink-3); }
+.probe-why::placeholder { color: var(--ink-3); }
+.probe-why:disabled { opacity: 0.5; }
+.probe-actions { display: flex; gap: 8px; margin-top: 24px; }
 .probe-actions .btn.primary { flex: 1; }
 .probe-sk-hold { min-height: 180px; }
 .sk-wrap { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
