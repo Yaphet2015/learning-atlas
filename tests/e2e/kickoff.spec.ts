@@ -24,8 +24,21 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   await drawer.getByLabel("向 AI 提问").fill("知道折射，但不懂为什么是弯的");
   await drawer.getByLabel("发送提问").click();
   await expect(drawer.locator(".msg.assistant")).toHaveCount(2);
-  // No outline in the kickoff answer: the primary action asks AI for the first level.
-  await drawer.getByRole("button", { name: "铺成第一层", exact: true }).click();
+  // The primary action drafts a learning plan first; the learner edits it, then confirms.
+  await drawer.getByRole("button", { name: "拟定学习计划", exact: true }).click();
+  const plan = drawer.locator(".plan-editor");
+  await expect(plan).toContainText("学完后，能解释彩虹");
+  await expect(plan.locator(".plan-block")).toHaveCount(5);
+  await plan.getByRole("button", { name: "删除「副虹从哪来？」" }).click();
+  await expect(plan.locator(".plan-block")).toHaveCount(4);
+  await plan.getByRole("button", { name: "阳光里有哪些颜色？", exact: true }).click();
+  await plan.getByLabel("块标题").fill("白光由哪些颜色组成？");
+  await plan.getByLabel("块标题").press("Enter");
+  await expect(plan).toContainText("白光由哪些颜色组成？");
+  const plans = await page.evaluate(() => (window as any).__atlasPlans);
+  expect(plans).toHaveLength(1);
+  expect(plans[0].prompt).toContain("知道折射，但不懂为什么是弯的");
+  await plan.getByRole("button", { name: "确认计划，铺成第一层" }).click();
   await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
   // Side by side on the first level, not a vertical chain.
   await expect
@@ -44,7 +57,10 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   // The map request carries what the learner said; the kickoff entry is gone once the level exists.
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
   expect(asks.map((a: any) => a.mode)).toEqual(["answer", "answer", "map"]);
-  expect(asks[2].prompt).toContain("知道折射，但不懂为什么是弯的");
+  // The map request lays the confirmed skeleton, and later requests carry the plan.
+  expect(asks[2].prompt).toContain("[b1] 白光由哪些颜色组成？");
+  expect(asks[2].prompt).not.toContain("副虹");
+  expect(asks[2].context.plan).toContain("学习目标：学完后，能解释彩虹");
   // Conversation requests carry the outline; card bodies are read through tools.
   expect(asks[1].canvas).toBe(true);
   expect(asks[1].context.structure).toContain("白板结构");

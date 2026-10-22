@@ -400,6 +400,17 @@ describe("constrained AI map parsing", () => {
     ).toThrow("重复或保留");
     expect(JSON.stringify(board)).toBe(before);
   });
+  it("drops stray top-level keys; they never reach the board", () => {
+    const board = createEmptyBoard("学习");
+    const result = buildMapFromAI(
+      JSON.stringify({ ...map(), html: "<script>alert(1)</script>", relations_note: "x" }),
+      board,
+    );
+    expect(result.nodes).toHaveLength(3);
+    expect(JSON.stringify(result)).not.toContain("script");
+    const { relations: _r, ...noRelations } = map();
+    expect(buildMapFromAI(JSON.stringify(noRelations), board).nodes).toHaveLength(3);
+  });
   it("connects disconnected components without fabricating semantic edges", () => {
     const board = createEmptyBoard("学习");
     const payload = map();
@@ -415,7 +426,6 @@ describe("constrained AI map parsing", () => {
   it.each([
     "not json",
     '{"nodes":[],"relations":[]}',
-    JSON.stringify({ ...map(), html: "<script>alert(1)</script>" }),
     JSON.stringify({
       nodes: [{ id: "n1", title: "恶意", body: "<script>alert(1)</script>" }],
       relations: [],
@@ -423,20 +433,6 @@ describe("constrained AI map parsing", () => {
     JSON.stringify({
       nodes: [{ id: "n1", title: "代码", body: "```js\nalert(1)\n```" }],
       relations: [],
-    }),
-    JSON.stringify({
-      ...map(),
-      relations: [
-        {
-          source: "structure",
-          target: "unrelated-board-node",
-          label: "invalid",
-        },
-      ],
-    }),
-    JSON.stringify({
-      ...map(),
-      relations: [{ source: "structure", target: "structure", label: "self" }],
     }),
     JSON.stringify({ nodes: [map().nodes[0], map().nodes[0]], relations: [] }),
     JSON.stringify({

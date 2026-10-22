@@ -63,6 +63,13 @@ import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import { expandPrompt } from "./model/expand";
 import { applyEnrichment, enrichPrompt } from "./model/enrich";
 import {
+  confirmPlan,
+  parsePlan,
+  planFirstLevelPrompt,
+  planPrompt,
+} from "./model/plan";
+import type { BoardPlan } from "./shared/types";
+import {
   firstLevelPrompt,
   kickoffNote,
   kickoffPrompt,
@@ -183,6 +190,7 @@ export default function App() {
       Record<string, { text: string; busy: boolean; error?: string }>
     >({}),
     [mapBusy, setMapBusy] = useState(false),
+    [planBusy, setPlanBusy] = useState(false),
     [promote, setPromote] = useState<{
       noteId: string;
       text: string;
@@ -598,6 +606,25 @@ export default function App() {
           else if (!locked()) putBoard(withHints(b, id, hints), false);
           return;
         }
+        // The learning plan: a draft the learner reviews before the first level.
+        if (hintMeta?.request.mode === "plan") {
+          if (update.status === "streaming") return;
+          requestMeta.current.delete(update.requestId);
+          setPlanBusy(false);
+          const b = boardRef.current;
+          if (update.status === "cancelled") return;
+          if (update.status !== "done") {
+            showToast(errorText(update.error ?? "学习计划没有拟好，请重试。"));
+            return;
+          }
+          if (b?.id !== update.boardId) return;
+          try {
+            putBoard({ ...b, plan: parsePlan(update.text) }, false);
+          } catch (error) {
+            showToast(errorText(error));
+          }
+          return;
+        }
         // Diagrams and overviews for new cards: quiet, optional decoration.
         if (hintMeta?.request.mode === "enrich") {
           if (update.status === "streaming") return;
@@ -871,7 +898,9 @@ export default function App() {
       if (
         [...requestMeta.current.values()].some(
           (meta) =>
-            meta.request.mode !== "answer" && meta.request.mode !== "enrich",
+            meta.request.mode !== "answer" &&
+            meta.request.mode !== "enrich" &&
+            meta.request.mode !== "plan",
         )
       )
         return;
@@ -1012,12 +1041,67 @@ export default function App() {
   const proposeFirstLevel = useCallback(() => {
     const b = boardRef.current;
     if (!b || locked()) return;
-    const note = kickoffNote(b);
-    generateMap(
-      b,
-      firstLevelPrompt(b.topic, learnerAnswers(note), kickoffSkeleton(note)),
-    );
-  }, [generateMap]);
+    if (b.plan?.status === "confirmed") {
+      generateMap(b, planFirstLevelPrompt(b));
+      return;
+    }
+    if (b.plan || planBusy) return;
+    requestPlan(b);
+  }, [generateMap, planBusy, settings.configured]);
+  /** One plan request after the kickoff (or straight from the question): the learner edits it, then confirms. */
+  const requestPlan = useCallback(
+    (b: Board) => {
+      if (!settings.configured) {
+        showToast("先连接 AI，它就能为这个问题拟定学习计划。");
+        setShowSettings(true);
+        return;
+      }
+      const root = rootOf(b);
+      if (!root) return;
+      const note = kickoffNote(b);
+      const virtual = newNote(b, { x: 0, y: 0 }, { kind: "node", id: root.id });
+      const request: AIRequest = {
+        boardId: b.id,
+        stickyId: "plan-" + root.id,
+        requestId: uid(),
+        mode: "plan",
+        prompt: planPrompt(b.topic, learnerAnswers(note)),
+        context: contextForNote(
+          { ...b, notes: [virtual] },
+          virtual.id,
+          undefined,
+          false,
+          "references",
+        ),
+      };
+      requestMeta.current.set(request.requestId, {
+        request,
+        anchor: root.id,
+      });
+      setPlanBusy(true);
+      api.ask(request).catch((e) => {
+        requestMeta.current.delete(request.requestId);
+        setPlanBusy(false);
+        showToast(errorText(e));
+      });
+    },
+    [settings.configured, showToast],
+  );
+  const editPlan = useCallback(
+    (plan: BoardPlan | undefined) =>
+      edit((current) => {
+        const { plan: _old, ...rest } = current;
+        return plan ? { ...rest, plan } : rest;
+      }),
+    [edit],
+  );
+  const confirmBoardPlan = useCallback(() => {
+    const b = boardRef.current;
+    if (!b?.plan || locked()) return;
+    const next = { ...b, plan: confirmPlan(b.plan) };
+    edit(() => next);
+    generateMap(next, planFirstLevelPrompt(next));
+  }, [edit, generateMap]);
   const resetBoardView = useCallback(() => {
     setPast([]);
     setCanvasPreview(null);
@@ -2409,7 +2493,19 @@ export default function App() {
           onHistory={() => setHistoryNoteId(drawerNote.id)}
           kickoff={
             needsKickoff(board) && kickoffNote(board)?.id === drawerNote.id
-              ? { onAccept: proposeFirstLevel, busy: mapBusy }
+              ? {
+                  onAccept: proposeFirstLevel,
+                  busy: mapBusy,
+                  planning: planBusy,
+                  plan: board.plan,
+                  onPlanChange: editPlan,
+                  onPlanConfirm: confirmBoardPlan,
+                  onReplan: () => {
+                    editPlan(undefined);
+                    const b = boardRef.current;
+                    if (b) requestPlan({ ...b, plan: undefined });
+                  },
+                }
               : undefined
           }
           onStop={() =>

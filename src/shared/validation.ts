@@ -72,6 +72,7 @@ export const conceptNodeSchema = z
       .object({ summary: plainText(120), sig: z.string().max(80) })
       .strict()
       .optional(),
+    planBlock: idSchema.optional(),
   })
   .strict();
 /** v1 node shape, accepted only as migration input. */
@@ -197,6 +198,34 @@ const legacyBoardV1Schema = z
     viewport: viewportSchema.optional(),
   })
   .strict();
+export const planIntentSchema = z.enum([
+  "concept",
+  "mechanism",
+  "decision",
+  "howto",
+  "learning-path",
+  "compare",
+]);
+export const planBlockSchema = z
+  .object({
+    id: idSchema,
+    title: nonemptyText(80),
+    why: z.string().max(300),
+    parent: idSchema.nullable(),
+    prerequisites: z.array(idSchema).max(12),
+    core: z.boolean(),
+  })
+  .strict();
+export const boardPlanSchema = z
+  .object({
+    status: z.enum(["draft", "confirmed"]),
+    intent: planIntentSchema,
+    goal: z.string().max(400),
+    learner: z.string().max(400),
+    blocks: z.array(planBlockSchema).max(16),
+    outOfScope: z.array(z.string().max(80)).max(8),
+  })
+  .strict();
 export const boardSchema = z
   .object({
     version: z.literal(2),
@@ -215,6 +244,7 @@ export const boardSchema = z
     notes: z.array(stickyNoteSchema).max(LIMITS.notes),
     scene: sceneSchema,
     viewport: viewportSchema.optional(),
+    plan: boardPlanSchema.optional(),
   })
   .strict()
   .superRefine((board, ctx) => {
@@ -330,6 +360,7 @@ export const contextBundleSchema = z
     references: z.array(contextReferenceSchema).max(LIMITS.contextReferences),
     summary: z.string().max(LIMITS.contextCharacters),
     structure: z.string().max(LIMITS.structureCharacters).optional(),
+    plan: z.string().max(8_000).optional(),
     review: z
       .object({
         scope: z.literal("all").optional(),
@@ -380,7 +411,15 @@ export const aiRequestSchema = z
     canvas: z.boolean().optional(),
     canvasRunId: idSchema.optional(),
     excludedCardIds: z.array(idSchema).max(LIMITS.nodes).optional(),
-    mode: z.enum(["answer", "map", "expand", "hint", "organize", "enrich"]),
+    mode: z.enum([
+      "answer",
+      "map",
+      "expand",
+      "hint",
+      "organize",
+      "enrich",
+      "plan",
+    ]),
   })
   .strict();
 export const baseUrlSchema = z
@@ -456,6 +495,8 @@ export const aiMapSchema = z
             emoji: z.string().max(16).optional(),
             color: colorSchema.optional(),
             visual: visualDiagramSchema.optional(),
+            /** The plan block this card realises. */
+            block: idSchema.optional(),
           })
           .strict(),
       )
@@ -471,10 +512,14 @@ export const aiMapSchema = z
           })
           .strict(),
       )
-      .max(12),
+      .max(12)
+      // A map without relations is still a map.
+      .default([]),
     overviews: aiOverviewsSchema,
   })
-  .strict();
+  // Stray top-level notes (e.g. "relations_note") are dropped rather than failing the whole map;
+  // nodes and relations stay strict.
+  .strip();
 
 // Expansion may find no useful additions; initial maps must still contain nodes.
 export const aiExpansionSchema = z.union([

@@ -232,6 +232,23 @@ export function expandWalkthrough(board: Board, nodeId: string): Board {
 const SEQUENCE_LABEL = /先|后|然后|接着|下一步|next/i;
 
 /** Parse data only: generated JavaScript/HTML is never compiled, rendered, or evaluated. */
+type CardSignature = { title: string; grams: Set<string> };
+const normalize = (text: string) =>
+  text.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
+function cardSignature(n: { title: string; body?: string }): CardSignature {
+  const text = normalize(`${n.title}${n.body ?? ""}`);
+  const grams = new Set<string>();
+  for (let i = 0; i < text.length - 1; i++) grams.add(text.slice(i, i + 2));
+  return { title: normalize(n.title), grams };
+}
+/** Same normalized title, or title+body character bigrams with Jaccard ≥ 0.6. */
+export function nearDuplicate(a: CardSignature, b: CardSignature): boolean {
+  if (a.title && a.title === b.title) return true;
+  if (a.grams.size < 8 || b.grams.size < 8) return false;
+  let shared = 0;
+  for (const g of a.grams) if (b.grams.has(g)) shared++;
+  return shared / (a.grams.size + b.grams.size - shared) >= 0.6;
+}
 export function buildMapFromAI(
   text: string,
   board: Board,
@@ -307,6 +324,7 @@ export function buildMapFromAI(
       item.parentId,
       Math.max(nextOrder.get(item.parentId) ?? 0, item.order + 1),
     );
+  const planIds = new Set(board.plan?.blocks.map((b) => b.id));
   const placed = map.nodes.map((item) => {
     const id = resolvedIds.get(item.id)!;
     const parent = parents.get(id) ?? null;
@@ -314,19 +332,41 @@ export function buildMapFromAI(
     nextOrder.set(parent, order + 1);
     return {
       ...node(id, item.title, item.body, parent, order),
+      ...(item.block && planIds.has(item.block) ? { planBlock: item.block } : {}),
       ...(item.visual
         ? { visual: { ...item.visual, labels: [...item.visual.labels] } }
         : {}),
     };
   });
+  // Near-duplicates of cards already on the board (or earlier in this reply) are dropped, with their new children.
+  const kept: typeof placed = [];
+  const dropped = new Set<string>();
+  const seenCards = board.nodes.map(cardSignature);
+  for (const card of placed) {
+    if (card.parentId && dropped.has(card.parentId)) {
+      dropped.add(card.id);
+      continue;
+    }
+    const sig = cardSignature(card);
+    if (seenCards.some((other) => nearDuplicate(sig, other))) {
+      dropped.add(card.id);
+      continue;
+    }
+    seenCards.push(sig);
+    kept.push(card);
+  }
+  placed.splice(0, placed.length, ...kept);
+  for (const id of dropped) parents.delete(id);
+  if (placed.length === 0) return cacheOverviews(board);
   const nodesById = new Map([...board.nodes, ...placed].map((n) => [n.id, n]));
   const cross: Relation[] = [];
   const pairs = new Set<string>();
   for (const edge of map.relations) {
     const source = resolvedIds.get(edge.source);
     const target = resolvedIds.get(edge.target);
-    if (!source || !target || source === target)
-      throw new Error("AI 返回了无效的关系，画布没有改变。");
+    // A relation to an unknown or dropped card is skipped; the new cards still land.
+    if (!source || !target || source === target) continue;
+    if (!nodesById.has(source) || !nodesById.has(target)) continue;
     const a = nodesById.get(source)!,
       b = nodesById.get(target)!;
     // Direct parent-child relations are already shown by the tree.

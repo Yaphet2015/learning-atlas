@@ -1,3 +1,4 @@
+import { renderPlan } from "./plan";
 import type {
   Board,
   ContextBundle,
@@ -161,6 +162,7 @@ export function contextForNote(
   if (scope === "references")
     return contextBundleSchema.parse({ topic, references, summary });
   const anchorId = selected?.kind === "node" ? selected.id : null;
+  const plan = renderPlan(board, anchorId);
   if (scope === "outline") {
     const outline = serializeStructure(board, {
       anchor: anchorId,
@@ -171,6 +173,7 @@ export function contextForNote(
       references,
       summary,
       ...(outline ? { structure: outline } : {}),
+      ...(plan ? { plan } : {}),
     });
   }
   // The whole map, compactly: the tutor can answer questions about levels,
@@ -191,6 +194,7 @@ export function contextForNote(
     references,
     summary,
     ...(structure ? { structure } : {}),
+    ...(plan ? { plan } : {}),
     review: cardReview(board, reviewFocus, note.excludedRefs),
   });
 }

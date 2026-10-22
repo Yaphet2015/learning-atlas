@@ -40,6 +40,8 @@ export interface ConceptNode {
   hand?: string;
   expanded?: boolean;
   visual?: VisualDiagram;
+  /** The board plan block this card realises (board.plan); optional. */
+  planBlock?: string;
 }
 export interface Relation {
   id: string;
@@ -110,6 +112,39 @@ export interface Board {
   notes: StickyNote[];
   scene: SceneState;
   viewport?: { x: number; y: number; zoom: number };
+  /** The learning plan behind the map (optional; older boards have none). */
+  plan?: BoardPlan;
+}
+export type PlanIntent =
+  | "concept"
+  | "mechanism"
+  | "decision"
+  | "howto"
+  | "learning-path"
+  | "compare";
+/** One block of the topic skeleton: a sub-question the map must answer. */
+export interface PlanBlock {
+  id: string;
+  title: string;
+  /** Why reaching the goal needs it. */
+  why: string;
+  /** A top-level block (null) becomes a first-level card; others sit under a top-level block. */
+  parent: string | null;
+  /** Blocks (ids) to understand first. */
+  prerequisites: string[];
+  /** Required by the question itself, whoever asks; the learner profile cannot drop it. */
+  core: boolean;
+}
+export interface BoardPlan {
+  /** draft: waiting for the learner to review it; confirmed: drives generation. */
+  status: "draft" | "confirmed";
+  intent: PlanIntent;
+  /** Testable: "学完后，能……". */
+  goal: string;
+  /** A short learner profile from the kickoff (or "按初学者处理"). */
+  learner: string;
+  blocks: PlanBlock[];
+  outOfScope: string[];
 }
 export interface BoardSummary {
   id: string;
@@ -136,6 +171,8 @@ export interface ContextBundle {
   structure?: string;
   /** Full card contents in the four-level review window; absent in older contexts. */
   review?: CardReview;
+  /** The confirmed board plan, rendered for this request (model/plan.ts). */
+  plan?: string;
 }
 export interface CardReview {
   scope?: "all";
@@ -195,7 +232,14 @@ export interface AIRequest {
   canvas?: boolean;
   canvasRunId?: string;
   excludedCardIds?: string[];
-  mode: "answer" | "map" | "expand" | "hint" | "organize" | "enrich";
+  mode:
+    | "answer"
+    | "map"
+    | "expand"
+    | "hint"
+    | "organize"
+    | "enrich"
+    | "plan";
 }
 export interface AIUpdate {
   boardId: string;
