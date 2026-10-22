@@ -98,6 +98,23 @@ export async function installFakeAtlas(
           );
         if (request.mode === "mark")
           return (window as any).__atlasMarkAnswers?.shift() ?? JSON.stringify({ pass: true, missing: "" });
+        const picked = /学习者从提示里选了这个方向：「([^」]+)」/.exec(request.prompt);
+        if (request.mode === "expand" && picked && !(window as any).__atlasExpansionAnswers?.length)
+          return gateFill(
+            JSON.stringify({
+              nodes: [
+                {
+                  id: "hint-card",
+                  parent: "anchor",
+                  title: picked[1],
+                  body: `${picked[1]}：比如在一个示例情况里，条件一变，结果就跟着变，所以判断前先看清条件。`,
+                  substance: [{ kind: "example", text: "比如在一个示例情况里，条件一变，结果就跟着变", isExample: true }],
+                  ...(/depthType 写 "(\w+)"/.exec(request.prompt) ? { depthType: /depthType 写 "(\w+)"/.exec(request.prompt)![1] } : {}),
+                },
+              ],
+              relations: [],
+            }),
+          );
         if (request.mode === "expand" || request.mode === "regen")
           return gateFill(
             (window as any).__atlasExpansionAnswers?.shift() ??

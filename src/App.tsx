@@ -312,6 +312,8 @@ export default function App() {
           hintSignature?: string;
           /** enrich: the new cards it decorates. */
           newIds?: string[];
+          /** A picked ghost hint: select the card it becomes. */
+          selectNew?: boolean;
           /** Quiet requests (gate judge, regenerate, check marking) resolve a promise. */
           resolve?: (text: string) => void;
           reject?: (error: Error) => void;
@@ -720,6 +722,10 @@ export default function App() {
                   );
                 const applied = applyGate(target, anchorId, outcome, mode, meta.request.context);
                 next = applied.board;
+                if (meta.selectNew && applied.added[0]) {
+                  const born = applied.added[0];
+                  setTimeout(() => setSelection({ kind: "node", id: born }), 0);
+                }
                 if (mode === "map" && !target.route?.length && anchorId === questionNode(target)?.id) {
                   const route = defaultRoute(next);
                   if (route.length) next = { ...next, route };
@@ -866,8 +872,8 @@ export default function App() {
     [edit, openDrawer],
   );
   const sendAI = useCallback(
-    async (request: AIRequest, anchor?: string) => {
-      requestMeta.current.set(request.requestId, { request, anchor });
+    async (request: AIRequest, anchor?: string, extra?: { selectNew?: boolean; split?: boolean }) => {
+      requestMeta.current.set(request.requestId, { request, anchor, ...extra });
       setPending((p) => ({
         ...p,
         [`${request.boardId}/${request.stickyId}`]: { text: "", busy: true },
@@ -974,7 +980,7 @@ export default function App() {
     [settings.configured, selection, sendAI, edit],
   );
   const expand = useCallback(
-    (id: string, angle?: DigAngle, promptOverride?: string) => {
+    (id: string, angle?: DigAngle, promptOverride?: string, extra?: { selectNew?: boolean; split?: boolean }) => {
       if (locked()) return;
       if (
         [...requestMeta.current.values()].some(
@@ -1018,6 +1024,7 @@ export default function App() {
           context,
         },
         id,
+        extra,
       );
     },
     [putBoard, settings.configured, sendAI, showToast],
@@ -1873,7 +1880,7 @@ export default function App() {
       const anchor = side === "below" ? from : side === "right" ? node.parentId : null;
       if (b.kind === "ai" && settings.configured && anchor) {
         setPreview(null);
-        expand(anchor, angle, expandPrompt(b, anchor, angle) + hintCardNote(title));
+        expand(anchor, angle, expandPrompt(b, anchor, angle) + hintCardNote(title), { selectNew: true });
         return;
       }
       const id = newId(

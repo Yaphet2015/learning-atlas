@@ -609,6 +609,7 @@ async function gateSample(t: EvalTopic, out: string) {
     const context = contextForNote({ ...board, notes: [...board.notes, virtual] }, virtual.id);
     const system = (m: string) => `${tutorInstructions(m as any)}\n\n${renderScopedContext(context)}`;
     const first = await chat(system(mode), prompt, { temperature: modeTemperature(mode) });
+    const firstTokens = { prompt: totals.prompt - before.prompt, completion: totals.completion - before.completion };
     const outcome = await runGate(first.content, board, anchorId, async (m, p) =>
       (await chat(tutorInstructions(m), p, { temperature: modeTemperature(m) })).content, prompt);
     const applied = applyGate(board, anchorId, outcome, mode, context);
@@ -622,6 +623,7 @@ async function gateSample(t: EvalTopic, out: string) {
       dropped: outcome.dropped.map((d) => ({ title: d.card.title, reasons: d.reasons })),
       calls: outcome.calls,
       roughTokens: outcome.tokens,
+      firstCall: firstTokens,
       tokens: { prompt: after.prompt - before.prompt, completion: after.completion - before.completion },
     });
     return applied.added;

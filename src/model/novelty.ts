@@ -127,9 +127,12 @@ export function cheapGate(
   if (/\d/.test(body) && subs.some((s) => /\d/.test(String(s.text)) && s.isExample) && !/比如|例如|示例|假设|举例/.test(body))
     reasons.push("正文里的示例数字旁要写明“比如/示例”");
   // 5. The check question must use a new situation.
+  // A clear restatement is rejected; a check that merely shares wording with the body is left to the judge.
   const q = card.check?.q ?? "";
-  if (q && (containment(q, body) >= 0.5 || /是什么[？?]?$|重要吗[？?]?$|^什么是/.test(q.trim())))
+  const qOverlap = q ? containment(q, body) : 0;
+  if (q && (qOverlap >= 0.7 || /是什么[？?]?$|重要吗[？?]?$|^什么是/.test(q.trim())))
     reasons.push("检查题在复述正文，要换成新情境");
+  else if (qOverlap >= 0.5) ambiguous = true;
   const answer = card.check?.options?.[card.check.answer ?? -1];
   if (answer && answer.length >= 6 && norm(body).includes(norm(answer)))
     reasons.push("检查题答案能在正文里直接找到");
@@ -187,11 +190,11 @@ export function judgePrompt(board: Board, items: { card: RawCard; against: strin
     const x = title(against);
     return {
       id: card.id,
-      card: { title: card.title, body: card.body, claims: card.claims },
+      card: { title: card.title, body: card.body, claims: card.claims, check: card.check?.q },
       compareWith: x ? { title: x.title, claims: claimsOf(x) } : null,
     };
   });
-  return `判断每张候选卡片相对“比较对象”是否带来具体的新知识。adds 写出它比比较对象多了什么（一句话，≤30 字；说不出具体差异就留空）。pass 为 true 仅当 adds 具体、且正文不是空话或复述。不因内容深、难而扣分。
+  return `判断每张候选卡片相对“比较对象”是否带来具体的新知识。adds 写出它比比较对象多了什么（一句话，≤30 字；说不出具体差异就留空）。pass 为 true 仅当 adds 具体、正文不是空话或复述，并且检查题 check 把知识点用到了正文没写过的新情境（只是换词复述正文则不通过）。不因内容深、难而扣分。
 只输出 JSON：{"verdicts":[{"id":"…","adds":"…","pass":true}]}
 候选：${JSON.stringify(rows)}`;
 }
