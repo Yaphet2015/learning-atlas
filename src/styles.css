@@ -4201,7 +4201,7 @@ kbd,
   right: auto;
   transform: translateX(-50%);
   top: calc(100% + 10px);
-  width: 214px;
+  width: 248px;
 }
 .menu.dig-menu .dig-head {
   padding: 4px 10px 6px;
@@ -4212,6 +4212,10 @@ kbd,
 .menu.dig-menu .it {
   justify-content: space-between;
   align-items: baseline;
+}
+.menu.dig-menu .dig-name,
+.menu.dig-menu .dig-sub {
+  white-space: nowrap;
 }
 .menu.dig-menu .dig-sub {
   font: 400 12px var(--kai);

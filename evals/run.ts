@@ -34,6 +34,7 @@ import {
 } from "../src/model/plan";
 import type { BoardPlan } from "../src/shared/types";
 import { expandPrompt } from "../src/model/expand";
+import { ANGLE_DEPTH, DIG_ANGLES } from "../src/model/angles";
 import type { Board, ContextBundle, StickyNote } from "../src/shared/types";
 import { TOPICS, type EvalTopic } from "./topics";
 import { treeMetrics, type EvalNode } from "./metrics";
@@ -548,7 +549,61 @@ async function runTopic(t: EvalTopic, out: string) {
 const mean = (xs: number[]) =>
   xs.length ? +(xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(2) : NaN;
 
+/**
+ * EVAL_MODE=angles: does 「往哪挖」 steer? Lay the first level, then expand one L1 card once per
+ * angle (each from the same board), and have a blinded judge say which angle each new card digs.
+ */
+const ANGLE_JUDGE_SYSTEM = `你是学习材料审阅者。给你一张父卡片和它下面新加的一张子卡片。判断子卡片主要在往哪个方向深入，只能选一个：
+why（解释原因、机制）、how（步骤、做法、如何运作）、example（具体例子、算例、案例）、edge（边界条件、例外、误区、何时不成立）、compare（与相近概念对照、区别）、apply（在实际决策或练习中怎么用）。
+只输出 JSON：{"angle":"why|how|example|edge|compare|apply","confidence":1-5}`;
+async function angleCheck(t: EvalTopic, out: string) {
+  const steps: Step[] = [];
+  let board = createEmptyBoard(t.topic);
+  const root = board.nodes[0].id;
+  board = await generate(board, root, "map", firstLevelPrompt(t.topic, []), 0, steps);
+  const anchorId = board.nodes.find((n) => n.parentId === root)?.id;
+  if (!anchorId) throw new Error("no first level");
+  const anchor = board.nodes.find((n) => n.id === anchorId)!;
+  const rows: any[] = [];
+  for (const angle of DIG_ANGLES) {
+    const next = await generate(board, anchorId, "expand", expandPrompt(board, anchorId, angle), 1, steps);
+    const added = next.nodes.filter((n) => !board.nodes.some((o) => o.id === n.id));
+    for (const n of added) {
+      const user = `父卡片：「${anchor.title}」${anchor.body}\n\n子卡片：「${n.title}」\n${n.summary ?? ""}\n${n.body}\n要点：${(n.keyPoints ?? []).join("；")}${n.example ? `\n例子：${n.example}` : ""}${n.misconception ? `\n误解：${n.misconception}` : ""}`;
+      let judged: any = {};
+      try {
+        const r = await chat(ANGLE_JUDGE_SYSTEM, user, { temperature: 0 });
+        judged = JSON.parse(r.content.slice(r.content.indexOf("{"), r.content.lastIndexOf("}") + 1));
+      } catch (e) {
+        judged = { error: String((e as Error).message) };
+      }
+      rows.push({ topic: t.id, asked: angle, title: n.title, depthType: n.depthType, judged: judged.angle, confidence: judged.confidence, match: judged.angle === angle, depthMatch: n.depthType === ANGLE_DEPTH[angle] });
+    }
+    if (!added.length) rows.push({ topic: t.id, asked: angle, title: null, match: false, depthMatch: false });
+  }
+  await writeFile(join(out, `${t.id}.angles.json`), JSON.stringify({ anchor: anchor.title, rows, steps }, null, 2));
+  return rows;
+}
+
 async function main() {
+  if (process.env.EVAL_MODE === "angles") {
+    const pick = process.env.EVAL_TOPICS?.split(",").map((s) => s.trim());
+    const topics = pick ? TOPICS.filter((t) => pick.includes(t.id)) : TOPICS.slice(0, 2);
+    const out = process.env.EVAL_OUT ?? join("evals", "results", "angles");
+    await mkdir(out, { recursive: true });
+    const all = (await Promise.all(topics.map((t) => angleCheck(t, out).catch((e) => (console.log(`✗ ${t.id}: ${e.message}`), []))))).flat();
+    const by = Object.fromEntries(
+      DIG_ANGLES.map((a) => {
+        const rs = all.filter((r) => r.asked === a && r.title);
+        return [a, { cards: rs.length, judgedMatch: rs.filter((r) => r.match).length, depthTagMatch: rs.filter((r) => r.depthMatch).length }];
+      }),
+    );
+    const cards = all.filter((r) => r.title);
+    const summary = { model: MODEL, topics: topics.map((t) => t.id), cards: cards.length, judgedMatch: +(cards.filter((r) => r.match).length / (cards.length || 1)).toFixed(3), depthTagMatch: +(cards.filter((r) => r.depthMatch).length / (cards.length || 1)).toFixed(3), byAngle: by, usage: totals, rows: all.map(({ topic, asked, title, depthType, judged, confidence }) => ({ topic, asked, title, depthType, judged, confidence })) };
+    await writeFile(join(out, "summary.json"), JSON.stringify(summary, null, 2));
+    console.log(JSON.stringify({ cards: summary.cards, judgedMatch: summary.judgedMatch, depthTagMatch: summary.depthTagMatch, byAngle: by }, null, 1));
+    return;
+  }
   const pick = process.env.EVAL_TOPICS?.split(",").map((s) => s.trim());
   const topics = pick ? TOPICS.filter((t) => pick.includes(t.id)) : TOPICS;
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);

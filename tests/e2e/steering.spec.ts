@@ -1,30 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 import { installFakeAtlas } from "./fake-atlas";
-import { insuranceBoard } from "./fixtures";
+import { insuranceBoard, plannedBoard } from "./fixtures";
 import { gotoApp } from "./ready";
 
 const card = (page: Page, id: string) =>
   page.locator(`.react-flow__node[data-id="${id}"]`);
 const asks = (page: Page) =>
   page.evaluate(() => (window as any).__atlasAsks as any[]);
-
-export function plannedBoard() {
-  const board: any = insuranceBoard(true);
-  board.nodes.find((n: any) => n.id === "c-what").planBlock = "b-what";
-  board.plan = {
-    status: "confirmed",
-    intent: "concept",
-    goal: "学完后，能读懂一份重疾险条款的关键部分。",
-    learner: "按初学者处理",
-    blocks: [
-      { id: "b-what", title: "保什么", why: "先知道保障范围", parent: null, prerequisites: [], core: true },
-      { id: "b-tiers", title: "多次赔付的间隔期", why: "分层决定赔多少", parent: "b-what", prerequisites: [], core: true },
-      { id: "b-wait", title: "等待期与免责", why: "决定会不会落空", parent: null, prerequisites: ["b-what"], core: true },
-    ],
-    outOfScope: [],
-  };
-  return board;
-}
 
 const oneCard = (id: string, title: string, block?: string) =>
   JSON.stringify({
