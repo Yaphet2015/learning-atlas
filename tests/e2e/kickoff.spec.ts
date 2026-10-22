@@ -20,6 +20,8 @@ test("a new question starts the 摸底; skipping it drafts a plan and the first 
   const probe = drawer.getByRole("region", { name: "摸底" });
   await expect(probe).toContainText("找到你的起点");
   await expect(probe).toContainText("第 1 题");
+  // Skip once the first question is up (so the chain exists and reaches the map prompt).
+  await expect(probe.locator(".beat-q")).toBeVisible();
   await probe.getByRole("button", { name: "跳过摸底" }).click();
   await expect(probe).toContainText("跳过也没关系，我会从最基础的开始排。");
   // The plan is drafted for a beginner; the learner edits it, then confirms.

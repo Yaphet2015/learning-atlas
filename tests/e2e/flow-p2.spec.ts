@@ -41,14 +41,14 @@ test("摸底 v2: brackets the edge without levels or marks; stations below the s
     await probe.getByRole("radio", { name: re }).click();
     await probe.getByRole("button", { name: "确定" }).click();
   };
-  await pick(/说法乙/); // p1 ✓ → p3
+  await pick(/核对合同/); // p1 ✓ → p3
   await expect(probe).toContainText("条款细读");
   await expect(probe).toContainText("第 2 题");
-  await pick(/说法甲/); // p3 ✗ → p2
+  await pick(/凭常识/); // p3 ✗ → p2
   await expect(probe).toContainText("最可能卡在哪一条");
   await pick(/等待期/); // p2 ✓ → refine (adjacent) → confirm deeper at p4
   await expect(probe).toContainText("产品取舍");
-  await pick(/说法甲/); // p4 ✗ → precise
+  await pick(/凭常识/); // p4 ✗ → precise
   await expect(probe).toContainText("你已经懂到");
   await expect(probe).toContainText("合同结构");
   await expect(probe).toContainText("从「条款细读」开始，正好在你会的上面一层。");
