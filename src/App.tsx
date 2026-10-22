@@ -73,7 +73,7 @@ import {
   planFirstLevelPrompt,
   planPrompt,
 } from "./model/plan";
-import type { BoardPlan, ConceptNode } from "./shared/types";
+import type { BoardPlan, ConceptNode, LadderLevel, ProbeState } from "./shared/types";
 import {
   firstLevelPrompt,
   kickoffNote,
@@ -134,7 +134,7 @@ import { nextStep } from "./model/next-step";
 import { defaultRoute, stationOf } from "./model/route";
 import { runGate, roughTokens } from "./model/novelty";
 import { applyGate } from "./model/gate";
-import { answerProbe, applyFrontier, failRecheck, gradePrompt, ladderPrompt, localGrade, newProbe, nextProbe, parseGrade, parseLadder, probeLearner, skipProbe } from "./model/probe";
+import { answerProbe, applyExpand, applyFrontier, applyRefine, bounds as probeBounds, cacheChain, cachedChain, chainKey, chainPrompt, failRecheck, gradePrompt, localGrade, newProbe, nextStep as probeStep, parseGrade, parsePoints, probeLearner, refinePrompt, restartProbe, skipProbe } from "./model/probe";
 import { afterChildSealed, analogyPrompt, isStuck, parseAnalogy, putOff, splitNote } from "./model/stuck";
 import { parseWrap, wrapPrompt } from "./model/wrap";
 import { ProbePanel } from "./components/ProbePanel";
@@ -1205,7 +1205,114 @@ export default function App() {
     [settings.configured, showToast],
   );
   const [probeBusy, setProbeBusy] = useState(false);
-  /** 摸底 step 1: open the root's kickoff drawer and draft the depth ladder (one quiet call). */
+  /** Which skeleton the probe shows while a generation call runs (README §9). */
+  const [probePhase, setProbePhase] = useState<"first" | "deeper" | "refine" | null>(null);
+  /** Prefetched expansion for the current top point (README §7 预取). */
+  const probePrefetch = useRef<{ key: string; promise: Promise<LadderLevel[]> } | null>(null);
+  /** One batched generation call (points + their questions); one retry. Tokens go to probe.meta. */
+  const genPoints = useCallback(async (prompt: string, sticky: string): Promise<{ points: LadderLevel[]; adjacent: boolean }> => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const reply = await askQuietRef.current("probe", prompt, sticky);
+        const tokens = roughTokens(prompt, reply);
+        if (import.meta.env.DEV) console.info(`[probe] gen ~${tokens} tokens`);
+        edit((current) => {
+          const p = current.probe;
+          if (!p) return current;
+          const t = p.meta?.tokens ?? { gen: 0, grade: 0 };
+          return { ...current, probe: { ...p, meta: { ...(p.meta ?? { expansions: 0, refines: 0, refined: [], adjacent: [] }), tokens: { ...t, gen: t.gen + tokens } } } };
+        }, false);
+        const parsed = parsePoints(reply);
+        if (parsed && (parsed.points.length || parsed.adjacent)) return parsed;
+      } catch {
+        /* retried once below */
+      }
+    }
+    throw new Error("probe-gen");
+  }, [edit]);
+  const expandPoints = useCallback(
+    (topic: string, chain: LadderLevel[]) => {
+      const from = chain.at(-1);
+      const key = chainKey(topic, from);
+      const cached = cachedChain(key);
+      if (cached) return Promise.resolve(cached);
+      if (probePrefetch.current?.key === key) return probePrefetch.current.promise;
+      const promise = genPoints(chainPrompt(topic, from, undefined, chain.map((p) => p.desc)), `probe-gen-${chain.length}`).then((r) => {
+        cacheChain(key, r.points);
+        return r.points;
+      });
+      probePrefetch.current = { key, promise };
+      promise.catch(() => {
+        if (probePrefetch.current?.key === key) probePrefetch.current = null;
+      });
+      return promise;
+    },
+    [genPoints],
+  );
+  /** Converged: re-seal a laid map, or go on to the plan. */
+  const finishProbe = useCallback(
+    (state: ProbeState) => {
+      let next: Board = { ...boardRef.current!, probe: state };
+      if (next.route?.length) next = applyFrontier(next);
+      edit(() => next);
+      if (!next.route?.length && !next.plan) requestPlan(next);
+    },
+    [edit, requestPlan],
+  );
+  /** Run the machine until it needs an answer (ask) or is done; EXPAND / REFINE are generation calls. */
+  const advanceProbe = useCallback(
+    async (start: ProbeState) => {
+      const topic = boardRef.current?.topic ?? "";
+      let state = start;
+      for (let guard = 0; guard < 12; guard++) {
+        const step = probeStep(state);
+        if (step.kind === "ask") {
+          edit((current) => ({ ...current, probe: state }));
+          // At the top of an open range: prefetch the deeper segment while the learner thinks.
+          const { hi } = probeBounds(state);
+          if (step.index === state.ladder.length - 1 && hi === Infinity && (state.meta?.expansions ?? 0) < 3)
+            void expandPoints(topic, state.ladder).catch(() => undefined);
+          return;
+        }
+        if (step.kind === "done") return finishProbe(state.status === "asking" ? { ...state, status: "done", frontier: step.frontier, meta: { ...state.meta!, stopReason: step.reason } } : state);
+        try {
+          if (step.kind === "expand") {
+            const first = !state.ladder.length;
+            setProbePhase(first ? "first" : "deeper");
+            if (first) {
+              const key = chainKey(topic);
+              let points = cachedChain(key);
+              if (!points) {
+                points = (await genPoints(chainPrompt(topic), "probe-gen-0")).points;
+                if (points.length < 3) throw new Error("probe-gen");
+                cacheChain(key, points);
+              }
+              state = { ...newProbe(points), meta: { ...newProbe(points).meta!, tokens: boardRef.current?.probe?.meta?.tokens } };
+            } else state = applyExpand(state, await expandPoints(topic, state.ladder));
+          } else {
+            setProbePhase("refine");
+            const r = await genPoints(refinePrompt(topic, state.ladder[step.lo], state.ladder[step.hi]), `probe-refine-${state.ladder.length}`);
+            state = applyRefine(state, step.lo, step.hi, r.points, r.adjacent);
+          }
+        } catch {
+          setProbePhase(null);
+          if (!state.ladder.length) {
+            showToast("没出好题，先从头开始。可以在画布右上角 ⋯ 里重新摸底。");
+            return finishProbe(skipProbe(undefined));
+          }
+          // A deeper segment failed: stop at what we know.
+          return finishProbe({ ...state, status: "done", frontier: Math.min(probeBounds(state).lo + 1, state.ladder.length - 1), meta: { ...state.meta!, stopReason: "cap" } });
+        } finally {
+          setProbePhase(null);
+        }
+        // Keep the latest tokens written by genPoints.
+        const t = boardRef.current?.probe?.meta?.tokens;
+        if (t && state.meta) state = { ...state, meta: { ...state.meta, tokens: t } };
+      }
+    },
+    [edit, expandPoints, finishProbe, genPoints, showToast],
+  );
+  /** 摸底 step 1: open the root's kickoff drawer and draft the first chain (one batched call). */
   const startProbe = useCallback(() => {
     const b = boardRef.current;
     const root = b && rootOf(b);
@@ -1216,51 +1323,34 @@ export default function App() {
       note.title = "AI 带我开始";
     }
     const created = note;
+    const empty = newProbe([]);
     edit((current) => ({
       ...current,
-      probe: newProbe([]),
+      probe: empty,
       notes: current.notes.some((n) => n.id === created.id) ? current.notes : [...current.notes, created],
     }));
     openDrawer(created.id);
-    setProbeBusy(true);
-    const prompt = ladderPrompt(b.topic);
-    askQuietRef
-      .current("probe", prompt, `probe-${root.id}`)
-      .then((text) => {
-        if (import.meta.env.DEV) console.info(`[probe] ladder ~${roughTokens(prompt, text)} tokens`);
-        const ladder = parseLadder(text);
-        if (ladder) {
-          edit((current) => ({ ...current, probe: newProbe(ladder) }));
-          return;
-        }
-        throw new Error("ladder");
-      })
-      .catch(() => {
-        showToast("摸底没准备好，我会从最基础的开始排。可以稍后重新摸底。");
-        const next = { ...boardRef.current!, probe: skipProbe(undefined) };
-        edit(() => next);
-        requestPlan(next);
-      })
-      .finally(() => setProbeBusy(false));
-  }, [edit, openDrawer, showToast, requestPlan]);
-  /** One probe answer: graded locally when possible, else one short call; converge → plan (or re-seal). */
+    void advanceProbe(empty);
+  }, [edit, openDrawer, advanceProbe]);
+  /** One answer: graded locally (MCQ, no reason), else one short call; then advance the machine. */
   const answerProbeQ = useCallback(
     async (choice: number | null, text: string) => {
       const b = boardRef.current;
       const state = b?.probe;
-      if (!b || !state || state.status !== "asking") return;
-      const step = nextProbe(state);
-      if (step.done) return;
-      const level = state.ladder[step.level];
-      let verdict = localGrade(level, choice, text);
+      if (!b || !state || state.status !== "asking" || probePhase) return;
+      const step = probeStep(state);
+      if (step.kind !== "ask") return;
+      const point = state.ladder[step.index];
+      let verdict = localGrade(point, choice, text);
       let missing = "";
+      let gradeTokens = 0;
       if (!verdict) {
         setProbeBusy(true);
-        const answer = choice !== null && choice >= 0 ? `${level.probe.options?.[choice] ?? ""}。理由：${text}` : text;
-        const prompt = gradePrompt(level, answer);
+        const answer = choice !== null && choice >= 0 ? `${point.probe.options?.[choice] ?? ""}。理由：${text}` : text;
+        const prompt = gradePrompt(point, answer);
         try {
           const reply = await askQuietRef.current("mark", prompt, `probe-mark-${b.id}`);
-          if (import.meta.env.DEV) console.info(`[probe] grade ~${roughTokens(prompt, reply)} tokens`);
+          gradeTokens = roughTokens(prompt, reply);
           const g = parseGrade(reply);
           verdict = g?.verdict ?? "unsure";
           missing = g?.missing ?? "";
@@ -1270,42 +1360,38 @@ export default function App() {
           setProbeBusy(false);
         }
       }
-      const current = boardRef.current;
-      if (!current?.probe) return;
-      const probe = answerProbe(current.probe, {
-        level: level.level,
+      const current = boardRef.current?.probe;
+      if (!current) return;
+      let next = answerProbe(current, {
+        pointId: point.id ?? `p${point.level}`,
         verdict,
         ...(text.trim() ? { text: text.slice(0, 1000) } : {}),
         ...(missing ? { missing } : {}),
         ...(step.recheck ? { recheck: true } : {}),
       });
-      let next: Board = { ...current, probe };
-      if (probe.status === "done") {
-        // Re-probe on a laid map only recomputes the light seals; a new board goes on to the plan.
-        if (next.route?.length) next = applyFrontier(next);
-        edit(() => next);
-        if (!next.route?.length && !next.plan) requestPlan(next);
-        return;
+      if (gradeTokens && next.meta) {
+        const t = next.meta.tokens ?? { gen: 0, grade: 0 };
+        next = { ...next, meta: { ...next.meta, tokens: { ...t, grade: t.grade + gradeTokens } } };
       }
-      edit(() => next);
+      if (next.status !== "asking") return finishProbe(next);
+      await advanceProbe(next);
     },
-    [edit, requestPlan],
+    [advanceProbe, finishProbe, probePhase],
   );
   const skipProbeQ = useCallback(() => {
     const b = boardRef.current;
     if (!b) return;
-    let next: Board = { ...b, probe: skipProbe(b.probe) };
-    if (next.route?.length) next = applyFrontier(next);
-    edit(() => next);
-    if (!next.route?.length && !next.plan) requestPlan(next);
-  }, [edit, requestPlan]);
+    finishProbe(skipProbe(b.probe));
+  }, [finishProbe]);
   const reprobe = useCallback(() => {
     const b = boardRef.current;
     if (!b?.probe?.ladder.length) return startProbe();
-    edit((current) => ({ ...current, probe: newProbe(current.probe!.ladder) }));
+    const again = restartProbe(b.probe);
+    edit((current) => ({ ...current, probe: again }));
     const note = kickoffNote(b);
     if (note) openDrawer(note.id);
-  }, [edit, startProbe, openDrawer]);
+    void advanceProbe(again);
+  }, [edit, startProbe, openDrawer, advanceProbe]);
   const fromStart = useCallback(
     () =>
       edit((current) =>
@@ -2955,7 +3041,11 @@ export default function App() {
                 <ProbePanel
                   state={board.probe}
                   busy={probeBusy}
+                  phase={probePhase ?? (board.probe.status !== "asking" && !stations && planBusy ? "result" : null)}
+                  topic={board.topic}
                   stations={stations}
+                  {...(board.probe.status !== "asking" && (stations || board.plan) ? { onStart: closeDrawer } : {})}
+                  {...(board.probe.status !== "asking" && board.probe.ladder.length ? { onRestart: reprobe } : {})}
                   onAnswer={(c, t) => void answerProbeQ(c, t)}
                   onSkip={skipProbeQ}
                   {...(stations ? { onFromStart: fromStart } : {})}
