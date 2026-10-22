@@ -241,6 +241,8 @@ test("dragging the sidebar resizes the canvas, clamps width and remembers it aft
   await expect(handle).toHaveAttribute("aria-valuenow", "210");
   await handle.press("End");
   await expect(handle).toHaveAttribute("aria-valuenow", "400");
+  // Let the width transition land before double-clicking the moving handle (macOS CI flake).
+  await expect(panel).toHaveCSS("width", "400px");
   await handle.dblclick();
   await expect(panel).toHaveCSS("width", "244px");
 });
