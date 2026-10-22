@@ -79,3 +79,35 @@ describe("angle-labelled hints", () => {
     expect(h.more).toBeUndefined();
   });
 });
+
+import { coverTarget } from "../src/model/plan";
+describe("coverage: generating a missing plan block", () => {
+  const planned = (): Board => {
+    const b = board();
+    b.nodes[1] = { ...b.nodes[1], planBlock: "p1" };
+    b.plan = {
+      status: "confirmed",
+      intent: "mechanism",
+      goal: "学完后，能解释彩虹",
+      learner: "按初学者处理",
+      blocks: [
+        { id: "p1", title: "折射", why: "光要先弯折", parent: null, prerequisites: [], core: true },
+        { id: "p1a", title: "色散", why: "颜色分开", parent: "p1", prerequisites: ["p1"], core: true },
+        { id: "p2", title: "观察角度", why: "", parent: null, prerequisites: [], core: false },
+      ],
+      outOfScope: [],
+    };
+    return b;
+  };
+  it("grows a sub-block under its parent block's card", () => {
+    const t = coverTarget(planned(), "p1a")!;
+    expect(t.anchorId).toBe("a");
+    expect(t.prompt).toContain('block 写 "p1a"');
+    expect(t.prompt).toContain("「折射」");
+  });
+  it("grows a missing top block from the root, and nothing for covered blocks", () => {
+    expect(coverTarget(planned(), "p2")!.anchorId).toBe("q");
+    expect(coverTarget(planned(), "p1")).toBeUndefined();
+    expect(coverTarget(planned(), "nope")).toBeUndefined();
+  });
+});
