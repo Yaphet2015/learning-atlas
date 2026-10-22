@@ -59,6 +59,9 @@ test("canvas ⋯ menu holds 整理记录与恢复, 导出 and 归档; a paused r
   const pill = page.getByRole("button", { name: /整理已暂停/ });
   await expect(pill).toBeVisible();
   await page.getByRole("button", { name: "画布操作" }).click();
+  // 重新摸底 is always the first item; this AI board has no probe yet, so it starts one.
+  await expect(page.locator(".canvas-menu [role=menuitem]").first()).toHaveText("重新摸底");
+  await expect(page.getByRole("menuitem", { name: "重新摸底" })).toBeEnabled();
   await expect(page.getByRole("menuitem", { name: /整理记录与恢复/ })).toContainText("1 次暂停");
   await expect(page.getByRole("menuitem", { name: "导出画布…" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "归档画布" })).toBeVisible();
@@ -83,3 +86,12 @@ for (const scheme of ["light", "dark"] as const)
     await page.screenshot({ path: `${dir}/collapsed-rail-${scheme}.png` });
     await page.getByRole("button", { name: "展开左侧边栏" }).click();
   });
+
+test("重新摸底 stays listed but disabled, with the reason, when it can't run", async ({ page }) => {
+  await installFakeAtlas(page, false, "web", [boards()[0]]);
+  await gotoApp(page);
+  await page.getByRole("button", { name: "画布操作" }).click();
+  const item = page.getByRole("menuitem", { name: "重新摸底" });
+  await expect(item).toBeDisabled();
+  await expect(item).toHaveAttribute("title", "先在设置里连接 AI");
+});

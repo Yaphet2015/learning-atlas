@@ -4,18 +4,21 @@ import { Menu } from "./Drawer";
 
 /**
  * The canvas's top-right ⋯ menu: the one home for whole-canvas actions (重新摸底, 整理记录与恢复,
- * 导出, 归档). The root card's ⋯ offers the same 重新摸底 handler.
+ * 导出, 归档). 重新摸底 is always the first item.
  */
 export function CanvasMenu({
   paused,
   onReprobe,
+  reprobeBlocked,
   onActivity,
   onExport,
   onArchive,
 }: {
   /** Paused organize runs on this canvas. */
   paused: number;
-  onReprobe?: () => void;
+  onReprobe: () => void;
+  /** Why 重新摸底 can't run right now (shown as its tooltip); undefined = enabled. */
+  reprobeBlocked?: string;
   onActivity: () => void;
   onExport: () => void;
   onArchive: () => void;
@@ -39,12 +42,17 @@ export function CanvasMenu({
       </button>
       {open && (
         <Menu className="canvas-menu" onClose={() => setOpen(false)}>
-          {onReprobe && (
-            <button className="it" role="menuitem" onClick={run(onReprobe)}>
-              <RotateCcw size={15} className="ico" />
-              重新摸底
-            </button>
-          )}
+          <button
+            className="it"
+            role="menuitem"
+            disabled={!!reprobeBlocked}
+            title={reprobeBlocked ?? "重新找你的起点"}
+            {...(reprobeBlocked ? { "data-tip": reprobeBlocked } : {})}
+            onClick={run(onReprobe)}
+          >
+            <RotateCcw size={15} className="ico" />
+            重新摸底
+          </button>
           <button className="it" role="menuitem" onClick={run(onActivity)}>
             <ListRestart size={15} className="ico" />
             整理记录与恢复

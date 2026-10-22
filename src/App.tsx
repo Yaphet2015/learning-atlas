@@ -2323,10 +2323,7 @@ export default function App() {
                 kickoffStarted: Boolean(kickoffNote(board)?.messages.length),
               }
             : {}),
-          // 重新摸底 lives in the root card's ⋯ menu once a probe has settled and a route exists.
-          ...(n.id === rootId && board.kind === "ai" && board.probe && board.probe.status !== "asking" && board.route?.length
-            ? { onReprobe: reprobe }
-            : {}),
+
         },
       });
     }
@@ -2724,14 +2721,23 @@ export default function App() {
             />
             {(() => {
               const paused = canvasRuns.filter((r) => r.boardId === board.id && r.status === "paused").length;
-              const canReprobe = board.kind === "ai" && !!board.probe && board.probe.status !== "asking" && !!board.route?.length;
+              // Always listed; disabled with the reason when it can't run.
+              const reprobeBlocked =
+                board.kind !== "ai"
+                  ? "示例画布没有摸底"
+                  : !settings.configured
+                    ? "先在设置里连接 AI"
+                    : board.probe?.status === "asking" || probeBusy
+                      ? "摸底正在进行"
+                      : undefined;
               return (
                 <div className="canvas-corner">
                   {paused > 0 && <PausedPill onOpen={() => setShowCanvasActivity(true)} />}
                   <Progress nodes={board.nodes} />
                   <CanvasMenu
                     paused={paused}
-                    {...(canReprobe ? { onReprobe: reprobe } : {})}
+                    onReprobe={reprobe}
+                    {...(reprobeBlocked ? { reprobeBlocked } : {})}
                     onActivity={() => setShowCanvasActivity(true)}
                     onExport={() => setShowExport(true)}
                     onArchive={() => void setBoardArchived(board.id, true)}
