@@ -60,6 +60,7 @@ import {
 import { tip, TooltipLayer } from "./components/Tooltip";
 import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
+import type { DigAngle } from "./model/angles";
 import { expandPrompt } from "./model/expand";
 import { applyEnrichment, enrichPrompt } from "./model/enrich";
 import {
@@ -893,7 +894,7 @@ export default function App() {
     [settings.configured, selection, sendAI, edit],
   );
   const expand = useCallback(
-    (id: string) => {
+    (id: string, angle?: DigAngle, promptOverride?: string) => {
       if (locked()) return;
       if (
         [...requestMeta.current.values()].some(
@@ -933,7 +934,7 @@ export default function App() {
           stickyId: "expand-" + id,
           requestId: uid(),
           mode: "expand",
-          prompt: expandPrompt(b, node.id),
+          prompt: promptOverride ?? expandPrompt(b, node.id, angle),
           context,
         },
         id,

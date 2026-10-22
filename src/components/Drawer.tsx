@@ -299,7 +299,7 @@ const clock = (iso: string) => {
 const copy = (text: string) => void navigator.clipboard?.writeText(text);
 
 /** Small popover menu: closes on Esc, on a click elsewhere, or after a pick. */
-function Menu({
+export function Menu({
   className = "",
   onClose,
   onDelete,

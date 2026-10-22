@@ -1,3 +1,10 @@
+import { Menu } from "./Drawer";
+import {
+  ANGLE_HINT,
+  ANGLE_LABEL,
+  DIG_ANGLES,
+  type DigAngle,
+} from "../model/angles";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   Handle,
@@ -13,6 +20,7 @@ import {
   Image,
   Layers3,
   MessageCircle,
+  ChevronDown,
   PencilLine,
   Sparkles,
   StickyNote,
@@ -56,7 +64,7 @@ export type CardData = {
   onStatus?: (id: string, status: ConceptNode["status"]) => void;
   onStartEdit?: (id: string) => void;
   onAsk?: (id: string) => void;
-  onExpand?: (id: string) => void;
+  onExpand?: (id: string, angle?: DigAngle) => void;
   canExpand?: boolean;
   expandBusy?: boolean;
   generating?: boolean;
@@ -308,6 +316,10 @@ function SelectToolbar({
   visible: boolean;
 }) {
   const n = data.concept;
+  const [digOpen, setDigOpen] = useState(false);
+  useEffect(() => {
+    if (!visible) setDigOpen(false);
+  }, [visible]);
   return (
     <NodeToolbar
       isVisible={visible}
@@ -337,14 +349,44 @@ function SelectToolbar({
         <PencilLine size={15} className="ico" />
       </button>
       {data.canExpand && (
-        <button
-          className="icon"
-          {...tip("再看一层")}
-          disabled={data.expandBusy}
-          onClick={() => data.onExpand?.(n.id)}
-        >
-          <Layers3 size={15} className="ico" />
-        </button>
+        <span className="dig">
+          <button
+            className="icon"
+            {...tip("再看一层")}
+            disabled={data.expandBusy}
+            onClick={() => data.onExpand?.(n.id)}
+          >
+            <Layers3 size={15} className="ico" />
+          </button>
+          <button
+            className="icon caret"
+            aria-label="往哪挖"
+            aria-haspopup="menu"
+            aria-expanded={digOpen}
+            title="往哪挖"
+            disabled={data.expandBusy}
+            onClick={() => setDigOpen((o) => !o)}
+          >
+            <ChevronDown size={12} className="ico" />
+          </button>
+          {digOpen && (
+            <Menu className="dig-menu" onClose={() => setDigOpen(false)}>
+              <div className="dig-head">往哪挖</div>
+              {DIG_ANGLES.map((a) => (
+                <button
+                  key={a}
+                  className="it"
+                  role="menuitem"
+                  data-angle={a}
+                  onClick={() => data.onExpand?.(n.id, a)}
+                >
+                  <span className="dig-name">{ANGLE_LABEL[a]}</span>
+                  <span className="dig-sub">{ANGLE_HINT[a]}</span>
+                </button>
+              ))}
+            </Menu>
+          )}
+        </span>
       )}
       <button
         className="icon accent"
