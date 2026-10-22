@@ -70,6 +70,8 @@ describe("new-knowledge gate: cheap checks (no LLM)", () => {
     const soft = { ...GOOD, body: GOOD.body + "有人会把体检推迟到投保之后。" };
     expect(cheapGate(soft, insurance(), "pay").kind).toBe("borderline");
     expect(evasionRisk("把复查推迟到下周", "怎么学好钢琴")).toBeNull();
+    // Explaining what does not count as concealment is legitimate: judged, not rejected.
+    expect(evasionRisk("问卷外的情况不构成隐瞒。", "重疾险")).toBe("borderline");
     // Explaining the duty itself is fine.
     expect(evasionRisk("投保前必须如实告知体检异常，否则保险公司可以拒赔。", "重疾险")).toBeNull();
     expect(cheapGate(GOOD, insurance(), "pay").kind).toBe("accept");
