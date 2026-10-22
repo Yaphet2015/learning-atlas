@@ -22,60 +22,56 @@ async function newQuestion(page: Page, topic: string) {
   await page.getByRole("button", { name: "开始探索", exact: true }).click();
 }
 
-test("二分摸底: L3 ✗ → L1 ✓ → L2 ✓ converges on L3; stations below it get the light seal", async ({ page }) => {
+test("摸底 v2: brackets the edge without levels or marks; stations below the start get the light seal", async ({ page }) => {
   await installFakeAtlas(page);
-  await page.addInitScript(() => {
-    (window as any).__atlasMarkAnswers = [
-      JSON.stringify({ verdict: "wrong", missing: "定义决定能不能赔" }),
-      JSON.stringify({ verdict: "correct", missing: "" }),
-    ];
-  });
   await newQuestion(page, "重疾险有哪些重要条款？");
   const probe = page.locator(".drawer").getByRole("region", { name: "摸底" });
-  // From the middle: L3 first.
-  await expect(probe.locator(".rung")).toHaveCount(6);
-  await expect(probe.locator(".rung.asking")).toContainText("L3");
-  await expect(probe).toContainText("一句话解释");
-  await probe.getByLabel("我的回答").fill("确诊了就能赔");
-  await probe.getByRole("button", { name: /确定/ }).click();
-  // Wrong → shallower: L1.
-  await expect(probe.locator(".rung.asking")).toContainText("L1");
-  await expect(probe).toContainText("第 2 题 / 约 3 题");
-  await expect(probe.locator(".rung.wrong")).toContainText("L3");
-  await probe.getByLabel("我的回答").fill("给付型是确诊就给一笔钱，报销型按花费报");
-  await probe.getByRole("button", { name: /确定/ }).click();
-  // Right → deeper: L2, a scenario question with 不知道 at the end.
-  await expect(probe.locator(".rung.asking")).toContainText("L2");
-  await expect(probe).toContainText("情境题");
-  await expect(probe.getByRole("radio")).toHaveCount(4);
-  await expect(probe.getByRole("radio").last()).toHaveText("不知道");
-  await probe.getByRole("radio", { name: /等待期/ }).click();
-  await probe.getByRole("button", { name: /确定/ }).click();
-  // Converged: frontier L3; L0 inferred; L4/L5 not asked.
-  await expect(probe).toContainText("3 题 · 已收敛");
-  await expect(probe.locator(".rung.frontier")).toContainText("L3");
-  await expect(probe.locator(".rung.frontier")).toContainText("← 前沿");
-  await expect(probe.locator(".rung.inferred")).toContainText("L0");
-  await expect(probe.locator(".rung.unasked")).toHaveCount(2);
-  await expect(probe.locator(".rung.unasked").first()).toContainText("先不问");
-  await expect(probe).toContainText("你已经懂「合同结构」了。所以我们从「条款细读」开始。");
-  // Grading: one short call each for the two free-text answers; the right option without a reason is local.
-  const marks = (await gates(page)).filter((r) => r.mode === "mark");
-  expect(marks).toHaveLength(2);
-  expect(marks[0].prompt).toContain("要点3");
-  expect(marks[0].prompt.length).toBeLessThan(600);
+  // No levels, scores or right/wrong marks: just 第 n 题 + dots and 正在找你的起点.
+  await expect(probe).toContainText("第 1 题");
+  await expect(probe).toContainText("正在找你的起点");
+  await expect(probe.locator(".probe-dots i")).not.toHaveCount(0);
+  await expect(probe).not.toContainText(/L\d|✓|✗/);
+  // Starts at the second point (not the intro); options end with a dashed 不了解这块.
+  await expect(probe).toContainText("给付型 vs 报销型");
+  await expect(probe.getByRole("radio").last()).toHaveText("不了解这块");
+  await expect(probe.locator(".opt.idk")).toHaveCount(1);
+  const confirm = probe.getByRole("button", { name: "确定" });
+  await expect(confirm).toBeDisabled();
+  const pick = async (re: RegExp) => {
+    await probe.getByRole("radio", { name: re }).click();
+    await probe.getByRole("button", { name: "确定" }).click();
+  };
+  await pick(/核对合同/); // p1 ✓ → p3
+  await expect(probe).toContainText("条款细读");
+  await expect(probe).toContainText("第 2 题");
+  await pick(/凭常识/); // p3 ✗ → p2
+  await expect(probe).toContainText("最可能卡在哪一条");
+  await pick(/等待期/); // p2 ✓ → refine (adjacent) → confirm deeper at p4
+  await expect(probe).toContainText("产品取舍");
+  await pick(/凭常识/); // p4 ✗ → precise
+  await expect(probe).toContainText("你已经懂到");
+  await expect(probe).toContainText("合同结构");
+  await expect(probe).toContainText("从「条款细读」开始，正好在你会的上面一层。");
+  await expect(probe.locator(".probe-known li")).toHaveCount(3);
+  // MCQ without a reason is graded locally: no mark calls.
+  expect((await gates(page)).filter((r) => r.mode === "mark")).toHaveLength(0);
   // The plan is written for this learner, and the map is asked for ladder levels.
   const plan = page.locator(".drawer .plan-editor");
   await expect(plan).toContainText("学完后");
+  // Plain prose: no question-type chip (机制/决策/…) anywhere in the probe or plan UI.
+  await expect(page.locator(".drawer .plan-kind")).toHaveCount(0);
+  await expect(page.locator(".drawer")).not.toContainText(/概念：是什么|机制：如何运作|决策：怎么选|操作：怎么做|学习路径：怎么学|对比：有什么区别/);
   const plans = await page.evaluate(() => (window as any).__atlasPlans);
-  expect(plans[0].prompt).toContain("二分摸底结果：学习者已经懂到 L2「合同结构」，路线从 L3「条款细读」开始");
+  expect(plans[0].prompt).toContain("摸底结果：学习者已经懂：「生病了保险给钱」、「给付型 vs 报销型」、「合同结构」。路线从「条款细读」开始");
   await plan.getByRole("button", { name: "确认计划，铺成第一层" }).click();
   await expect(page.locator(".react-flow__node-concept")).toHaveCount(3);
   const first = page.locator(".react-flow__node-concept").first();
   await expect(first.locator(".seal.light")).toHaveCount(1);
+  // Without card levels, the 3 stations spread over the 5-point chain (0, 2, 4): two fall before 条款细读.
+  await expect(page.locator(".react-flow__node-concept .seal.light")).toHaveCount(2);
   await page.locator(".drawer").getByLabel("关闭").click();
   const bar = page.getByRole("region", { name: "下一步" });
-  await expect(bar).toContainText("下一步 · 第 2 站");
+  await expect(bar).toContainText("下一步 · 第 3 站");
   // 重新摸底 lives only in the canvas ⋯ menu (first item), not the drawer or the root card.
   await page.locator(".react-flow__node-root").click();
   await expect(page.locator(".select-toolbar").getByRole("button", { name: "更多操作" })).toHaveCount(0);

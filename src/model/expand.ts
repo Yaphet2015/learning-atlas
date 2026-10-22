@@ -1,3 +1,4 @@
+import { probeBrief } from "./probe";
 import type { Board, ConceptNode, DepthType } from "../shared/types";
 import { angleRule, type DigAngle } from "./angles";
 
@@ -49,7 +50,8 @@ export function expandPrompt(
   const ladder = angle
     ? angleRule(angle)
     : `深度阶梯：当前卡片是「${anchor.depthType ? DEPTH_LABEL[anchor.depthType] : "未标注"}」层。新卡片优先往下一阶走：${next.map((d) => `${d}（${DEPTH_LABEL[d]}）`).join(" 或 ")}，并在 depthType 里标出；不要再停留在“是什么”的同一层重复定义。`;
-  return basePrompt(anchor.title, ladder, known);
+  const brief = probeBrief(board);
+  return basePrompt(anchor.title, ladder, known) + (brief ? `\n${brief}` : "");
 }
 
 function basePrompt(title: string, ladder: string, known: string[]): string {

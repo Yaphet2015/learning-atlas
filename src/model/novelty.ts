@@ -5,6 +5,7 @@
  * Gate data (newIdea, substance, addsBeyond, claims, scores) is stored in node.meta.gate and is
  * never rendered or exported.
  */
+import { knownClaims, probeBrief } from "./probe";
 import type { Board, ConceptNode, GateMeta, GateSubstance } from "../shared/types";
 
 /** A generated card as the model sends it, before it reaches the board. */
@@ -170,6 +171,9 @@ export function cheapGate(
   const r = (v: number) => +v.toFixed(3);
   if (simParent >= REJECT_PARENT) reasons.push("复述父卡");
   if (sib >= REJECT_PARENT) reasons.push("和同批兄弟卡重复");
+  // 7. The learner already knows this (摸底): a card that re-teaches a known point is not new to them.
+  const known = knownClaims(board);
+  if (known.length && maxPair(mine, known) >= REJECT_PARENT) reasons.push("讲的是学习者摸底时已经懂的内容");
   if (reasons.length) return { kind: "reject", reasons, simParent: r(simParent), simMax: r(simMax) };
   if (simMax >= MERGE_BOARD && nearest && nearest !== parentId) return { kind: "merge", into: nearest, sim: r(simMax) };
   const border = Math.max(simParent, simMax, sib);
@@ -254,7 +258,7 @@ export function regeneratePrompt(
 ${parent ? `父卡（anchor）：「${parent.title}」${parent.body ? `：${parent.body.slice(0, 300)}` : ""}\n` : ""}${siblings.length ? `已有兄弟卡：${JSON.stringify(siblings)}\n` : ""}原始要求（节选）：${base.slice(0, 300)}
 上一轮有 ${rejected.length} 张候选没有通过新知识检查，请只重写这几张（同样的 JSON 格式，id 保持不变），逐条改掉问题：
 ${rejected.map(({ card, reasons }) => `- ${card.id}「${card.title}」：${reasons.join("；")}`).join("\n")}
-已有卡片的关键论断如下，不要重复：${JSON.stringify(existing)}`;
+已有卡片的关键论断如下，不要重复：${JSON.stringify(existing)}${probeBrief(board) ? `\n${probeBrief(board)}` : ""}`;
 }
 
 export interface GateOutcome {

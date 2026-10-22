@@ -18,9 +18,10 @@ test("a new question starts the 摸底; skipping it drafts a plan and the first 
   const drawer = page.locator(".drawer");
   // The bisection probe replaces the open-ended kickoff questions.
   const probe = drawer.getByRole("region", { name: "摸底" });
-  await expect(probe).toContainText("摸底 · 找到你的起点");
-  await expect(probe).toContainText("第 1 题 / 约 3 题");
-  await expect(probe.locator(".rung.asking")).toContainText("L3");
+  await expect(probe).toContainText("找到你的起点");
+  await expect(probe).toContainText("第 1 题");
+  // Skip once the first question is up (so the chain exists and reaches the map prompt).
+  await expect(probe.locator(".beat-q")).toBeVisible();
   await probe.getByRole("button", { name: "跳过摸底" }).click();
   await expect(probe).toContainText("跳过也没关系，我会从最基础的开始排。");
   // The plan is drafted for a beginner; the learner edits it, then confirms.
@@ -57,7 +58,7 @@ test("a new question starts the 摸底; skipping it drafts a plan and the first 
   // The map request lays the confirmed skeleton, with the ladder levels, and carries the plan.
   expect(asks[0].prompt).toContain("[b1] 白光由哪些颜色组成？");
   expect(asks[0].prompt).not.toContain("副虹");
-  expect(asks[0].prompt).toContain("理解深度阶梯");
+  expect(asks[0].prompt).toContain("概念链");
   expect(asks[0].context.plan).toContain("学习目标：学完后，能解释彩虹");
   // New cards get the quiet enrich follow-up.
   await expect
@@ -80,12 +81,12 @@ test("closing the drawer mid-摸底 leaves it as the next step, and 开始 resum
 }) => {
   await installFakeAtlas(page);
   await newQuestion(page, "彩虹是怎么形成的？");
-  await expect(page.locator(".drawer .rung.asking")).toContainText("L3");
+  await expect(page.locator(".drawer .probe-q")).toContainText("给付型 vs 报销型");
   await page.locator(".drawer").getByLabel("关闭").click();
   const bar = page.getByRole("region", { name: "下一步" });
   await expect(bar).toContainText("继续摸底，找到你的起点");
   await bar.getByRole("button", { name: /开始/ }).click();
-  await expect(page.locator(".drawer .rung.asking")).toContainText("L3");
+  await expect(page.locator(".drawer .probe-q")).toContainText("给付型 vs 报销型");
   const gates = await page.evaluate(() => (window as any).__atlasGates);
   expect(gates.filter((g: any) => g.mode === "probe")).toHaveLength(1);
   expect(await page.evaluate(() => (window as any).__atlasAsks.length)).toBe(0);
