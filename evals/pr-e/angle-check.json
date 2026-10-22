@@ -1,0 +1,514 @@
+{
+  "model": "deepseek-flash",
+  "topics": [
+    "opportunity-cost",
+    "tcp-handshake",
+    "marathon"
+  ],
+  "cards": 57,
+  "judgedMatch": 0.719,
+  "depthTagMatch": 1,
+  "byAngle": {
+    "why": {
+      "cards": 9,
+      "judgedMatch": 9,
+      "depthTagMatch": 9
+    },
+    "how": {
+      "cards": 10,
+      "judgedMatch": 9,
+      "depthTagMatch": 10
+    },
+    "example": {
+      "cards": 9,
+      "judgedMatch": 6,
+      "depthTagMatch": 9
+    },
+    "edge": {
+      "cards": 10,
+      "judgedMatch": 7,
+      "depthTagMatch": 10
+    },
+    "compare": {
+      "cards": 9,
+      "judgedMatch": 7,
+      "depthTagMatch": 9
+    },
+    "apply": {
+      "cards": 10,
+      "judgedMatch": 3,
+      "depthTagMatch": 10
+    }
+  },
+  "usage": {
+    "retries": 1,
+    "retryMs": 30859,
+    "retryReasons": [
+      "31s body read failed after 31s"
+    ],
+    "prompt": 120405,
+    "completion": 90075,
+    "reasoning": 70863,
+    "cached": 65536,
+    "calls": 78,
+    "failures": 0
+  },
+  "rows": [
+    {
+      "topic": "opportunity-cost",
+      "asked": "why",
+      "title": "为什么资源有限才有成本？",
+      "depthType": "why",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "why",
+      "title": "为什么人人算出的数不同？",
+      "depthType": "why",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "why",
+      "title": "为什么事前事后常对不上？",
+      "depthType": "why",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "how",
+      "title": "怎么找出替代选项",
+      "depthType": "how",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "how",
+      "title": "怎么确定这份资源",
+      "depthType": "how",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "how",
+      "title": "怎么给非钱收益定价",
+      "depthType": "how",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "example",
+      "title": "自家店面开店也有成本",
+      "depthType": "apply",
+      "judged": "example",
+      "confidence": 4
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "example",
+      "title": "同一小时对谁更贵",
+      "depthType": "apply",
+      "judged": "example",
+      "confidence": 4
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "example",
+      "title": "存款还是买债券",
+      "depthType": "apply",
+      "judged": "example",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "edge",
+      "title": "拿不到的选择不算成本",
+      "depthType": "edge",
+      "judged": "edge",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "edge",
+      "title": "事后更好不代表算错",
+      "depthType": "edge",
+      "judged": "edge",
+      "confidence": 4
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "edge",
+      "title": "不是所有代价都能折成钱",
+      "depthType": "edge",
+      "judged": "edge",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "compare",
+      "title": "机会成本 vs 边际成本",
+      "depthType": "compare",
+      "judged": "compare",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "compare",
+      "title": "机会成本 vs 风险",
+      "depthType": "compare",
+      "judged": "compare",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "compare",
+      "title": "机会成本与比较优势",
+      "depthType": "compare",
+      "judged": "compare",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "apply",
+      "title": "用反事实问法定位",
+      "depthType": "apply",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "apply",
+      "title": "用最低接受补偿反推",
+      "depthType": "apply",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "opportunity-cost",
+      "asked": "apply",
+      "title": "把“不行动”列成选项",
+      "depthType": "apply",
+      "judged": "apply",
+      "confidence": 4
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "why",
+      "title": "为什么每个方向要单独确认？",
+      "depthType": "why",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "why",
+      "title": "初始序号为什么要随机选？",
+      "depthType": "why",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "why",
+      "title": "为什么不能自己确认已发出？",
+      "depthType": "why",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "how",
+      "title": "每步报文怎么填",
+      "depthType": "how",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "how",
+      "title": "ISN 怎么选",
+      "depthType": "how",
+      "judged": "why",
+      "confidence": 4
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "how",
+      "title": "状态如何逐步推进",
+      "depthType": "how",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "example",
+      "title": "三个报文的序号怎么变",
+      "depthType": "apply",
+      "judged": "example",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "example",
+      "title": "抓包里那三行长什么样",
+      "depthType": "apply",
+      "judged": "example",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "example",
+      "title": "两个方向各算各的账",
+      "depthType": "apply",
+      "judged": "example",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "edge",
+      "title": "双方同时发起会怎样？",
+      "depthType": "edge",
+      "judged": "edge",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "edge",
+      "title": "第三次 ACK 丢了会怎样？",
+      "depthType": "edge",
+      "judged": "edge",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "edge",
+      "title": "收到 RST 就是握手失败吗？",
+      "depthType": "edge",
+      "judged": "edge",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "compare",
+      "title": "TCP 握手与 TLS 握手",
+      "depthType": "compare",
+      "judged": "compare",
+      "confidence": 5
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "compare",
+      "title": "握手 ACK 与数据 ACK",
+      "depthType": "compare",
+      "judged": "compare",
+      "confidence": 4
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "compare",
+      "title": "ISN 与数据字节序号",
+      "depthType": "compare",
+      "judged": "why",
+      "confidence": 4
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "apply",
+      "title": "抓包核对三份证据",
+      "depthType": "apply",
+      "judged": "how",
+      "confidence": 4
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "apply",
+      "title": "用连接状态定位缺口",
+      "depthType": "apply",
+      "judged": "apply",
+      "confidence": 4
+    },
+    {
+      "topic": "tcp-handshake",
+      "asked": "apply",
+      "title": "连上了不等于可信可用",
+      "depthType": "apply",
+      "judged": "edge",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "why",
+      "title": "为什么必须留够 20 周以上？",
+      "depthType": "why",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "why",
+      "title": "为什么首马目标只写“完赛”？",
+      "depthType": "why",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "why",
+      "title": "为什么周数直接卡住跑量上限？",
+      "depthType": "why",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "how",
+      "title": "倒推赛期算周数",
+      "depthType": "how",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "how",
+      "title": "30 分钟连续跑自测",
+      "depthType": "how",
+      "judged": "how",
+      "confidence": 4
+    },
+    {
+      "topic": "marathon",
+      "asked": "how",
+      "title": "设三个阶段检查点",
+      "depthType": "how",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "how",
+      "title": "设改报或延期决策点",
+      "depthType": "how",
+      "judged": "how",
+      "confidence": 4
+    },
+    {
+      "topic": "marathon",
+      "asked": "example",
+      "title": "总周数要留缓冲",
+      "depthType": "apply",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "example",
+      "title": "剩 12–14 周转半马",
+      "depthType": "apply",
+      "judged": "edge",
+      "confidence": 4
+    },
+    {
+      "topic": "marathon",
+      "asked": "example",
+      "title": "用关门时间定完赛目标",
+      "depthType": "apply",
+      "judged": "how",
+      "confidence": 4
+    },
+    {
+      "topic": "marathon",
+      "asked": "edge",
+      "title": "有运动底子也要从低跑量起步",
+      "depthType": "edge",
+      "judged": "why",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "edge",
+      "title": "停练几周后要不要补课",
+      "depthType": "edge",
+      "judged": "how",
+      "confidence": 4
+    },
+    {
+      "topic": "marathon",
+      "asked": "edge",
+      "title": "周数够也可能选错比赛",
+      "depthType": "edge",
+      "judged": "edge",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "edge",
+      "title": "中途发现落后该不该降级",
+      "depthType": "edge",
+      "judged": "apply",
+      "confidence": 4
+    },
+    {
+      "topic": "marathon",
+      "asked": "compare",
+      "title": "日历周数≠有效训练周数",
+      "depthType": "compare",
+      "judged": "edge",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "compare",
+      "title": "全马对比半马：周期差一倍",
+      "depthType": "compare",
+      "judged": "compare",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "compare",
+      "title": "结果目标对比过程目标",
+      "depthType": "compare",
+      "judged": "compare",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "apply",
+      "title": "从比赛日倒推关键日期",
+      "depthType": "apply",
+      "judged": "how",
+      "confidence": 5
+    },
+    {
+      "topic": "marathon",
+      "asked": "apply",
+      "title": "总周数要先打八五折",
+      "depthType": "apply",
+      "judged": "how",
+      "confidence": 3
+    },
+    {
+      "topic": "marathon",
+      "asked": "apply",
+      "title": "给目标设一个降级触发点",
+      "depthType": "apply",
+      "judged": "how",
+      "confidence": 4
+    },
+    {
+      "topic": "marathon",
+      "asked": "apply",
+      "title": "挑一场对零基础友好的比赛",
+      "depthType": "apply",
+      "judged": "apply",
+      "confidence": 4
+    }
+  ]
+}
