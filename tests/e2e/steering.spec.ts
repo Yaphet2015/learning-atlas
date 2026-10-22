@@ -48,9 +48,12 @@ test("angle-labelled ghost hints: tags, extra angles, and the new card keeps the
   await page.addInitScript(() => ((window as any).__atlasHintAngles = true));
   await gotoApp(page);
   const owner = card(page, "c-how");
-  await owner.locator("article").hover();
   const below = owner.locator(".ghost-hint.below");
-  await expect(below).toHaveText("提示·子0");
+  // The next-step auto-pan can move the card right after load; re-hover until the hints show.
+  await expect(async () => {
+    await owner.locator("article").hover();
+    await expect(below).toHaveText("提示·子0", { timeout: 1500 });
+  }).toPass({ timeout: 10000 });
   await expect(below).toHaveAttribute("data-angle-label", "为什么");
   await expect(owner.locator(".ghost-hint.right")).toHaveAttribute("data-angle", "compare");
   const alts = owner.locator(".ghost-hint.alt");
