@@ -2699,15 +2699,19 @@ export default function App() {
           )}
           onLay={(items, messageId) => {
             const ids = items.map(() => newId("concept"));
-            edit((b) =>
-              layOutline(
+            edit((b) => {
+              const laid = layOutline(
                 b,
                 drawerAnchorOrRoot,
                 items.map((i) => ({ head: i.head, body: plain(i.rest) })),
                 ids,
                 messageId ? { noteId: drawerNote.id, messageId } : undefined,
-              ),
-            );
+              );
+              // Laying the first level under the question draws the numbered route.
+              return !laid.route?.length && drawerAnchorOrRoot === questionNode(laid)?.id
+                ? { ...laid, route: defaultRoute(laid) }
+                : laid;
+            });
             showToast(
               ids.length > 1
                 ? `已铺成 ${ids.length} 张卡，⌘Z 可以撤销。`
@@ -2828,7 +2832,7 @@ export default function App() {
             </button>
             <span className="eyebrow">一张新地图</span>
             <h2 id="new-title">什么，让你好奇？</h2>
-            <p>输入一个问题、概念或领域。先看清一个小场景，再一步步展开。</p>
+            <p>写下一个问题。接下来我们把它排成一条路线，每站走 4 拍：猜 · 学 · 讲 · 测——你始终知道下一步做什么。</p>
             <form
               onSubmit={(e) => {
                 e.preventDefault();

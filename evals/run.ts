@@ -35,6 +35,9 @@ import {
 import type { BoardPlan } from "../src/shared/types";
 import { expandPrompt } from "../src/model/expand";
 import { ANGLE_DEPTH, DIG_ANGLES } from "../src/model/angles";
+import { runGate, FILLER } from "../src/model/novelty";
+import { applyGate } from "../src/model/gate";
+import { markPrompt, parseMark, testPoints } from "../src/model/mark";
 import type { Board, ContextBundle, StickyNote } from "../src/shared/types";
 import { TOPICS, type EvalTopic } from "./topics";
 import { treeMetrics, type EvalNode } from "./metrics";
@@ -585,7 +588,76 @@ async function angleCheck(t: EvalTopic, out: string) {
   return rows;
 }
 
+/**
+ * EVAL_MODE=gate: a small real-LLM sample of the new-knowledge gate. Lays the first level and
+ * expands EVAL_EXPANDS L1 cards through runGate exactly as App.tsx does, marks one check answer,
+ * and reports real token usage per step plus field completeness and filler/label hits.
+ */
+async function gateSample(t: EvalTopic, out: string) {
+  let board = createEmptyBoard(t.topic);
+  const root = board.nodes[0].id;
+  const steps: any[] = [];
+  const usageNow = () => ({ prompt: totals.prompt, completion: totals.completion });
+  const expandOnce = async (anchorId: string, mode: "map" | "expand", prompt: string) => {
+    const before = usageNow();
+    const virtual = newNote(board, { x: 0, y: 0 }, { kind: "node", id: anchorId });
+    const context = contextForNote({ ...board, notes: [...board.notes, virtual] }, virtual.id);
+    const system = (m: string) => `${tutorInstructions(m as any)}\n\n${renderScopedContext(context)}`;
+    const first = await chat(system(mode), prompt, { temperature: modeTemperature(mode) });
+    const outcome = await runGate(first.content, board, anchorId, async (m, p) =>
+      (await chat(m === "gate" ? tutorInstructions("gate") : system("expand"), p, { temperature: modeTemperature(m) })).content, prompt);
+    const applied = applyGate(board, anchorId, outcome, mode, context);
+    board = applied.board;
+    const after = usageNow();
+    steps.push({
+      mode,
+      anchor: anchorId,
+      kept: outcome.kept.map((k) => ({ title: k.card.title, by: k.meta.decidedBy, regenerated: !!k.meta.regenerated })),
+      merged: outcome.merges.length,
+      dropped: outcome.dropped.map((d) => ({ title: d.card.title, reasons: d.reasons })),
+      calls: outcome.calls,
+      roughTokens: outcome.tokens,
+      tokens: { prompt: after.prompt - before.prompt, completion: after.completion - before.completion },
+    });
+    return applied.added;
+  };
+  const l1 = await expandOnce(root, "map", firstLevelPrompt(t.topic, []));
+  for (const id of l1.slice(0, Number(process.env.EVAL_EXPANDS ?? 2))) await expandOnce(id, "expand", expandPrompt(board, id));
+  const cards = board.nodes.filter((n) => n.parentId !== null);
+  const withCheck = cards.find((n) => n.check?.q);
+  let mark: any;
+  if (withCheck) {
+    const before = usageNow();
+    const r = await chat(tutorInstructions("mark"), markPrompt(withCheck.check!.q, testPoints(withCheck), "我不太确定，可能是因为条款写得复杂。"), { temperature: 0 });
+    mark = { verdict: parseMark(r.content), tokens: { prompt: totals.prompt - before.prompt, completion: totals.completion - before.completion } };
+  }
+  const g = (n: any) => n.meta?.gate ?? {};
+  const report = {
+    topic: t.id,
+    cards: cards.length,
+    fieldsComplete: cards.filter((n) => n.check?.q && g(n).newIdea && g(n).substance?.length && g(n).addsBeyond && g(n).claims?.length).length,
+    fillerHits: cards.filter((n) => FILLER.some((w) => n.title.includes(w) || n.body.includes(w))).length,
+    labelHits: cards.filter((n) => /(^|\n)\s*(新知识点|机制|例子|要点)\s*[:：]/.test(n.body)).length,
+    steps,
+    mark,
+    sample: cards.slice(0, 6).map((n) => ({ title: n.title, body: n.body, check: n.check?.q })),
+  };
+  await writeFile(join(out, `${t.id}.gate.json`), JSON.stringify(report, null, 2));
+  return report;
+}
+
 async function main() {
+  if (process.env.EVAL_MODE === "gate") {
+    const pick = process.env.EVAL_TOPICS?.split(",").map((s) => s.trim()) ?? ["critical-illness"];
+    const out = process.env.EVAL_OUT ?? join("evals", "results", "gate");
+    await mkdir(out, { recursive: true });
+    const reports = [];
+    for (const t of TOPICS.filter((x) => pick.includes(x.id))) reports.push(await gateSample(t, out));
+    const summary = { model: MODEL, usage: totals, reports: reports.map(({ sample, ...r }) => r) };
+    await writeFile(join(out, "summary.json"), JSON.stringify(summary, null, 2));
+    console.log(JSON.stringify(summary, null, 1));
+    return;
+  }
   if (process.env.EVAL_MODE === "angles") {
     const pick = process.env.EVAL_TOPICS?.split(",").map((s) => s.trim());
     const topics = pick ? TOPICS.filter((t) => pick.includes(t.id)) : TOPICS.slice(0, 2);

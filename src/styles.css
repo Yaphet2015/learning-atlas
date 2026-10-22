@@ -4604,3 +4604,7 @@ kbd,
   font: 400 14.5px/1.75 var(--kai);
   color: var(--ink);
 }
+/* On the route the beat line replaces the generic 探索中 line. */
+.card.s-exploring:has(.beat-line)::after {
+  display: none;
+}
