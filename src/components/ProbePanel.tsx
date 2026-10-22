@@ -1,126 +1,221 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ProbeState } from "../shared/types";
-import { levelState, nextProbe, probeResult, type LevelState } from "../model/probe";
-import { UNSURE } from "../model/mark";
+import { MAX_QUESTIONS, nextStep, probeOutcome } from "../model/probe";
+
+export type ProbePhase = "first" | "deeper" | "refine" | "result" | null;
 
 export interface ProbeProps {
   state: ProbeState;
+  /** Grading a free-text reason. */
   busy: boolean;
-  /** Stations on the route (for the result line); 0 before the map is laid. */
+  /** Which generation call is running (README §9 skeletons); "result" = the route is being laid. */
+  phase: ProbePhase;
+  topic: string;
   stations: number;
   onAnswer: (choice: number | null, text: string) => void;
   onSkip: () => void;
-  /** 我想从头学: drop the light seals, start at 第 1 站. */
+  /** 从这里开始 */
+  onStart?: () => void;
+  /** 换个起点: probe again. */
+  onRestart?: () => void;
+  /** Kept for 我想从头学 in other surfaces. */
   onFromStart?: () => void;
 }
 
-const MARK: Record<LevelState, string> = {
-  asking: "正在问",
-  correct: "✓",
-  partial: "✗",
-  wrong: "✗",
-  unsure: "✗",
-  inferred: "推断",
-  unasked: "先不问",
-};
+const IDK = "不了解这块";
 
-/** The bisection 摸底 (01-start / 02-route): the depth ladder L5→L0 on top, one probe below. */
-export function ProbePanel({ state, busy, stations, onAnswer, onSkip, onFromStart }: ProbeProps) {
+/** Show the skeleton only after 300ms; add the slow line after 12s. */
+function useDelayed(on: boolean) {
+  const [shown, setShown] = useState(false);
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    setShown(false);
+    setSlow(false);
+    if (!on) return;
+    const a = setTimeout(() => setShown(true), 300);
+    const b = setTimeout(() => setSlow(true), 12000);
+    return () => {
+      clearTimeout(a);
+      clearTimeout(b);
+    };
+  }, [on]);
+  return { shown, slow };
+}
+
+function Dots({ n, total }: { n: number; total: number }) {
+  return (
+    <span className="probe-dots" aria-hidden>
+      {Array.from({ length: total }, (_, i) => (
+        <i key={i} className={i < n ? "d" : i === n ? "n" : ""} />
+      ))}
+    </span>
+  );
+}
+
+function Skeleton({ phase, topic, slow }: { phase: Exclude<ProbePhase, null>; topic: string; slow: boolean }) {
+  const line =
+    phase === "first" ? `正在为「${topic}」出第一道题…` : phase === "deeper" ? "答对了，在往更深处找…" : phase === "refine" ? "在缩小范围…" : "正在确定你的起点…";
+  return (
+    <div className="probe-sk" role="status" aria-live="polite" data-phase={phase}>
+      <p className="probe-st">
+        <i />
+        {line}
+      </p>
+      {phase === "first" && <p className="probe-sub">大约 5–8 题，随时可以跳过</p>}
+      {phase === "result" ? (
+        <div className="probe-res sk-wrap">
+          <span className="sk" style={{ width: "40%", height: 12 }} />
+          <span className="sk" style={{ width: "80%", height: 18 }} />
+          <span className="sk" style={{ width: "65%", height: 12 }} />
+        </div>
+      ) : (
+        <div className="probe-q sk-wrap">
+          <span className="sk" style={{ width: "90%", height: 16 }} />
+          <span className="sk" style={{ width: "70%", height: 16 }} />
+          {[0, 1, 2, 3].map((i) => (
+            <span key={i} className="sk sk-opt" />
+          ))}
+        </div>
+      )}
+      {slow && <p className="probe-sub">比平时慢一点…</p>}
+    </div>
+  );
+}
+
+/** 摸底 v2 (README): no levels, no scores, no right/wrong marks; one question at a time. */
+export function ProbePanel({ state, busy, phase, topic, onAnswer, onSkip, onStart, onRestart }: ProbeProps) {
   const [choice, setChoice] = useState<number | null>(null);
   const [text, setText] = useState("");
-  const step = nextProbe(state);
+  const [why, setWhy] = useState(false);
+  const { shown, slow } = useDelayed(phase !== null);
   const asking = state.status === "asking";
-  const level = asking && !step.done ? state.ladder[step.level] : undefined;
-  const frontier = state.frontier ?? 0;
+  const step = asking && state.ladder.length ? nextStep(state) : undefined;
+  const point = step?.kind === "ask" ? state.ladder[step.index] : undefined;
   const n = state.answers.length;
+  const total = Math.max(6, Math.min(MAX_QUESTIONS, n + 3));
+  const opts = point?.probe.options ?? [];
   const submit = () => {
-    if (busy || !level) return;
-    if (level.probe.type === "choice" ? choice === null : !text.trim() && choice !== -1) return;
-    onAnswer(choice, text);
+    if (busy || !point || choice === null) return;
+    onAnswer(choice, choice === -1 ? "" : text);
     setChoice(null);
     setText("");
+    setWhy(false);
   };
-  return (
-    <section className="stop probe" aria-label="摸底">
-      <div className="probe-head">
-        <h3>摸底 · 找到你的起点</h3>
-        <span className="lab">
-          {asking ? (state.ladder.length ? `第 ${n + 1} 题 / 约 3 题` : "正在拟深度阶梯…") : `${n} 题 · 已收敛`}
+  const head = (
+    <div className="probe-head">
+      <h3>找到你的起点</h3>
+      {asking && (
+        <span className="probe-prog">
+          第 {n + 1} 题 <Dots n={n} total={total} />
         </span>
-      </div>
-      {state.ladder.length > 0 && (
-        <ol className="ladder" aria-label="深度阶梯">
-          {[...state.ladder].reverse().map((l) => {
-            const st = levelState(state, l.level);
-            const isFrontier = !asking && state.status === "done" && l.level === frontier;
-            return (
-              <li key={l.level} className={`rung ${st} ${isFrontier ? "frontier" : ""}`}>
-                <b>L{l.level}</b>
-                <span className="rung-desc">{l.desc}</span>
-                <span className="rung-mark">{isFrontier ? "← 前沿" : MARK[st]}</span>
-              </li>
-            );
-          })}
-        </ol>
       )}
-      {level && (
-        <div className="beat-pane probe-q">
-          <span className="lab">
-            L{level.level} · {level.probe.type === "choice" ? "情境题" : "一句话解释"}
-          </span>
-          <p className="beat-q">{level.probe.q}</p>
-          {level.probe.type === "choice" && level.probe.options ? (
+    </div>
+  );
+  if (phase) {
+    return (
+      <section className="stop probe" aria-label="摸底" aria-busy>
+        {head}
+        {shown ? <Skeleton phase={phase} topic={topic} slow={slow} /> : <div className="probe-sk-hold" />}
+        <div className="probe-actions">
+          <button className="btn" disabled style={{ opacity: 0.4 }}>
+            确定
+          </button>
+          {phase !== "result" && (
+            <button className="btn quiet" onClick={onSkip}>
+              跳过摸底
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
+  if (asking) {
+    return (
+      <section className="stop probe" aria-label="摸底">
+        {head}
+        <p className="probe-st">
+          <i />
+          正在找你的起点
+        </p>
+        {point ? (
+          <div className="probe-q">
+            <p className="beat-q">{point.probe.q}</p>
             <div className="beat-options" role="radiogroup" aria-label="摸底选项">
-              {[...level.probe.options, UNSURE].map((o, i) => {
-                const v = i === level.probe.options!.length ? -1 : i;
+              {[...opts, IDK].map((o, i) => {
+                const v = i === opts.length ? -1 : i;
                 return (
-                  <button key={i} role="radio" aria-checked={choice === v} className={`opt ${choice === v ? "on" : ""}`} onClick={() => setChoice(v)}>
-                    {v >= 0 ? `${String.fromCharCode(65 + i)}. ` : ""}
+                  <button key={i} role="radio" aria-checked={choice === v} className={`opt ${v === -1 ? "idk" : ""} ${choice === v ? "on" : ""}`} onClick={() => setChoice(v)}>
                     {o}
                   </button>
                 );
               })}
             </div>
-          ) : (
-            <button className={`opt ${choice === -1 ? "on" : ""}`} role="radio" aria-checked={choice === -1} onClick={() => setChoice(choice === -1 ? null : -1)}>
-              {UNSURE}
-            </button>
-          )}
-          <textarea
-            className="beat-input"
-            aria-label={level.probe.type === "choice" ? "说说为什么（可选）" : "我的回答"}
-            rows={2}
-            value={text}
-            placeholder={level.probe.type === "choice" ? "选完再用一句话说说为什么（可选），能让判断更准。" : "用一句话回答"}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-          />
-          <div className="beat-acts">
-            <button className="btn primary" disabled={busy} onClick={submit}>
-              {busy ? "正在判…" : "确定"} <span className="kbd">↵</span>
-            </button>
-            <button className="btn quiet" onClick={onSkip}>
-              跳过摸底
-            </button>
+            {choice !== null && choice >= 0 && (why ? (
+              <textarea className="probe-why" placeholder="为什么这么选？（可不写）" value={text} onChange={(e) => setText(e.target.value)} rows={2} />
+            ) : (
+              <button className="link probe-why-btn" onClick={() => setWhy(true)}>
+                说说理由（可选）
+              </button>
+            ))}
           </div>
+        ) : null}
+        <div className="probe-actions">
+          <button className="btn primary" disabled={choice === null || busy} style={choice === null || busy ? { opacity: 0.4 } : undefined} onClick={submit}>
+            {busy ? "在看你的理由…" : "确定"}
+          </button>
+          <button className="btn quiet" onClick={onSkip}>
+            跳过摸底
+          </button>
+        </div>
+      </section>
+    );
+  }
+  const o = probeOutcome(state);
+  return (
+    <section className="stop probe" aria-label="摸底结果">
+      {head}
+      <div className="probe-res">
+        {o.skipped && !o.questions ? (
+          <h4>跳过也没关系，我会从最基础的开始排。</h4>
+        ) : o.capped ? (
+          <h4>你懂得挺深，先从这里开始，后面随时可以往下钻。</h4>
+        ) : o.known ? (
+          <>
+            <span className="probe-k">你已经懂到</span>
+            <h4>{o.known.desc}</h4>
+            <p>
+              从「{o.start?.desc}」开始，正好在你会的上面一层。
+            </p>
+          </>
+        ) : (
+          <h4>我们从最基础的开始。</h4>
+        )}
+        {o.knownList.length > 0 && (
+          <ul className="probe-known">
+            {o.knownList.map((k) => (
+              <li key={k.id ?? k.level}>{k.desc}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {o.start && (
+        <div className="probe-start">
+          <span className="no">1</span>
+          <b>{o.start.desc}</b>
         </div>
       )}
-      {!asking && (
-        <div className="probe-result">
-          <p>{probeResult(state, stations)}</p>
-          {onFromStart && frontier > 0 && (
-            <button className="btn quiet" onClick={onFromStart}>
-              我想从头学
-            </button>
-          )}
-        </div>
-      )}
+      <div className="probe-actions">
+        {onStart && (
+          <button className="btn primary" onClick={onStart}>
+            从这里开始
+          </button>
+        )}
+        {onRestart && (
+          <button className="btn quiet" onClick={onRestart}>
+            换个起点
+          </button>
+        )}
+      </div>
     </section>
   );
 }
