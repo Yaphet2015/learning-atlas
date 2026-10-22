@@ -23,7 +23,8 @@ export function contextForNote(
   selection?: Selection,
   /** The drawer lists unticked references too, so they can be ticked back. */
   keepExcluded = false,
-  scope: "review" | "references" = "review",
+  /** review: outline + four-level card review; outline: outline only; references: neither. */
+  scope: "review" | "outline" | "references" = "review",
 ): ContextBundle {
   const note = board.notes.find((item) => item.id === noteId);
   if (!note) throw new Error("找不到这张便签。");
@@ -159,6 +160,19 @@ export function contextForNote(
     .join("\n\n");
   if (scope === "references")
     return contextBundleSchema.parse({ topic, references, summary });
+  const anchorId = selected?.kind === "node" ? selected.id : null;
+  if (scope === "outline") {
+    const outline = serializeStructure(board, {
+      anchor: anchorId,
+      cards: note.contextCards,
+    });
+    return contextBundleSchema.parse({
+      topic,
+      references,
+      summary,
+      ...(outline ? { structure: outline } : {}),
+    });
+  }
   // The whole map, compactly: the tutor can answer questions about levels,
   // order and links without the learner pasting them.
   const anchor = selected?.kind === "node" ? selected.id : null;

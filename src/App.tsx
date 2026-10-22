@@ -61,10 +61,12 @@ import { tip, TooltipLayer } from "./components/Tooltip";
 import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import { expandPrompt } from "./model/expand";
+import { applyEnrichment, enrichPrompt } from "./model/enrich";
 import {
   firstLevelPrompt,
   kickoffNote,
   kickoffPrompt,
+  kickoffSkeleton,
   learnerAnswers,
   isQuestionRoot,
   needsKickoff,
@@ -282,9 +284,18 @@ export default function App() {
     requestMeta = useRef(
       new Map<
         string,
-        { request: AIRequest; anchor?: string; hintSignature?: string }
+        {
+          request: AIRequest;
+          anchor?: string;
+          hintSignature?: string;
+          /** enrich: the new cards it decorates. */
+          newIds?: string[];
+        }
       >(),
-    );
+    ),
+    enrichRef = useRef<
+      (board: Board, anchor: string | undefined, ids: string[]) => void
+    >(() => {});
   // Ghost hints: in flight (by card), failed (by card|signature), and hover debounce timers.
   const hintBusy = useRef(new Set<string>());
   const hintFailed = useRef(new Set<string>());
@@ -587,6 +598,22 @@ export default function App() {
           else if (!locked()) putBoard(withHints(b, id, hints), false);
           return;
         }
+        // Diagrams and overviews for new cards: quiet, optional decoration.
+        if (hintMeta?.request.mode === "enrich") {
+          if (update.status === "streaming") return;
+          requestMeta.current.delete(update.requestId);
+          const b = boardRef.current;
+          if (update.status !== "done" || b?.id !== update.boardId || locked())
+            return;
+          const next = applyEnrichment(
+            update.text,
+            b,
+            hintMeta.newIds ?? [],
+            hintMeta.request.context,
+          );
+          if (next !== b) putBoard(next, false);
+          return;
+        }
         const key = `${update.boardId}/${update.stickyId}`;
         setPending((p) => ({
           ...p,
@@ -658,6 +685,12 @@ export default function App() {
                 };
               }
               if (next !== target) {
+                const known = new Set(target.nodes.map((n) => n.id));
+                const added = next.nodes
+                  .filter((n) => !known.has(n.id))
+                  .map((n) => n.id);
+                if (meta && meta.request.mode !== "answer" && added.length)
+                  enrichRef.current(next, meta.anchor, added);
                 if (boardRef.current?.id === target.id) {
                   putBoard(next, false);
                 } else {
@@ -789,7 +822,7 @@ export default function App() {
         setShowSettings(true);
         return false;
       }
-      const context = contextForNote(b, noteId, selection, false, "references");
+      const context = contextForNote(b, noteId, selection, false, "outline");
       const request: AIRequest = {
         boardId: b.id,
         stickyId: noteId,
@@ -837,7 +870,8 @@ export default function App() {
       if (locked()) return;
       if (
         [...requestMeta.current.values()].some(
-          (meta) => meta.request.mode !== "answer",
+          (meta) =>
+            meta.request.mode !== "answer" && meta.request.mode !== "enrich",
         )
       )
         return;
@@ -978,7 +1012,11 @@ export default function App() {
   const proposeFirstLevel = useCallback(() => {
     const b = boardRef.current;
     if (!b || locked()) return;
-    generateMap(b, firstLevelPrompt(b.topic, learnerAnswers(kickoffNote(b))));
+    const note = kickoffNote(b);
+    generateMap(
+      b,
+      firstLevelPrompt(b.topic, learnerAnswers(note), kickoffSkeleton(note)),
+    );
   }, [generateMap]);
   const resetBoardView = useCallback(() => {
     setPast([]);
@@ -1607,6 +1645,31 @@ export default function App() {
     const b = boardRef.current;
     setPreview(id && b ? addChild(b, id, GHOST) : null);
   }, []);
+  // After new cards land: one quiet follow-up for their diagrams and topic overviews.
+  enrichRef.current = (b, anchor, ids) => {
+    if (!configured.current) return;
+    const anchorId =
+      anchor && b.nodes.some((n) => n.id === anchor) ? anchor : rootOf(b)?.id;
+    if (!anchorId) return;
+    const virtual = newNote(b, { x: 0, y: 0 }, { kind: "node", id: anchorId });
+    const request: AIRequest = {
+      boardId: b.id,
+      stickyId: "enrich-" + anchorId,
+      requestId: uid(),
+      mode: "enrich",
+      prompt: enrichPrompt(b, ids),
+      context: contextForNote(
+        { ...b, notes: [...b.notes, virtual] },
+        virtual.id,
+      ),
+    };
+    requestMeta.current.set(request.requestId, {
+      request,
+      anchor: anchorId,
+      newIds: ids,
+    });
+    api.ask(request).catch(() => requestMeta.current.delete(request.requestId));
+  };
   const kickoffReady = needsKickoff(board) && !mapBusy && !study;
   const drawerNote = board?.notes.find((n) => n.id === drawer?.id);
   const drawerNoteAttachment = drawerNote?.attachedTo;

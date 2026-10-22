@@ -140,4 +140,38 @@ describe("four-level card review preparation", () => {
       }).success,
     ).toBe(false);
   });
+  it("scopes the review to the anchor's branch, not every card on its levels", () => {
+    const board = chain();
+    // A second branch under the question, as deep as the anchor.
+    const base = board.nodes[1];
+    board.nodes.push(
+      {
+        ...base,
+        id: "other-1",
+        parentId: "card-0",
+        order: 1,
+        title: "另一分支",
+      },
+      {
+        ...base,
+        id: "other-2",
+        parentId: "other-1",
+        order: 0,
+        title: "另一分支第二层",
+      },
+      {
+        ...base,
+        id: "other-3",
+        parentId: "other-2",
+        order: 0,
+        title: "另一分支第三层",
+      },
+    );
+    const ids = cardReview(board, ["card-3"]).nodes.map((n) => n.id);
+    expect(ids).toContain("card-2");
+    expect(ids).toContain("card-0");
+    expect(ids).toContain("other-1");
+    expect(ids).not.toContain("other-2");
+    expect(ids).not.toContain("other-3");
+  });
 });

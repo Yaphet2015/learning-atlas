@@ -4,7 +4,10 @@ import { questionId } from "./kickoff";
 
 export const CARD_REVIEW_RADIUS = 4;
 
-/** Prepare a review locally, independently of outline and reference budgets. */
+/**
+ * Prepare a review locally, independently of outline and reference budgets: full cards of
+ * the anchors' branches within four levels, not every card on those levels.
+ */
 export function cardReview(
   board: Board,
   focus: string[] = [],
@@ -23,14 +26,35 @@ export function cardReview(
     const question = questionId(board.nodes);
     if (question) anchors.push(question);
   }
+  // Each anchor's branch: its ancestors, everything under its parent (itself, its
+  // siblings and their subtrees) or under itself when it is a root, and the first level
+  // under the question. Other branches reach the model as titles in the outline.
+  const parents = new Map(board.nodes.map((n) => [n.id, n.parentId]));
+  const inScope = new Set<string>();
+  const addSubtree = (id: string) => {
+    inScope.add(id);
+    for (const child of children.get(id) ?? []) addSubtree(child.id);
+  };
+  for (const anchor of anchors) {
+    const parent = parents.get(anchor) ?? null;
+    addSubtree(parent ?? anchor);
+    for (let up = parent; up; up = parents.get(up) ?? null) inScope.add(up);
+  }
+  const question = questionId(board.nodes);
+  if (question) {
+    inScope.add(question);
+    for (const child of children.get(question) ?? []) inScope.add(child.id);
+  }
   const anchorLevels = anchors.map((id) => levels.get(id)!);
   const excluded = new Set(excludedRefs);
   return {
     radius: CARD_REVIEW_RADIUS,
     anchors,
     nodes: ordered
-      .filter(({ level }) =>
-        anchorLevels.some((d) => Math.abs(level - d) <= CARD_REVIEW_RADIUS),
+      .filter(
+        ({ node, level }) =>
+          inScope.has(node.id) &&
+          anchorLevels.some((d) => Math.abs(level - d) <= CARD_REVIEW_RADIUS),
       )
       .map(({ node, level }) => {
         const card: CardReview["nodes"][number] = {

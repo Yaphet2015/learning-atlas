@@ -380,7 +380,7 @@ export const aiRequestSchema = z
     canvas: z.boolean().optional(),
     canvasRunId: idSchema.optional(),
     excludedCardIds: z.array(idSchema).max(LIMITS.nodes).optional(),
-    mode: z.enum(["answer", "map", "expand", "hint", "organize"]),
+    mode: z.enum(["answer", "map", "expand", "hint", "organize", "enrich"]),
   })
   .strict();
 export const baseUrlSchema = z
@@ -436,7 +436,7 @@ export const selectionSchema = z
   .nullable();
 
 // An invalid optional summary must not discard otherwise valid new cards.
-const aiOverviewsSchema = z
+export const aiOverviewsSchema = z
   .array(z.object({ id: idSchema, summary: plainText(120) }).strict())
   .max(12)
   .optional()

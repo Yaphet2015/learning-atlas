@@ -33,7 +33,15 @@ export async function installFakeAtlas(
       // Ghost-hint requests are recorded apart so flows that count asks stay exact.
       const hints: any[] = [];
       (window as any).__atlasHints = hints;
+      // So are the quiet diagram/overview follow-ups after new cards land.
+      const enriches: any[] = [];
+      (window as any).__atlasEnriches = enriches;
       const answer = (request: any) => {
+        if (request.mode === "enrich")
+          return (
+            (window as any).__atlasEnrichAnswers?.shift() ??
+            JSON.stringify({ visuals: [], overviews: [] })
+          );
         if (request.mode === "organize")
           return (window as any).__atlasOrganizationAnswers?.shift() ?? "{}";
         if (request.mode === "expand")
@@ -281,7 +289,12 @@ export async function installFakeAtlas(
             (window as any).__atlasOrganizationError
           )
             throw new Error("整理请求失败，请重试。");
-          (request.mode === "hint" ? hints : asks).push(request);
+          (request.mode === "hint"
+            ? hints
+            : request.mode === "enrich"
+              ? enriches
+              : asks
+          ).push(request);
           if (request.canvas && (window as any).__atlasChatCanvas) {
             void startCanvas(request.boardId, "chat", request.requestId);
           }

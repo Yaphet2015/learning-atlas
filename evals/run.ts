@@ -8,12 +8,25 @@
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { renderScopedContext, tutorInstructions } from "../electron/prompts";
+import {
+  canvasBundle,
+  canvasTutorInstructions,
+  maxOutputTokens,
+  modeTemperature,
+  renderScopedContext,
+  tutorInstructions,
+} from "../electron/prompts";
 import { buildMapFromAI, createEmptyBoard, newNote } from "../src/model/boards";
 import { contextForNote } from "../src/model/context";
-import { firstLevelPrompt } from "../src/model/kickoff";
+import {
+  firstLevelPrompt,
+  kickoffNote,
+  kickoffPrompt,
+  kickoffSkeleton,
+  learnerAnswers,
+} from "../src/model/kickoff";
 import { expandPrompt } from "../src/model/expand";
-import type { Board, ContextBundle } from "../src/shared/types";
+import type { Board, ContextBundle, StickyNote } from "../src/shared/types";
 import { TOPICS, type EvalTopic } from "./topics";
 import { treeMetrics, type EvalNode } from "./metrics";
 
@@ -26,8 +39,8 @@ if (!KEY || !BASE || !MODEL) {
   );
   process.exit(0);
 }
-// The app budgets 32k output for DeepSeek reasoning models (electron/ai-runtime.ts buildProvider).
-const MAX_TOKENS = 32_768;
+// Same output budget as the app gives this model (electron/prompts.ts maxOutputTokens).
+const MAX_TOKENS = maxOutputTokens(MODEL);
 const CONCURRENCY = Math.max(1, Number(process.env.EVAL_CONCURRENCY ?? 3));
 
 interface Usage {
@@ -45,7 +58,15 @@ const totals: Usage & { calls: number; failures: number } = {
   failures: 0,
 };
 
-async function chat(system: string, user: string, tries = 3) {
+type Msg = { role: "system" | "user" | "assistant"; content: string };
+async function chat(
+  system: string,
+  user: string | Msg[],
+  opts: { temperature?: number } = {},
+  tries = 3,
+) {
+  const turns: Msg[] =
+    typeof user === "string" ? [{ role: "user", content: user }] : user;
   let last = "";
   for (let i = 0; i < tries; i++) {
     const started = Date.now();
@@ -59,11 +80,10 @@ async function chat(system: string, user: string, tries = 3) {
         body: JSON.stringify({
           model: MODEL,
           max_tokens: MAX_TOKENS,
-          // The app sets no temperature; mirror it.
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user },
-          ],
+          ...(opts.temperature !== undefined
+            ? { temperature: opts.temperature }
+            : {}),
+          messages: [{ role: "system", content: system }, ...turns],
         }),
         signal: AbortSignal.timeout(300_000),
       });
@@ -103,7 +123,7 @@ async function chat(system: string, user: string, tries = 3) {
 }
 
 interface Step {
-  kind: "map" | "expand";
+  kind: "map" | "expand" | "kickoff";
   round: number;
   anchor: string;
   anchorTitle: string;
@@ -149,7 +169,9 @@ async function generate(
   };
   steps.push(step);
   try {
-    const r = await chat(system, prompt);
+    const r = await chat(system, prompt, {
+      temperature: modeTemperature(mode),
+    });
     Object.assign(step, {
       raw: r.content,
       reasoningChars: r.reasoningChars,
@@ -218,17 +240,109 @@ async function judge(t: EvalTopic, nodes: EvalNode[]) {
   return { ...j, checklistCoverage: +(covered / t.mustHave.length).toFixed(3) };
 }
 
+/**
+ * 「让 AI 带我开始」 as the Electron app runs it: a drawer conversation on the root, answered by
+ * the canvas-agent tutor with the request's references (App.tsx askNote → ai-runtime canvasBundle).
+ * The harness has no tools, so the tutor answers from the provided context only.
+ */
+async function kickoff(
+  board: Board,
+  t: EvalTopic,
+  steps: Step[],
+): Promise<Board> {
+  const root = board.nodes[0].id;
+  const at = () => new Date().toISOString();
+  const ask = async (n: StickyNote, text: string): Promise<StickyNote> => {
+    const asked: StickyNote = {
+      ...n,
+      messages: [
+        ...n.messages,
+        { id: `u${n.messages.length}`, role: "user", text, createdAt: at() },
+      ],
+    };
+    const context = contextForNote(
+      { ...board, notes: [...board.notes, asked] },
+      n.id,
+      undefined,
+      false,
+      "outline",
+    );
+    const system = `${canvasTutorInstructions()}\n\n${renderScopedContext(canvasBundle(context))}`;
+    const step: Step = {
+      kind: "kickoff",
+      round: -1,
+      anchor: root,
+      anchorTitle: t.topic,
+      systemChars: system.length,
+      prompt: text,
+      added: 0,
+    };
+    steps.push(step);
+    const r = await chat(
+      system,
+      asked.messages.map((m) => ({ role: m.role, content: m.text })),
+      answerOptions(),
+    );
+    Object.assign(step, {
+      raw: r.content,
+      reasoningChars: r.reasoningChars,
+      finish: r.finish,
+      ms: r.ms,
+      usage: r.usage,
+    });
+    return {
+      ...asked,
+      messages: [
+        ...asked.messages,
+        {
+          id: `a${asked.messages.length}`,
+          role: "assistant",
+          text: r.content,
+          createdAt: at(),
+        },
+      ],
+    };
+  };
+  const start: StickyNote = {
+    ...newNote(board, { x: 0, y: 0 }, { kind: "node", id: root }),
+    title: "AI 带我开始",
+  };
+  const first = await ask(start, kickoffPrompt(t.topic));
+  const done = await ask(first, t.kickoff!);
+  return { ...board, notes: [...board.notes, done] };
+}
+/** Request options of a drawer answer, as the app sends them. */
+const answerOptions = () => ({ temperature: modeTemperature("answer") });
+
 async function runTopic(t: EvalTopic, out: string) {
   const started = Date.now();
   const steps: Step[] = [];
   let board = createEmptyBoard(t.topic);
   const root = board.nodes[0].id;
-  // First level as 「铺成第一层」 sends it after a kickoff with no learner answers (App.tsx proposeFirstLevel).
+  // Topics with a scripted learner reply go through the kickoff conversation first; the first
+  // level is then built exactly as 「铺成第一层」 does (App.tsx proposeFirstLevel).
+  if (t.kickoff && process.env.EVAL_KICKOFF !== "0") {
+    try {
+      board = await kickoff(board, t, steps);
+    } catch (e) {
+      steps.push({
+        kind: "kickoff",
+        round: -1,
+        anchor: root,
+        anchorTitle: t.topic,
+        systemChars: 0,
+        prompt: "",
+        added: 0,
+        error: String((e as Error).message ?? e),
+      });
+    }
+  }
+  const kick = kickoffNote(board);
   board = await generate(
     board,
     root,
     "map",
-    firstLevelPrompt(t.topic, []),
+    firstLevelPrompt(t.topic, learnerAnswers(kick), kickoffSkeleton(kick)),
     0,
     steps,
   );
