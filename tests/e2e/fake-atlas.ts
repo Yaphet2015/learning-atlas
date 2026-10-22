@@ -85,6 +85,17 @@ export async function installFakeAtlas(
                 block: "b1",
                 title: "阳光里有哪些颜色？",
                 body: "白光其实混着很多颜色。",
+                summary: "白光是红到紫多种颜色的混合。",
+                keyPoints: [
+                  "可见光波长约 380–750 纳米",
+                  "三棱镜能把白光分成连续色带",
+                  "不同颜色在水中折射率略有不同",
+                ],
+                whyItMatters: "颜色本来就在阳光里，彩虹只是把它们分开。",
+                example: "用一杯水和手电筒，在墙上也能照出一小段彩带。",
+                misconception: "误解：水滴给光“染了色”；其实：只是把已有的颜色分开。",
+                depthType: "what",
+                sources: [{ title: "牛顿《光学》", url: "https://en.wikipedia.org/wiki/Opticks" }],
               },
               {
                 id: "bend",

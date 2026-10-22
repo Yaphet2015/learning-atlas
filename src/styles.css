@@ -4113,3 +4113,71 @@ kbd,
   gap: 8px;
   flex-wrap: wrap;
 }
+/* Rich cards (PR-C): a quiet depth tag, the summary lead and the detail sections in the drawer */
+.depth-tag {
+  display: inline-block;
+  font: 500 11px/1.6 var(--kai);
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  padding: 0 7px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.this-card h2 .depth-tag {
+  margin-left: 8px;
+  font-size: 12px;
+}
+.card p.face-summary {
+  color: var(--ink);
+}
+.this-card .card-summary {
+  margin: 0;
+  font: 600 16px/1.7 var(--kai);
+  color: var(--ink);
+}
+.card-detail {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--rule);
+}
+.cd-sec {
+  display: grid;
+  gap: 4px;
+}
+.cd-k {
+  font: 600 12px/1.5 var(--kai);
+  letter-spacing: 0.04em;
+  color: var(--accent-ink);
+}
+.cd-sec p,
+.cd-points,
+.cd-sources {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: var(--ink-2);
+}
+.cd-points,
+.cd-sources {
+  padding-left: 1.2em;
+}
+.cd-points li + li {
+  margin-top: 2px;
+}
+.cd-example p {
+  background: var(--paper-deep);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+}
+.cd-mis p {
+  border-left: 2px solid var(--accent-wash);
+  padding-left: 10px;
+}
+.cd-sources .cd-url {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 3px;
+}

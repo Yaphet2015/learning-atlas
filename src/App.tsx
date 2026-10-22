@@ -933,7 +933,7 @@ export default function App() {
           stickyId: "expand-" + id,
           requestId: uid(),
           mode: "expand",
-          prompt: expandPrompt(node.title),
+          prompt: expandPrompt(b, node.id),
           context,
         },
         id,

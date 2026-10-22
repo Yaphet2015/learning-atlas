@@ -136,6 +136,7 @@ vi.mock("@earendil-works/pi-ai/providers/openai", async (importOriginal) => {
 
 import {
   AIRuntime,
+  STALL_ERROR,
   emptyTextState,
   historyFromEntries,
   reduceAgentEvent,
@@ -647,6 +648,22 @@ describe("real durable SQLite adapter with offline simulated model transport", (
         ),
       ).toBeDefined(),
     );
+  });
+  it("aborts a silent stream after the stall limit and reports a retryable error", async () => {
+    transport.hold = true;
+    const updates: AIUpdate[] = [];
+    const runtime = createRuntime(updates);
+    runtime.stallTimeoutMs = 300;
+    await configureRuntime(runtime);
+    await runtime.ask(request());
+    await vi.waitFor(() => expect(updates.at(-1)?.status).toBe("error"), {
+      timeout: 5_000,
+    });
+    expect(updates.at(-1)?.error).toBe(STALL_ERROR);
+    // The sticky is free again: a retry is accepted.
+    transport.hold = false;
+    await runtime.ask(request({ requestId: "retry" }));
+    await vi.waitFor(() => expect(updates.at(-1)?.status).toBe("done"));
   });
   it("returns a safe provider error without exposing raw provider diagnostics", async () => {
     transport.failure = true;

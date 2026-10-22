@@ -1,0 +1,604 @@
+{
+  "stamp": "2026-10-21T06-10-13",
+  "model": "deepseek-flash",
+  "topics": 12,
+  "wallMs": 3451495,
+  "usage": {
+    "retries": 27,
+    "retryMs": 3139795,
+    "retryReasons": [
+      "34s empty content (finish_reason=undefined)",
+      "618s empty content (finish_reason=undefined)",
+      "618s empty content (finish_reason=undefined)",
+      "16s empty content (finish_reason=undefined)",
+      "596s empty content (finish_reason=undefined)",
+      "596s empty content (finish_reason=undefined)",
+      "101s empty content (finish_reason=undefined)",
+      "101s empty content (finish_reason=undefined)",
+      "1s HTTP 402: Insufficient Balance (request_id: 75eb1170-14eb-47a2-a3c3-64e80115312b",
+      "1s HTTP 402: Insufficient Balance (request_id: 44f20c5c-c07f-4089-8ac6-23c8a7af5d54",
+      "1s HTTP 402: Insufficient Balance (request_id: 3983dadb-0a7e-4100-ab69-0bed7867f0ca",
+      "1s HTTP 402: Insufficient Balance (request_id: 4faa21b5-d2ad-4251-bff5-5ed4e7be2bb6",
+      "1s HTTP 402: Insufficient Balance (request_id: d78d0e92-7ef0-4651-bda7-730f08991644",
+      "1s HTTP 402: Insufficient Balance (request_id: 3f1eef27-bb7c-4d1c-b371-5664506dbef0",
+      "1s HTTP 402: Insufficient Balance (request_id: 8c35faa6-68ab-4433-9de2-7e2f88862691",
+      "1s HTTP 402: Insufficient Balance (request_id: b888a79b-232d-4f41-aaf9-bfe46e1df40f",
+      "1s HTTP 402: Insufficient Balance (request_id: ab01349f-0017-4a6a-a1ed-8dd20276c61f",
+      "1s HTTP 402: Insufficient Balance (request_id: 9b7760c9-e0b9-42c7-ad43-d8bcf0b18c1d",
+      "1s HTTP 402: Insufficient Balance (request_id: f5097c72-cc7d-4eff-b227-e69ae462c6a8",
+      "1s HTTP 402: Insufficient Balance (request_id: c6fcd1de-e28c-4219-9fbb-0cd57b018832",
+      "1s HTTP 402: Insufficient Balance (request_id: 07bbb991-ff21-402a-b004-1e50236def43",
+      "1s HTTP 402: Insufficient Balance (request_id: 619bb9fa-ef21-4405-82ef-2387aac63649",
+      "1s HTTP 402: Insufficient Balance (request_id: a8883cf7-51f7-4329-a125-56bcad01857b",
+      "120s empty content (finish_reason=undefined)",
+      "122s empty content (finish_reason=undefined)",
+      "103s empty content (finish_reason=undefined)",
+      "104s empty content (finish_reason=undefined)"
+    ],
+    "prompt": 1006011,
+    "completion": 613710,
+    "reasoning": 488048,
+    "cached": 336384,
+    "calls": 181,
+    "failures": 5
+  },
+  "overall": {
+    "n": 11,
+    "goalFit": 4.36,
+    "coverage": 4,
+    "depth": 4.91,
+    "nonRedundancy": 3.82,
+    "newInfoPerCard": 4.27,
+    "checklistCoverage": 0.88,
+    "planChecklistCoverage": 0.71,
+    "blockCoverage": 0.9,
+    "cards": 33.27,
+    "richShare": 1,
+    "textDupRate": 0,
+    "newInfoL2": 0.78,
+    "newInfoL3": 0.74,
+    "bodyL1": 338.45,
+    "bodyL3": 349.55
+  },
+  "byType": {
+    "concept": {
+      "n": 2,
+      "goalFit": 4.5,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4.5,
+      "checklistCoverage": 0.86,
+      "planChecklistCoverage": 0.79,
+      "blockCoverage": 0.86,
+      "cards": 32,
+      "richShare": 1,
+      "textDupRate": 0,
+      "newInfoL2": 0.77,
+      "newInfoL3": 0.73,
+      "bodyL1": 317.5,
+      "bodyL3": 310.5
+    },
+    "mechanism": {
+      "n": 2,
+      "goalFit": 4,
+      "coverage": 4.5,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 1,
+      "planChecklistCoverage": 0.73,
+      "blockCoverage": 0.92,
+      "cards": 29,
+      "richShare": 1,
+      "textDupRate": 0,
+      "newInfoL2": 0.75,
+      "newInfoL3": 0.73,
+      "bodyL1": 403.5,
+      "bodyL3": 402
+    },
+    "decision": {
+      "n": 2,
+      "goalFit": 4,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 3.5,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 0.93,
+      "planChecklistCoverage": 0.58,
+      "blockCoverage": 0.91,
+      "cards": 34,
+      "richShare": 1,
+      "textDupRate": 0,
+      "newInfoL2": 0.8,
+      "newInfoL3": 0.74,
+      "bodyL1": 345.5,
+      "bodyL3": 379.5
+    },
+    "howto": {
+      "n": 2,
+      "goalFit": 5,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 3.5,
+      "newInfoPerCard": 4.5,
+      "checklistCoverage": 0.75,
+      "planChecklistCoverage": 0.75,
+      "blockCoverage": 1,
+      "cards": 37.5,
+      "richShare": 1,
+      "textDupRate": 0,
+      "newInfoL2": 0.78,
+      "newInfoL3": 0.75,
+      "bodyL1": 321.5,
+      "bodyL3": 332
+    },
+    "learning-path": {
+      "n": 1,
+      "goalFit": 4,
+      "coverage": 3,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 0.71,
+      "planChecklistCoverage": 0.57,
+      "blockCoverage": 0.5,
+      "cards": 27,
+      "richShare": 0.96,
+      "textDupRate": 0,
+      "newInfoL2": 0.79,
+      "newInfoL3": 0.76,
+      "bodyL1": 331,
+      "bodyL3": 302
+    },
+    "compare": {
+      "n": 2,
+      "goalFit": 4.5,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4.5,
+      "checklistCoverage": 0.93,
+      "planChecklistCoverage": 0.79,
+      "blockCoverage": 1,
+      "cards": 37,
+      "richShare": 1,
+      "textDupRate": 0,
+      "newInfoL2": 0.82,
+      "newInfoL3": 0.75,
+      "bodyL1": 308,
+      "bodyL3": 347.5
+    }
+  },
+  "byTopic": [
+    {
+      "id": "opportunity-cost",
+      "type": "concept",
+      "goalFit": 5,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 5,
+      "checklistCoverage": 0.857,
+      "planChecklistCoverage": 0.714,
+      "planIntent": "concept",
+      "planIntentFit": 5,
+      "planStructure": 4,
+      "blockCoverage": 0.727,
+      "cards": 30,
+      "richShare": 1,
+      "byLevel": {
+        "1": 4,
+        "2": 14,
+        "3": 12
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.763,
+        "3": 0.746
+      },
+      "avgBody": {
+        "1": 312,
+        "2": 305,
+        "3": 291
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布紧扣“什么是机会成本”，从定义、估算、辨析到读研跳槽和企业接单应用，层次清楚且例子、数字、误区充分，深度优秀。主要缺口是未覆盖“比较优势/分工与机会成本”这一清单要点；另有沉没成本与电影票例子、定义与“未选项不能相加”等轻度重复。"
+    },
+    {
+      "id": "entropy",
+      "type": "concept",
+      "goalFit": 4,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 0.857,
+      "planChecklistCoverage": 0.857,
+      "planIntent": "concept",
+      "planIntentFit": 5,
+      "planStructure": 5,
+      "blockCoverage": 1,
+      "cards": 34,
+      "richShare": 1,
+      "byLevel": {
+        "1": 5,
+        "2": 12,
+        "3": 15,
+        "4": 2
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.785,
+        "3": 0.717,
+        "4": 0.732
+      },
+      "avgBody": {
+        "1": 323,
+        "2": 338,
+        "3": 330,
+        "4": 334
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布整体质量很高，统计熵、热力学熵、信息熵三条线清楚，例子、数字、误区与判断标准密集，深层确实比上层更深。主要缺陷是完全缺少“时间箭头与熵”的直接处理，第二定律只作为方向判据出现。信息熵与统计熵的边界讲得很细，但少数卡片在宏观态划分、全同粒子/混合熵、功与熵流上存在重复。"
+    },
+    {
+      "id": "attention",
+      "type": "mechanism",
+      "goalFit": 4,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 1,
+      "planChecklistCoverage": 0.75,
+      "planIntent": "mechanism",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 0.833,
+      "cards": 30,
+      "richShare": 1,
+      "byLevel": {
+        "1": 4,
+        "2": 12,
+        "3": 14
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.771,
+        "3": 0.749
+      },
+      "avgBody": {
+        "1": 369,
+        "2": 401,
+        "3": 368
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "机制讲得很扎实：缩放方差的数值例子、显存估算公式、Q/K 不可共用投影、头剪枝判据这类内容明显超出定义复述，深层卡确实比上层更深，几乎每张卡都有可验证的新信息。主要问题是重心偏移与局部重复：RNN 瓶颈用了三张 L3 深挖，而清单里的因果掩码只在两张别主题的卡里当要点出现，既没说清 decoder 为何不能看未来，也没有 padding mask；另外 QKV 误区、多头拼接两处在父子卡间近乎同义改写，且 L1「长序列权重被摊薄」的断言被下级 L2 反证，前后口径不一致，建议把该论断改为条件式并合并重复卡片。"
+    },
+    {
+      "id": "tcp-handshake",
+      "type": "mechanism",
+      "goalFit": 4,
+      "coverage": 5,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 1,
+      "planChecklistCoverage": 0.714,
+      "planIntent": "mechanism",
+      "planIntentFit": 5,
+      "planStructure": 5,
+      "blockCoverage": 1,
+      "cards": 28,
+      "richShare": 1,
+      "byLevel": {
+        "1": 4,
+        "2": 11,
+        "3": 13
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.728,
+        "3": 0.711
+      },
+      "avgBody": {
+        "1": 438,
+        "2": 489,
+        "3": 436
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "核心问题回答得扎实：三次报文、两次不足、四次多余、ISN 随机化与 SYN cookie 都有机制级说明，深度和细节明显高于及格线。主要问题是若干深层分支（MSS、窗口缩放/SACK、序号回绕、TFO、抓包定位）偏离“为什么是三次”的主线，且第三步 ACK 丢失的两张卡片存在前后口径不一致与重复，削弱了整体紧凑度。"
+    },
+    {
+      "id": "critical-illness",
+      "type": "decision",
+      "goalFit": 4,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 3,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 1,
+      "planChecklistCoverage": 0.875,
+      "planIntent": "decision",
+      "planIntentFit": 5,
+      "planStructure": 3,
+      "blockCoverage": 0.818,
+      "cards": 39,
+      "richShare": 1,
+      "byLevel": {
+        "1": 5,
+        "2": 16,
+        "3": 18
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.789,
+        "3": 0.728
+      },
+      "avgBody": {
+        "1": 344,
+        "2": 403,
+        "3": 350
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整体是一棵面向决策的高质量画布：L1 把“怎么选”拆成优先级、变量排序、产品形态、条款核对、下单判定五个可执行决策，L2/L3 大量给出保费倍数、IRR、免体检额度、核保五结论、三同条款等硬信息，深度明显高于常见科普。主要扣分在于：部分 L3 滑向百万医疗免赔额、住院津贴、老年储蓄计划等偏离“重疾险怎么选”的边缘话题；同时“保费≤年收入10%”“保额优先于期限”在多张卡反复出现，使重复度偏高。覆盖上唯一实质性缺口是意外险与“家庭支柱优先”这条筛选原则。"
+    },
+    {
+      "id": "laptop-choice",
+      "type": "decision",
+      "goalFit": 4,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 0.857,
+      "planChecklistCoverage": 0.286,
+      "planIntent": "decision",
+      "planIntentFit": 4,
+      "planStructure": 5,
+      "blockCoverage": 1,
+      "cards": 29,
+      "richShare": 1,
+      "byLevel": {
+        "1": 4,
+        "2": 12,
+        "3": 13
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.807,
+        "3": 0.76
+      },
+      "avgBody": {
+        "1": 347,
+        "2": 379,
+        "3": 409
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "决策维度、人群对号、拍板顺序三段都紧扣“怎么选”，深度在同类画布里属上乘：几乎每张卡都有数字、机制、误区和可执行判断标准。主要问题是第一层整棵“现有电脑够不够用”子树回答的是“要不要买”而非“买哪个”，占了近三分之一篇幅；同时清单里的二手残值完全缺失，长期成本只算到维修和延保。少量 L3 与父卡重复测同一件事，信息增量偏薄。"
+    },
+    {
+      "id": "marathon",
+      "type": "howto",
+      "goalFit": 5,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 5,
+      "checklistCoverage": 0.75,
+      "planChecklistCoverage": 0.875,
+      "planIntent": "howto",
+      "planIntentFit": 5,
+      "planStructure": 2,
+      "blockCoverage": 1,
+      "cards": 38,
+      "richShare": 1,
+      "byLevel": {
+        "1": 5,
+        "2": 15,
+        "3": 18
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.766,
+        "3": 0.734
+      },
+      "avgBody": {
+        "1": 298,
+        "2": 350,
+        "3": 305
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布高度贴题，按24周分期、跑走起步、轻松跑/长距离强度、伤痛红线、减量与比赛日配速补给逐层展开，数字、例子和误区很多，执行性强。主要缺口是力量训练只有频次没有动作方案、比赛日补给未明确电解质，另缺比赛选择与赛后恢复。重复主要是父子卡之间对10%加量、能量胶间隔和疼痛阈值的反复引用，但多数深挖仍带来新信息。"
+    },
+    {
+      "id": "first-website",
+      "type": "howto",
+      "goalFit": 5,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 3,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 0.75,
+      "planChecklistCoverage": 0.625,
+      "planIntent": "howto",
+      "planIntentFit": 5,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 37,
+      "richShare": 1,
+      "byLevel": {
+        "1": 5,
+        "2": 17,
+        "3": 15
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.79,
+        "3": 0.759
+      },
+      "avgBody": {
+        "1": 345,
+        "2": 348,
+        "3": 359
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布高度贴题，围绕“从零上线”给出了时间线、工具托管、部署绑定和上线检查，深层卡片有不少可执行细节与边界条件。主要短板是技术选型未比较静态站点生成器/建站平台/手写 HTML，且完全漏掉 SEO 与访问统计；部分域名回退和上线检查卡片存在明显重复。"
+    },
+    {
+      "id": "microecon",
+      "type": "learning-path",
+      "goalFit": 3,
+      "coverage": 2,
+      "depth": 4,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 0.571,
+      "planChecklistCoverage": 0.714,
+      "planIntent": "learning-path",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 40,
+      "richShare": 1,
+      "byLevel": {
+        "1": 5,
+        "2": 17,
+        "3": 18
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.801,
+        "3": 0.742
+      },
+      "avgBody": {
+        "1": 344,
+        "2": 330,
+        "3": 313
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "作为一份学习路线，它的时间预算、练习阶梯、过关线与回炉机制做得非常扎实，卡片几乎都有数字、例子和误区，深层也确实比上层更深。但它把“学好微观经济学”整体窄化成“考研微观应试”：一半篇幅在院校书目、真题权重、科目代码上，而博弈论、信息不对称、外部性与公共品、一般均衡等清单核心进阶内容完全缺席，现实案例检验也只剩一句读评论。覆盖与贴题因此明显扣分，属于执行层面优秀、学科视野残缺的方案。",
+      "rerun": "HTTP 402 (test account balance) during the run"
+    },
+    {
+      "id": "english-speaking",
+      "type": "learning-path",
+      "goalFit": 5,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 1,
+      "planChecklistCoverage": 0.75,
+      "planIntent": "learning-path",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 0.923,
+      "cards": 40,
+      "richShare": 1,
+      "byLevel": {
+        "1": 5,
+        "2": 18,
+        "3": 17
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.767,
+        "3": 0.744
+      },
+      "avgBody": {
+        "1": 316,
+        "2": 333,
+        "3": 333
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整棵树高度贴题，从起点评估、三阶段路线、每周动作到材料难度和进阶判据，形成了可执行的系统，深层卡片也普遍带数字阈值、反例和误区，深度突出。主要短板是覆盖面的两处偏斜：目标只谈场景不谈考试，发音缺音标与语调专项，真人对话只讲“对象验收”不讲渠道选择；此外L3“起点时长对照阶段入口”与L2跳级判据数值冲突，属于需要消除的重复。",
+      "rerun": "HTTP 402 (test account balance) during the run"
+    },
+    {
+      "id": "react-vue",
+      "type": "compare",
+      "goalFit": 4,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 4,
+      "checklistCoverage": 0.857,
+      "planChecklistCoverage": 0.857,
+      "planIntent": "compare",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 36,
+      "richShare": 1,
+      "byLevel": {
+        "1": 5,
+        "2": 16,
+        "3": 15
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.83,
+        "3": 0.766
+      },
+      "avgBody": {
+        "1": 341,
+        "2": 378,
+        "3": 373
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "画布整体紧扣 React/Vue 比较，机制、性能、生态和选型都有较深展开，例子与判断标准丰富。主要问题是清单第3条组件写法（Hooks vs Composition API/Options API）完全缺失，生态部分未点名 Redux/Zustand；部分 L3 滑向通用选型/数据解读方法论，削弱了“区别”本身的聚焦度。"
+    },
+    {
+      "id": "index-vs-active",
+      "type": "compare",
+      "goalFit": 5,
+      "coverage": 4,
+      "depth": 5,
+      "nonRedundancy": 4,
+      "newInfoPerCard": 5,
+      "checklistCoverage": 1,
+      "planChecklistCoverage": 0.714,
+      "planIntent": "compare",
+      "planIntentFit": 4,
+      "planStructure": 4,
+      "blockCoverage": 1,
+      "cards": 38,
+      "richShare": 1,
+      "byLevel": {
+        "1": 5,
+        "2": 16,
+        "3": 17
+      },
+      "textDupRate": 0,
+      "newInfo": {
+        "2": 0.817,
+        "3": 0.742
+      },
+      "avgBody": {
+        "1": 275,
+        "2": 312,
+        "3": 322
+      },
+      "failedSteps": 0,
+      "emptyExpansions": 0,
+      "verdict": "整体是高质量的比较型画布：先拆收益来源，再对齐比较维度、解释长期跑输原因，最后落到选择条件与核心-卫星配置，紧贴“哪个更好”的决策意图。主要扣分在覆盖上对 SPIVA、A 股主动基金实证和分散度对比不够显性，少数 L3 执行细节偏重且与上层主题有重复。"
+    }
+  ],
+  "reruns": [
+    "microecon",
+    "english-speaking"
+  ]
+}

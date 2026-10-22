@@ -436,7 +436,7 @@ describe("constrained AI map parsing", () => {
     }),
     JSON.stringify({ nodes: [map().nodes[0], map().nodes[0]], relations: [] }),
     JSON.stringify({
-      nodes: Array.from({ length: 7 }, (_, i) => ({
+      nodes: Array.from({ length: 9 }, (_, i) => ({
         id: `n${i}`,
         title: "节点",
         body: "内容",

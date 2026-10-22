@@ -346,7 +346,20 @@ type ActiveRun = {
   settled: Promise<void>;
   settle: () => void;
   canvasId?: string;
+  /** Stall watchdog: last time any agent event arrived, and whether the run was aborted for silence. */
+  lastProgress?: number;
+  stallTimer?: ReturnType<typeof setInterval>;
+  stalled?: boolean;
 };
+
+/**
+ * A run with no agent event (no token, thinking delta or tool call) for this long is aborted.
+ * The SDK timeout only covers the response headers; a provider can keep an SSE stream open with
+ * keep-alives and nothing else for many minutes.
+ */
+export const STALL_TIMEOUT_MS = 180_000;
+export const STALL_ERROR =
+  "AI 服务超过 3 分钟没有返回任何内容，已停止等待。服务商可能繁忙，请稍后重试。";
 
 /** Default limit for the settings connection probe. */
 export const CONNECTION_TIMEOUT_MS = 15_000;
@@ -1040,6 +1053,7 @@ export class AIRuntime {
         );
         watcher.start(async (events) => {
           if (active.finished) return;
+          active.lastProgress = Date.now();
           for (const event of events)
             active.state = reduceAgentEvent(
               active.state,
@@ -1048,6 +1062,7 @@ export class AIRuntime {
             );
           this.publish(active, "streaming");
         });
+        this.watchStall(active);
         if (active.cancelled) {
           await conversation.abort(CTX);
           await watcher.stop();
@@ -1115,10 +1130,12 @@ export class AIRuntime {
       );
       watcher.start(async (events) => {
         if (active.finished) return;
+        active.lastProgress = Date.now();
         for (const event of events)
           active.state = reduceAgentEvent(active.state, event, active.baseline);
         this.publish(active, "streaming");
       });
+      this.watchStall(active);
       if (active.cancelled) {
         await watcher.stop();
         this.finish(key, active, "cancelled");
@@ -1189,9 +1206,11 @@ export class AIRuntime {
         !active.state.truncated &&
         !active.state.aborted
           ? "done"
-          : active.cancelled || active.state.aborted
-            ? "cancelled"
-            : "error";
+          : active.stalled
+            ? "error"
+            : active.cancelled || active.state.aborted
+              ? "cancelled"
+              : "error";
       const canvasStatus = await this.settleCanvas(
         active,
         status === "done" ||
@@ -1208,7 +1227,9 @@ export class AIRuntime {
       this.finish(
         key,
         active,
-        active.cancelled || this.closed ? "cancelled" : "error",
+        !active.stalled && (active.cancelled || this.closed)
+          ? "cancelled"
+          : "error",
       );
     }
   }
@@ -1557,9 +1578,11 @@ export class AIRuntime {
         status,
         ...(status === "error"
           ? {
-              error: active.state.truncated
-                ? OUTPUT_LIMIT_ERROR
-                : PROVIDER_ERROR,
+              error: active.stalled
+                ? STALL_ERROR
+                : active.state.truncated
+                  ? OUTPUT_LIMIT_ERROR
+                  : PROVIDER_ERROR,
             }
           : {}),
       });
@@ -1567,12 +1590,34 @@ export class AIRuntime {
       /* A detached renderer must not fail persistence. */
     }
   }
+  /** Abort a run that has gone silent; it ends as an error the renderer can retry. */
+  /** Silence limit for a run; tests shorten it. */
+  stallTimeoutMs = STALL_TIMEOUT_MS;
+  private watchStall(active: ActiveRun, limit = this.stallTimeoutMs): void {
+    active.lastProgress = Date.now();
+    if (active.stallTimer) clearInterval(active.stallTimer);
+    active.stallTimer = setInterval(
+      () => {
+        if (active.finished || active.cancelled) {
+          clearInterval(active.stallTimer);
+          return;
+        }
+        if (Date.now() - (active.lastProgress ?? 0) < limit) return;
+        clearInterval(active.stallTimer);
+        active.stalled = true;
+        void active.conversation?.abort(CTX).catch(() => {});
+      },
+      Math.min(5_000, limit),
+    );
+    active.stallTimer.unref?.();
+  }
   private finish(
     key: string,
     active: ActiveRun,
     status: AIUpdate["status"],
   ): void {
     if (active.finished) return;
+    if (active.stallTimer) clearInterval(active.stallTimer);
     this.publish(active, status);
     active.finished = true;
     if (this.active.get(key) === active) this.active.delete(key);

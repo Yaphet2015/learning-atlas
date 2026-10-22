@@ -46,6 +46,65 @@ export const visualDiagramSchema = z
     basis: z.enum(["literal", "analogy"]),
   })
   .strict();
+export const depthTypeSchema = z.enum([
+  "what",
+  "why",
+  "how",
+  "edge",
+  "apply",
+  "compare",
+]);
+const sourceUrl = z
+  .string()
+  .max(500)
+  .refine((u) => /^https?:\/\/[^\s<>"]+$/i.test(u), "http(s) URL only");
+export const cardSourceSchema = z
+  .object({ title: plainText(120), url: sourceUrl.optional() })
+  .strict();
+/** Rich card fields, shared by stored cards and AI output. */
+export const richCardFields = {
+  summary: plainText(160).optional(),
+  keyPoints: z.array(plainText(160)).max(4).optional(),
+  whyItMatters: plainText(300).optional(),
+  example: plainText(400).optional(),
+  misconception: plainText(300).optional(),
+  depthType: depthTypeSchema.optional(),
+  sources: z.array(cardSourceSchema).max(4).optional(),
+};
+/**
+ * Model text that names a tag in prose (“写在 <template> 里”) is kept readable with full-width
+ * brackets instead of failing the map; it is plain text either way.
+ */
+const ACTIVE_MARKUP =
+  /<\/?\s*(script|iframe|img|svg|style|object|embed|a|link|meta|form|input|video|audio|math)\b|\son\w+\s*=|javascript:/i;
+const defang = (v: unknown) =>
+  typeof v === "string" && !ACTIVE_MARKUP.test(v)
+    ? v.replace(/</g, "＜").replace(/>/g, "＞")
+    : v; // Anything that looks like active markup is still rejected by plainText.
+const aiText = (max: number) => z.preprocess(defang, plainText(max));
+/**
+ * The same fields as the model sends them: a bad or over-long optional field is trimmed or dropped
+ * instead of failing the whole map (plain-text checks still apply, so nothing unsafe is kept).
+ */
+const aiRichCardFields = {
+  summary: aiText(160).optional().catch(undefined),
+  keyPoints: z
+    .preprocess(
+      (v) => (Array.isArray(v) ? v.slice(0, 4) : v),
+      z.array(aiText(160)).max(4).optional(),
+    )
+    .catch(undefined),
+  whyItMatters: aiText(300).optional().catch(undefined),
+  example: aiText(400).optional().catch(undefined),
+  misconception: aiText(300).optional().catch(undefined),
+  depthType: richCardFields.depthType.catch(undefined),
+  sources: z
+    .preprocess(
+      (v) => (Array.isArray(v) ? v.slice(0, 4) : v),
+      richCardFields.sources,
+    )
+    .catch(undefined),
+};
 export const conceptNodeSchema = z
   .object({
     id: idSchema,
@@ -73,6 +132,7 @@ export const conceptNodeSchema = z
       .strict()
       .optional(),
     planBlock: idSchema.optional(),
+    ...richCardFields,
   })
   .strict();
 /** v1 node shape, accepted only as migration input. */
@@ -377,6 +437,12 @@ export const contextBundleSchema = z
                 title: true,
                 body: true,
                 visual: true,
+                summary: true,
+                keyPoints: true,
+                whyItMatters: true,
+                example: true,
+                misconception: true,
+                depthType: true,
               })
               .extend({
                 level: z
@@ -489,7 +555,7 @@ export const aiMapSchema = z
           .object({
             id: idSchema,
             title: plainText(100),
-            body: plainText(1_200),
+            body: aiText(1_200),
             /** "anchor", an existing card id, a generated id, or null for a root. */
             parent: idSchema.nullable().optional(),
             emoji: z.string().max(16).optional(),
@@ -497,11 +563,12 @@ export const aiMapSchema = z
             visual: visualDiagramSchema.optional(),
             /** The plan block this card realises. */
             block: idSchema.optional(),
+            ...aiRichCardFields,
           })
           .strict(),
       )
       .min(1)
-      .max(6),
+      .max(8),
     relations: z
       .array(
         z

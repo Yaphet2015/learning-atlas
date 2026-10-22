@@ -235,8 +235,27 @@ const SEQUENCE_LABEL = /先|后|然后|接着|下一步|next/i;
 type CardSignature = { title: string; grams: Set<string> };
 const normalize = (text: string) =>
   text.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
-function cardSignature(n: { title: string; body?: string }): CardSignature {
-  const text = normalize(`${n.title}${n.body ?? ""}`);
+/** The optional rich fields of an AI node, copied only when present. */
+function richFields(item: Partial<ConceptNode>): Partial<ConceptNode> {
+  const out: Partial<ConceptNode> = {};
+  if (item.summary) out.summary = item.summary;
+  if (item.keyPoints?.length) out.keyPoints = [...item.keyPoints];
+  if (item.whyItMatters) out.whyItMatters = item.whyItMatters;
+  if (item.example) out.example = item.example;
+  if (item.misconception) out.misconception = item.misconception;
+  if (item.depthType) out.depthType = item.depthType;
+  if (item.sources?.length) out.sources = item.sources.map((s) => ({ ...s }));
+  return out;
+}
+function cardSignature(n: {
+  title: string;
+  body?: string;
+  summary?: string;
+  keyPoints?: string[];
+}): CardSignature {
+  const text = normalize(
+    `${n.title}${n.summary ?? ""}${n.body ?? ""}${(n.keyPoints ?? []).join("")}`,
+  );
   const grams = new Set<string>();
   for (let i = 0; i < text.length - 1; i++) grams.add(text.slice(i, i + 2));
   return { title: normalize(n.title), grams };
@@ -271,7 +290,7 @@ export function buildMapFromAI(
   const result = schema.safeParse(parsed);
   if (!result.success)
     throw new Error(
-      "AI 返回的图谱不符合格式要求。请要求 1–6 个纯文本节点，并重试。",
+      "AI 返回的图谱不符合格式要求。请要求 1–8 个纯文本节点，并重试。",
     );
   const map = result.data;
   const anchor = board.nodes.find(
@@ -333,6 +352,7 @@ export function buildMapFromAI(
     return {
       ...node(id, item.title, item.body, parent, order),
       ...(item.block && planIds.has(item.block) ? { planBlock: item.block } : {}),
+      ...richFields(item),
       ...(item.visual
         ? { visual: { ...item.visual, labels: [...item.visual.labels] } }
         : {}),

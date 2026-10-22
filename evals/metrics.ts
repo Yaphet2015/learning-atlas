@@ -5,6 +5,8 @@ export interface EvalNode {
   title: string;
   body: string;
   level: number;
+  /** The card carries keyPoints (PR-C rich content). */
+  rich?: boolean;
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
