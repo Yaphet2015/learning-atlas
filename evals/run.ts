@@ -17,7 +17,7 @@ import {
   tutorInstructions,
 } from "../electron/prompts";
 import { buildMapFromAI, createEmptyBoard, newNote } from "../src/model/boards";
-import { contextForNote } from "../src/model/context";
+import { contextForNote, leanForGeneration } from "../src/model/context";
 import {
   firstLevelPrompt,
   kickoffNote,
@@ -606,8 +606,12 @@ async function gateSample(t: EvalTopic, out: string) {
   const expandOnce = async (anchorId: string, mode: "map" | "expand", prompt: string) => {
     const before = usageNow();
     const virtual = newNote(board, { x: 0, y: 0 }, { kind: "node", id: anchorId });
-    const context = contextForNote({ ...board, notes: [...board.notes, virtual] }, virtual.id);
+    const context = leanForGeneration(contextForNote({ ...board, notes: [...board.notes, virtual] }, virtual.id), board, anchorId);
     const system = (m: string) => `${tutorInstructions(m as any)}\n\n${renderScopedContext(context)}`;
+    if (process.env.EVAL_DEBUG) {
+      const { topic, structure, review, plan, ...sel } = context as any;
+      console.error("sizes", mode, JSON.stringify({ tutor: tutorInstructions(mode).length, structure: structure?.length ?? 0, review: JSON.stringify(review ?? "").length, selected: JSON.stringify(sel).length, prompt: prompt.length }));
+    }
     const first = await chat(system(mode), prompt, { temperature: modeTemperature(mode) });
     const firstTokens = { prompt: totals.prompt - before.prompt, completion: totals.completion - before.completion };
     const outcome = await runGate(first.content, board, anchorId, async (m, p) =>

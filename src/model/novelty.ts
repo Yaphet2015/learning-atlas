@@ -293,7 +293,10 @@ export async function runGate(
     return rejected;
   };
   const rejected = pass(cards, false);
-  if (rejected.length) {
+  // Token budget: only spend a regenerate call when more than half the batch failed (or <2 survive).
+  const survivors = out.kept.length + border.length;
+  if (rejected.length && survivors >= 2 && rejected.length * 2 <= cards.length) out.dropped.push(...rejected);
+  else if (rejected.length) {
     const prompt = regeneratePrompt(regenBase, rejected, board, anchorId);
     out.calls.regen++;
     try {

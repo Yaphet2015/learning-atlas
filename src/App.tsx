@@ -39,7 +39,7 @@ import {
 import { reconcileCanvasResult } from "./model/canvas-result";
 import { CanvasRunProgress } from "./components/CanvasRunProgress";
 import { CanvasActivity } from "./components/CanvasActivity";
-import { contextForNote } from "./model/context";
+import { contextForNote, leanForGeneration } from "./model/context";
 import {
   HINT_DELAY,
   cachedHints,
@@ -1009,9 +1009,10 @@ export default function App() {
       const node = b.nodes.find((n) => n.id === id);
       if (!node) return;
       const virtual = newNote(b, { x: 0, y: 0 }, { kind: "node", id });
-      const context = contextForNote(
-        { ...b, notes: [...b.notes, virtual] },
-        virtual.id,
+      const context = leanForGeneration(
+        contextForNote({ ...b, notes: [...b.notes, virtual] }, virtual.id),
+        b,
+        id,
       );
       setMapBusy(true);
       void sendAI(
