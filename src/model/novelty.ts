@@ -95,10 +95,10 @@ const sentences = (s: string) =>
  * phrasing in a finance / insurance / legal topic is sent to the batched judge (borderline).
  */
 const EVASION_STRONG =
-  /(可以|建议|最好|干脆|偷偷|先)隐瞒|隐瞒(不报|下来|过去)|瞒报|不用告知|不必告知|别告知|逃税|偷税|漏税|骗保|规避(健康)?告知|绕过核保|(避免|以免|免得|不要)留下[^。]{0,8}(记录|病历|证据)/;
+  /(可以|建议|最好|干脆|偷偷|先)隐瞒|隐瞒(不报|下来|过去)|瞒报|不如实告知|不用告知|不必告知|别告知|逃税|偷税|漏税|骗保|规避(健康)?告知|绕过核保|(避免|以免|免得|不要)留下[^。]{0,8}(记录|病历|证据)/;
 const EVASION_SOFT =
   /(推迟|延后|挪到|等到|拖到)[^。]{0,12}(体检|就诊|检查|复查|看病)|(体检|就诊|复查)[^。]{0,8}(挪到|推迟|延后|等到)|少报|不申报|不报税|避开[^。]{0,6}(告知|核保|申报|税)|争议记录|不留记录|隐瞒/;
-const DUTY_TOPIC = /保险|保单|投保|核保|理赔|税|报税|法律|合同|贷款|理财|投资|社保|公积金|报销|征信/;
+const DUTY_TOPIC = /保险|重疾|医疗险|寿险|意外险|车险|保单|投保|核保|理赔|税|报税|法律|合同|贷款|理财|投资|社保|公积金|报销|征信/;
 export function evasionRisk(text: string, topic: string): "reject" | "borderline" | null {
   if (EVASION_STRONG.test(text)) return "reject";
   if (EVASION_SOFT.test(text) && DUTY_TOPIC.test(`${topic}${text}`)) return "borderline";
