@@ -1299,7 +1299,9 @@ export default function App() {
     const b = boardRef.current;
     if (!b?.probe?.ladder.length) return startProbe();
     edit((current) => ({ ...current, probe: newProbe(current.probe!.ladder) }));
-  }, [edit, startProbe]);
+    const note = kickoffNote(b);
+    if (note) openDrawer(note.id);
+  }, [edit, startProbe, openDrawer]);
   const fromStart = useCallback(
     () =>
       edit((current) =>
@@ -1599,9 +1601,7 @@ export default function App() {
       const n = b?.nodes.find((x) => x.id === id);
       if (!b || !n) return;
       if (b.nodes.some((c) => c.parentId === id && c.meta?.split)) return;
-      expand(id, undefined, expandPrompt(b, id) + splitNote(n));
-      for (const meta of requestMeta.current.values())
-        if (meta.request.mode === "expand" && meta.anchor === id) meta.split = true;
+      expand(id, undefined, expandPrompt(b, id) + splitNote(n), { split: true });
     },
     [expand],
   );
@@ -2319,6 +2319,10 @@ export default function App() {
                 kickoffStarted: Boolean(kickoffNote(board)?.messages.length),
               }
             : {}),
+          // 重新摸底 lives in the root card's ⋯ menu once a probe has settled and a route exists.
+          ...(n.id === rootId && board.kind === "ai" && board.probe && board.probe.status !== "asking" && board.route?.length
+            ? { onReprobe: reprobe }
+            : {}),
         },
       });
     }
@@ -2339,6 +2343,7 @@ export default function App() {
     setStatus,
     addNote,
     expand,
+    reprobe,
     mapBusy,
     nextId,
     pending,
@@ -2928,11 +2933,6 @@ export default function App() {
                   onSkip={skipProbeQ}
                   {...(stations ? { onFromStart: fromStart } : {})}
                 />
-                {board.probe.status !== "asking" && stations > 0 && (
-                  <button className="btn quiet reprobe" onClick={reprobe}>
-                    重新摸底
-                  </button>
-                )}
               </>
             );
           })()}

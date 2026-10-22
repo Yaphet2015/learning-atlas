@@ -15,12 +15,12 @@ export interface ProbeProps {
 }
 
 const MARK: Record<LevelState, string> = {
-  asking: "● 正在问",
+  asking: "正在问",
   correct: "✓",
-  partial: "接近",
+  partial: "✗",
   wrong: "✗",
-  unsure: "不知道",
-  inferred: "✓ 推断",
+  unsure: "✗",
+  inferred: "推断",
   unasked: "先不问",
 };
 
@@ -57,7 +57,7 @@ export function ProbePanel({ state, busy, stations, onAnswer, onSkip, onFromStar
               <li key={l.level} className={`rung ${st} ${isFrontier ? "frontier" : ""}`}>
                 <b>L{l.level}</b>
                 <span className="rung-desc">{l.desc}</span>
-                <span className="rung-mark">{isFrontier ? "← 前沿" : asking || st !== "unasked" ? MARK[st] : ""}</span>
+                <span className="rung-mark">{isFrontier ? "← 前沿" : MARK[st]}</span>
               </li>
             );
           })}

@@ -72,6 +72,8 @@ export type CardData = {
   generating?: boolean;
   /** Root only, while an AI board has no first level yet: the obvious next step. */
   onKickoff?: () => void;
+  /** Root only, once 摸底 has settled: 重新摸底 in the card's ⋯ menu. */
+  onReprobe?: () => void;
   kickoffStarted?: boolean;
   /** Station number on the learning route (第 n 站). */
   station?: number;
@@ -569,6 +571,10 @@ const dateLabel = (iso?: string) => {
 export function RootCard({ data, selected }: NodeProps<CardNode>) {
   const n = data.concept;
   const [open, setOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => {
+    if (!selected) setMoreOpen(false);
+  }, [selected]);
   const { hintsOpen, controlsActive, ...attention } = useHintAttention(
     data,
     !!selected,
@@ -628,6 +634,36 @@ export function RootCard({ data, selected }: NodeProps<CardNode>) {
         </div>
       )}
       {!data.linkMode && <AddHandles data={data} />}
+      {data.onReprobe && (
+        <NodeToolbar isVisible={!!selected} position={Position.Bottom} offset={20} className="select-toolbar">
+          <span className="more">
+            <button
+              className="icon"
+              aria-label="更多操作"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              title="更多操作"
+              onClick={() => setMoreOpen((o) => !o)}
+            >
+              <MoreHorizontal size={15} className="ico" />
+            </button>
+            {moreOpen && (
+              <Menu className="card-menu" onClose={() => setMoreOpen(false)}>
+                <button
+                  className="it"
+                  role="menuitem"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    data.onReprobe?.();
+                  }}
+                >
+                  重新摸底
+                </button>
+              </Menu>
+            )}
+          </span>
+        </NodeToolbar>
+      )}
     </article>
   );
 }

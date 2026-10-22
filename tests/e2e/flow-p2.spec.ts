@@ -57,6 +57,7 @@ test("二分摸底: L3 ✗ → L1 ✓ → L2 ✓ converges on L3; stations below
   await expect(probe.locator(".rung.frontier")).toContainText("← 前沿");
   await expect(probe.locator(".rung.inferred")).toContainText("L0");
   await expect(probe.locator(".rung.unasked")).toHaveCount(2);
+  await expect(probe.locator(".rung.unasked").first()).toContainText("先不问");
   await expect(probe).toContainText("你已经懂「合同结构」了。所以我们从「条款细读」开始。");
   // Grading: one short call each for the two free-text answers; the right option without a reason is local.
   const marks = (await gates(page)).filter((r) => r.mode === "mark");
@@ -75,6 +76,11 @@ test("二分摸底: L3 ✗ → L1 ✓ → L2 ✓ converges on L3; stations below
   await page.locator(".drawer").getByLabel("关闭").click();
   const bar = page.getByRole("region", { name: "下一步" });
   await expect(bar).toContainText("下一步 · 第 2 站");
+  // 重新摸底 lives in the root card's ⋯ menu, not the drawer.
+  await page.locator(".react-flow__node-root").click();
+  await page.locator(".select-toolbar").getByRole("button", { name: "更多操作" }).click();
+  await expect(page.getByRole("menuitem", { name: "重新摸底" })).toBeVisible();
+  await page.keyboard.press("Escape");
   // 我想从头学: the light seals go, the route starts at 第 1 站.
   await page.locator(".react-flow__node-root").click();
   await page.keyboard.press("n");

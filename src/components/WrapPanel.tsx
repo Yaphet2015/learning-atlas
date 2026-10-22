@@ -31,7 +31,7 @@ export function WrapPanel({
           <p className="card-body">{wrap.text}</p>
           <p className="beat-sealed">
             <span className="seal-a" aria-hidden="true">A</span>
-            全图讲通了 · 亮起 {wrap.lit.length} / {stations} 站
+            全图讲通了
           </p>
         </>
       ) : (
@@ -49,7 +49,7 @@ export function WrapPanel({
             }}
           />
           <p className="beat-foot">
-            {sentences(text)} 句 · 亮起 {wrap?.lit.length ?? 0} / {stations} 站
+            {sentences(text)} 句
           </p>
           {wrap?.missing && <p className="beat-feedback" role="status">还差一点：{wrap.missing}</p>}
           {failed && !wrap?.missing && <p className="beat-feedback" role="status">这次没判出来，稍后再提交一次。</p>}

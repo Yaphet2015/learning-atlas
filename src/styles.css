@@ -4635,18 +4635,20 @@ kbd,
   padding: 0;
   list-style: none;
 }
+/* Quiet progress: plain rows, state as text; only the row being asked is emphasised. */
 .rung {
   display: grid;
   grid-template-columns: 28px 1fr auto;
   align-items: center;
   gap: 8px;
-  min-height: 30px;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  min-height: 26px;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--border);
   font: 400 13px/1.4 var(--kai);
-  color: var(--ink-2);
-  background: var(--card);
+  color: var(--ink-3);
+}
+.rung:last-child {
+  border-bottom: 0;
 }
 .rung b {
   font: 700 12px var(--mono, var(--kai));
@@ -4656,31 +4658,18 @@ kbd,
   font-size: 12px;
   color: var(--ink-3);
 }
-.rung.asking {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset;
+.rung.asking,
+.rung.correct,
+.rung.frontier {
   color: var(--ink);
 }
 .rung.asking .rung-mark,
-.rung.wrong .rung-mark,
 .rung.frontier .rung-mark {
   color: var(--accent);
   font-weight: 700;
 }
-.rung.correct {
-  background: color-mix(in srgb, var(--accent) 9%, var(--card));
-  color: var(--ink);
-}
-.rung.inferred {
-  border-style: dashed;
-  background: color-mix(in srgb, var(--accent) 5%, var(--card));
-}
-.rung.unasked,
-.rung.unsure {
-  color: var(--ink-3);
-}
-.rung.frontier {
-  border-color: var(--accent);
+.rung.correct .rung-mark {
+  color: var(--ink-2);
 }
 .probe-result {
   display: flex;
@@ -4695,9 +4684,6 @@ kbd,
   margin: 0;
   font: 400 14px/1.6 var(--kai);
   color: var(--ink);
-}
-.btn.reprobe {
-  align-self: flex-start;
 }
 .stuck {
   display: flex;
@@ -4756,9 +4742,7 @@ kbd,
   margin-left: auto;
 }
 .card.lit {
-  box-shadow:
-    0 0 0 2px var(--accent),
-    0 0 22px color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
 }
 .ns-no.star {
   color: var(--accent);
