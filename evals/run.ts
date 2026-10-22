@@ -681,7 +681,7 @@ async function probeSample(t: EvalTopic, out: string) {
       continue;
     }
     let state = newProbe(first.points);
-    const initial = first.points.map((p) => p.id);
+    const initial = state.ladder.map((p) => p.id);
     const log: any[] = [];
     for (let guard = 0; state.status === "asking" && guard < 40; guard++) {
       const step = nextStep(state);

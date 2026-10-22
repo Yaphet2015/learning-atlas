@@ -112,7 +112,9 @@ export function localGrade(l: LadderLevel, choice: number | null, reason: string
 
 const freshMeta = (): ProbeMeta => ({ expansions: 0, refines: 0, refined: [], adjacent: [] });
 export function newProbe(chain: LadderLevel[]): ProbeState {
-  return { status: "asking", ladder: number(chain), answers: [], meta: freshMeta() };
+  // Stable ids from the start, so refine inserts never shift what an answer points at.
+  const ladder = number(chain).map((p, i) => ({ ...p, id: p.id ?? `p${i}`, ...(i && !p.buildsOn ? { buildsOn: chain[i - 1].id ?? `p${i - 1}` } : {}) }));
+  return { status: "asking", ladder, answers: [], meta: freshMeta() };
 }
 const metaOf = (s: ProbeState): ProbeMeta => s.meta ?? freshMeta();
 const indexOf = (s: ProbeState, a: ProbeAnswer) => {
