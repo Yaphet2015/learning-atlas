@@ -52,6 +52,9 @@ export function applyGate(
         ...(c?.q ? { check: { q: String(c.q).slice(0, 400), ...(options?.length ? { options } : {}) } } : {}),
         meta: {
           gate: k.meta,
+          ...(Number.isInteger((k.card as { level?: unknown }).level)
+            ? { level: Math.min(5, Math.max(0, (k.card as unknown as { level: number }).level)) }
+            : {}),
           ...(c?.q
             ? {
                 check: {

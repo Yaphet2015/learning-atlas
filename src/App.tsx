@@ -132,6 +132,12 @@ import { nextStep } from "./model/next-step";
 import { defaultRoute, stationOf } from "./model/route";
 import { runGate, roughTokens } from "./model/novelty";
 import { applyGate } from "./model/gate";
+import { answerProbe, applyFrontier, failRecheck, gradePrompt, ladderPrompt, localGrade, newProbe, nextProbe, parseGrade, parseLadder, probeLearner, skipProbe } from "./model/probe";
+import { afterChildSealed, analogyPrompt, isStuck, parseAnalogy, putOff, splitNote } from "./model/stuck";
+import { parseWrap, wrapPrompt } from "./model/wrap";
+import { ProbePanel } from "./components/ProbePanel";
+import { StuckExits } from "./components/StuckExits";
+import { WrapPanel } from "./components/WrapPanel";
 import { explainPoints, localMark, markPrompt, parseMark, testPoints, type Mark } from "./model/mark";
 import { questionNode } from "./shared/canvas";
 import { StudyMode } from "./components/StudyMode";
@@ -299,7 +305,7 @@ export default function App() {
   const boardCache = useRef(new Map<string, Board>()),
     completionQueues = useRef(new Map<string, Promise<void>>());
   const askQuietRef = useRef<
-    (mode: "gate" | "mark" | "expand" | "regen", prompt: string, stickyId: string, context?: AIRequest["context"]) => Promise<string>
+    (mode: "gate" | "mark" | "expand" | "probe" | "regen", prompt: string, stickyId: string, context?: AIRequest["context"]) => Promise<string>
   >(() => Promise.reject(new Error("not ready")));
   const boardRef = useRef<Board | null>(null),
     saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
@@ -312,6 +318,8 @@ export default function App() {
           hintSignature?: string;
           /** enrich: the new cards it decorates. */
           newIds?: string[];
+          /** expand from a stuck stop (往下拆): the new cards are its split children. */
+          split?: boolean;
           /** A picked ghost hint: select the card it becomes. */
           selectNew?: boolean;
           /** Quiet requests (gate judge, regenerate, check marking) resolve a promise. */
@@ -726,9 +734,14 @@ export default function App() {
                   const born = applied.added[0];
                   setTimeout(() => setSelection({ kind: "node", id: born }), 0);
                 }
+                if (meta.split && applied.added.length) {
+                  const born = new Set(applied.added);
+                  next = { ...next, nodes: next.nodes.map((n) => (born.has(n.id) ? { ...n, meta: { ...n.meta, split: true } } : n)) };
+                }
                 if (mode === "map" && !target.route?.length && anchorId === questionNode(target)?.id) {
                   const route = defaultRoute(next);
-                  if (route.length) next = { ...next, route };
+                  // 摸底 done: stations below the frontier get the light A seal.
+                  if (route.length) next = applyFrontier({ ...next, route });
                 }
                 showToast(
                   applied.added.length
@@ -906,7 +919,7 @@ export default function App() {
   );
   /** A quiet request (no thread, no toast) whose reply text resolves the promise. */
   const askQuiet = useCallback(
-    (mode: "gate" | "mark" | "expand" | "regen", prompt: string, stickyId: string, context?: AIRequest["context"]) =>
+    (mode: "gate" | "mark" | "expand" | "probe" | "regen", prompt: string, stickyId: string, context?: AIRequest["context"]) =>
       new Promise<string>((resolve, reject) => {
         const b = boardRef.current;
         if (!b) return reject(new Error("no board"));
@@ -1162,7 +1175,10 @@ export default function App() {
         stickyId: "plan-" + root.id,
         requestId: uid(),
         mode: "plan",
-        prompt: planPrompt(b.topic, learnerAnswers(note)),
+        prompt: planPrompt(
+          b.topic,
+          b.probe && b.probe.status !== "asking" ? [probeLearner(b.probe), ...learnerAnswers(note)] : learnerAnswers(note),
+        ),
         context: contextForNote(
           { ...b, notes: [virtual] },
           virtual.id,
@@ -1183,6 +1199,115 @@ export default function App() {
       });
     },
     [settings.configured, showToast],
+  );
+  const [probeBusy, setProbeBusy] = useState(false);
+  /** 摸底 step 1: open the root's kickoff drawer and draft the depth ladder (one quiet call). */
+  const startProbe = useCallback(() => {
+    const b = boardRef.current;
+    const root = b && rootOf(b);
+    if (!b || !root) return;
+    let note = kickoffNote(b);
+    if (!note) {
+      note = newNote(b, { x: 0, y: 0 }, { kind: "node", id: root.id });
+      note.title = "AI 带我开始";
+    }
+    const created = note;
+    edit((current) => ({
+      ...current,
+      probe: newProbe([]),
+      notes: current.notes.some((n) => n.id === created.id) ? current.notes : [...current.notes, created],
+    }));
+    openDrawer(created.id);
+    setProbeBusy(true);
+    const prompt = ladderPrompt(b.topic);
+    askQuietRef
+      .current("probe", prompt, `probe-${root.id}`)
+      .then((text) => {
+        if (import.meta.env.DEV) console.info(`[probe] ladder ~${roughTokens(prompt, text)} tokens`);
+        const ladder = parseLadder(text);
+        if (ladder) {
+          edit((current) => ({ ...current, probe: newProbe(ladder) }));
+          return;
+        }
+        throw new Error("ladder");
+      })
+      .catch(() => {
+        showToast("摸底没准备好，我会从最基础的开始排。可以稍后重新摸底。");
+        const next = { ...boardRef.current!, probe: skipProbe(undefined) };
+        edit(() => next);
+        requestPlan(next);
+      })
+      .finally(() => setProbeBusy(false));
+  }, [edit, openDrawer, showToast, requestPlan]);
+  /** One probe answer: graded locally when possible, else one short call; converge → plan (or re-seal). */
+  const answerProbeQ = useCallback(
+    async (choice: number | null, text: string) => {
+      const b = boardRef.current;
+      const state = b?.probe;
+      if (!b || !state || state.status !== "asking") return;
+      const step = nextProbe(state);
+      if (step.done) return;
+      const level = state.ladder[step.level];
+      let verdict = localGrade(level, choice, text);
+      let missing = "";
+      if (!verdict) {
+        setProbeBusy(true);
+        const answer = choice !== null && choice >= 0 ? `${level.probe.options?.[choice] ?? ""}。理由：${text}` : text;
+        const prompt = gradePrompt(level, answer);
+        try {
+          const reply = await askQuietRef.current("mark", prompt, `probe-mark-${b.id}`);
+          if (import.meta.env.DEV) console.info(`[probe] grade ~${roughTokens(prompt, reply)} tokens`);
+          const g = parseGrade(reply);
+          verdict = g?.verdict ?? "unsure";
+          missing = g?.missing ?? "";
+        } catch {
+          verdict = "unsure";
+        } finally {
+          setProbeBusy(false);
+        }
+      }
+      const current = boardRef.current;
+      if (!current?.probe) return;
+      const probe = answerProbe(current.probe, {
+        level: level.level,
+        verdict,
+        ...(text.trim() ? { text: text.slice(0, 1000) } : {}),
+        ...(missing ? { missing } : {}),
+        ...(step.recheck ? { recheck: true } : {}),
+      });
+      let next: Board = { ...current, probe };
+      if (probe.status === "done") {
+        // Re-probe on a laid map only recomputes the light seals; a new board goes on to the plan.
+        if (next.route?.length) next = applyFrontier(next);
+        edit(() => next);
+        if (!next.route?.length && !next.plan) requestPlan(next);
+        return;
+      }
+      edit(() => next);
+    },
+    [edit, requestPlan],
+  );
+  const skipProbeQ = useCallback(() => {
+    const b = boardRef.current;
+    if (!b) return;
+    let next: Board = { ...b, probe: skipProbe(b.probe) };
+    if (next.route?.length) next = applyFrontier(next);
+    edit(() => next);
+    if (!next.route?.length && !next.plan) requestPlan(next);
+  }, [edit, requestPlan]);
+  const reprobe = useCallback(() => {
+    const b = boardRef.current;
+    if (!b?.probe?.ladder.length) return startProbe();
+    edit((current) => ({ ...current, probe: newProbe(current.probe!.ladder) }));
+    const note = kickoffNote(b);
+    if (note) openDrawer(note.id);
+  }, [edit, startProbe, openDrawer]);
+  const fromStart = useCallback(
+    () =>
+      edit((current) =>
+        current.probe ? applyFrontier({ ...current, probe: { ...current.probe, frontier: 0 } }) : current,
+      ),
+    [edit],
   );
   const editPlan = useCallback(
     (plan: BoardPlan | undefined) =>
@@ -1333,7 +1458,10 @@ export default function App() {
       editingLocked.current = false;
     }
     // A new question starts the guided kickoff (or leads to AI settings) instead of a silent map.
-    if (kickoff) startKickoff();
+    if (kickoff) {
+      if (settings.configured) startProbe();
+      else startKickoff();
+    }
   }
   async function importBoardFile(file: File) {
     if (locked()) return;
@@ -1465,6 +1593,61 @@ export default function App() {
     },
     [],
   );
+  const [stuckBusy, setStuckBusy] = useState<{ id: string; kind: "split" | "analogy" } | null>(null);
+  /** 往下拆: one gated expansion into exactly two smaller children under the stuck card. */
+  const splitStuck = useCallback(
+    (id: string) => {
+      const b = boardRef.current;
+      const n = b?.nodes.find((x) => x.id === id);
+      if (!b || !n) return;
+      if (b.nodes.some((c) => c.parentId === id && c.meta?.split)) return;
+      expand(id, undefined, expandPrompt(b, id) + splitNote(n), { split: true });
+    },
+    [expand],
+  );
+  const analogyStuck = useCallback(
+    async (id: string) => {
+      const n = boardRef.current?.nodes.find((x) => x.id === id);
+      if (!n) return;
+      setStuckBusy({ id, kind: "analogy" });
+      const prompt = analogyPrompt(n);
+      try {
+        const reply = await askQuietRef.current("probe", prompt, `analogy-${id}`);
+        if (import.meta.env.DEV) console.info(`[stuck] analogy ~${roughTokens(prompt, reply)} tokens`);
+        const analogy = parseAnalogy(reply);
+        if (analogy) patchNode(id, { analogy, beat: "learn", fails: 0 });
+        else showToast("这次没想出类比，换个办法试试？");
+      } catch (e) {
+        showToast(errorText(e));
+      } finally {
+        setStuckBusy(null);
+      }
+    },
+    [patchNode, showToast],
+  );
+  /** 合起来讲: one short call says which stations the answer reached. */
+  const submitWrap = useCallback(
+    async (text: string): Promise<boolean> => {
+      const b = boardRef.current;
+      if (!b) return false;
+      const prompt = wrapPrompt(b, text);
+      try {
+        const reply = await askQuietRef.current("mark", prompt, `wrap-${b.id}`);
+        if (import.meta.env.DEV) console.info(`[wrap] ~${roughTokens(prompt, reply)} tokens`);
+        const current = boardRef.current;
+        const w = current && parseWrap(current, reply);
+        if (!w) return false;
+        edit((x) => ({
+          ...x,
+          wrap: { text: text.slice(0, 4000), lit: w.lit, ...(w.pass ? {} : { missing: w.missing || "再串进几站" }), done: w.pass },
+        }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [edit],
+  );
   const rename = useCallback(
     (id: string, title: string) =>
       edit((b) => ({
@@ -1565,6 +1748,11 @@ export default function App() {
     setWelcome(false);
     const b = boardRef.current;
     if (!b) return;
+    if (next.kind === "probe") {
+      const note = kickoffNote(b);
+      if (note) openDrawer(note.id);
+      return;
+    }
     if (next.kind === "wrap") {
       const root = questionNode(b);
       if (root) addNote({ kind: "node", id: root.id }, { cards: false });
@@ -1572,6 +1760,7 @@ export default function App() {
     }
     if (!("card" in next)) return;
     const id = next.card.id;
+    if (next.card.meta?.later) patchNode(id, { meta: { ...next.card.meta, later: false } });
     if (!next.card.beat && next.card.status !== "explained") patchNode(id, { beat: "guess" });
     setSelection({ kind: "node", id });
     addNote({ kind: "node", id }, { cards: false });
@@ -1939,7 +2128,7 @@ export default function App() {
     });
     api.ask(request).catch(() => requestMeta.current.delete(request.requestId));
   };
-  const kickoffReady = needsKickoff(board) && !mapBusy && !study;
+  const kickoffReady = needsKickoff(board) && !board?.probe && !mapBusy && !study;
   const drawerNote = board?.notes.find((n) => n.id === drawer?.id);
   const drawerNoteAttachment = drawerNote?.attachedTo;
   const drawerAnchor =
@@ -2098,6 +2287,7 @@ export default function App() {
           onPreviewAdd: hoverAdd,
           station: stationOf(board, n.id),
           isNext: nextId === n.id,
+          lit: !!board.wrap?.lit.includes(n.id),
           ...(nextId === n.id ? { onStartNext: () => startNextRef.current() } : {}),
           // Ghost hints only on the current stop or a card the learner picked (no 大海感).
           ...(settings.configured && tool === "select" && (!board.route?.length || nextId === n.id || selectedNodeId === n.id)
@@ -2129,6 +2319,10 @@ export default function App() {
                 kickoffStarted: Boolean(kickoffNote(board)?.messages.length),
               }
             : {}),
+          // 重新摸底 lives in the root card's ⋯ menu once a probe has settled and a route exists.
+          ...(n.id === rootId && board.kind === "ai" && board.probe && board.probe.status !== "asking" && board.route?.length
+            ? { onReprobe: reprobe }
+            : {}),
         },
       });
     }
@@ -2149,6 +2343,7 @@ export default function App() {
     setStatus,
     addNote,
     expand,
+    reprobe,
     mapBusy,
     nextId,
     pending,
@@ -2720,6 +2915,27 @@ export default function App() {
           onPromote={(text) =>
             setPromote({ noteId: drawerNote.id, title: "新的发现", text })
           }
+          lead={(() => {
+            const id = drawerNote.attachedTo?.kind === "node" ? drawerNote.attachedTo.id : undefined;
+            const root = questionNode(board);
+            if (!id || id !== root?.id || board.kind !== "ai") return undefined;
+            const stations = board.route?.length ?? 0;
+            if (next.kind === "wrap" || next.kind === "wrapped")
+              return <WrapPanel board={board} stations={stations} onSubmit={submitWrap} />;
+            if (!board.probe) return undefined;
+            return (
+              <>
+                <ProbePanel
+                  state={board.probe}
+                  busy={probeBusy}
+                  stations={stations}
+                  onAnswer={(c, t) => void answerProbeQ(c, t)}
+                  onSkip={skipProbeQ}
+                  {...(stations ? { onFromStart: fromStart } : {})}
+                />
+              </>
+            );
+          })()}
           study={(() => {
             const id = drawerNote.attachedTo?.kind === "node" ? drawerNote.attachedTo.id : undefined;
             const card = id ? board.nodes.find((n) => n.id === id) : undefined;
@@ -2727,7 +2943,28 @@ export default function App() {
             if (!card || card.parentId === null || board.kind !== "ai" || !board.route?.length) return undefined;
             return {
               station: stationOf(board, card.id),
-              onPatch: (patch: Partial<ConceptNode>) => patchNode(card.id, patch),
+              onPatch: (patch: Partial<ConceptNode>) => {
+                if (patch.seal === "test") {
+                  edit((b) => afterChildSealed({ ...b, nodes: b.nodes.map((x) => (x.id === card.id ? { ...x, ...patch } : x)) }, card.id));
+                  return;
+                }
+                patchNode(card.id, patch);
+              },
+              onRecheckFail: () => {
+                edit((b) => failRecheck(b, card.id, nextId ?? undefined));
+                showToast("去掉了浅印：这一站排在下一步之后，再走一遍 4 拍。");
+              },
+              stuck: isStuck(card) ? (
+                <StuckExits
+                  busy={stuckBusy?.id === card.id ? stuckBusy.kind : mapBusy ? "split" : undefined}
+                  onSplit={() => splitStuck(card.id)}
+                  onAnalogy={() => void analogyStuck(card.id)}
+                  onLater={() => {
+                    edit((b) => putOff(b, card.id));
+                    closeDrawer();
+                  }}
+                />
+              ) : undefined,
               onMark: (kind: "explain" | "test", answer: string, choice: number | null) =>
                 markCard(card.id, kind, answer, choice),
             };

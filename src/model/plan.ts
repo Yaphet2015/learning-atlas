@@ -171,7 +171,14 @@ export function planFirstLevelPrompt(board: Board): string {
   const plan = board.plan!;
   const tops = topBlocks(plan);
   return `按已确认的学习计划为「${board.topic}」铺第一层：每个顶层块一张卡，顺序不变，都以 anchor 为 parent，并用 "block" 写上对应的块 id：${tops.map((b, i) => `${i + 1}. [${b.id}] ${b.title}`).join("；")}。
-标题写成这个块要回答的具体小问题；正文直接给出这一块的要点（结论、关键数字或判断标准），并点明它对学习目标的作用，不要只写“介绍了……”。只铺这一层，子块留给后续展开。`;
+标题写成这个块要回答的具体小问题；正文直接给出这一块的要点（结论、关键数字或判断标准），并点明它对学习目标的作用，不要只写“介绍了……”。只铺这一层，子块留给后续展开。${ladderNote(board)}`;
+}
+/** With a 摸底 ladder: each first-level card names the ladder level it teaches, shallow → deep. */
+function ladderNote(board: Board): string {
+  const ladder = board.probe?.ladder;
+  if (!ladder?.length) return "";
+  return `
+理解深度阶梯：${ladder.map((l) => `L${l.level} ${l.desc}`).join("；")}。每张卡加一个整数字段 "level"，写它主要讲的是哪一级；卡片顺序从浅到深。`;
 }
 
 /** Edits from the plan editor. */

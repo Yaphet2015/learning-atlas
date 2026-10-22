@@ -18,6 +18,9 @@ import {
 } from "../electron/prompts";
 import { buildMapFromAI, createEmptyBoard, newNote } from "../src/model/boards";
 import { contextForNote, leanForGeneration } from "../src/model/context";
+import { answerProbe, gradePrompt, ladderPrompt, localGrade, newProbe, nextProbe, parseGrade, parseLadder } from "../src/model/probe";
+import { analogyPrompt, parseAnalogy } from "../src/model/stuck";
+import { parseWrap, wrapPrompt } from "../src/model/wrap";
 import {
   firstLevelPrompt,
   kickoffNote,
@@ -657,7 +660,91 @@ async function gateSample(t: EvalTopic, out: string) {
   return report;
 }
 
+/**
+ * EVAL_MODE=probe: a small real-LLM sample of phase 2. One ladder call; a simulated learner who
+ * knows L0–L2 answers the bisection (free text graded by one short call each); one 换个类比 call;
+ * one 合起来讲 call on a three-station board. Reports real token usage per step.
+ */
+async function probeSample(t: EvalTopic, out: string) {
+  const steps: any[] = [];
+  const timed = async <T,>(name: string, f: () => Promise<T>) => {
+    const before = { p: totals.prompt, c: totals.completion };
+    const r = await f();
+    steps.push({ step: name, tokens: { prompt: totals.prompt - before.p, completion: totals.completion - before.c } });
+    return r;
+  };
+  const reply = await timed("ladder", () => chat(tutorInstructions("probe"), ladderPrompt(t.topic), { temperature: modeTemperature("probe") }));
+  const ladder = parseLadder(reply.content);
+  if (!ladder) return { topic: t.id, ladder: null, raw: reply.content.slice(0, 400), steps };
+  const KNOWN = 3;
+  let state = newProbe(ladder);
+  const graded: any[] = [];
+  for (let guard = 0; state.status === "asking" && guard < 6; guard++) {
+    const step = nextProbe(state);
+    if (step.done) break;
+    const l = ladder[step.level];
+    const knows = step.level < KNOWN;
+    let verdict = null as any;
+    let choice: number | null = null;
+    const text = knows ? `${l.keyPoints.join("，")}。` : "我觉得只要确诊了就一定能拿到钱。";
+    if (l.probe.type === "choice") {
+      choice = knows ? l.probe.answer! : (l.probe.answer! + 1) % l.probe.options!.length;
+      verdict = localGrade(l, choice, knows ? text : "");
+    }
+    if (!verdict) {
+      const answer = choice !== null ? `${l.probe.options![choice]}。理由：${text}` : text;
+      const g = await timed(`grade L${step.level}`, () => chat(tutorInstructions("mark"), gradePrompt(l, answer), { temperature: 0 }));
+      verdict = parseGrade(g.content)?.verdict ?? "unsure";
+    }
+    graded.push({ level: step.level, type: l.probe.type, expected: knows ? "correct" : "not", verdict });
+    state = answerProbe(state, { level: step.level, verdict, ...(step.recheck ? { recheck: true } : {}) });
+  }
+  const card = {
+    id: "c1", kind: "concept" as const, title: ladder[Math.min(3, ladder.length - 1)].desc, body: ladder[Math.min(3, ladder.length - 1)].keyPoints.join("；"),
+    parentId: "q", order: 0, status: "exploring" as const, fails: 2,
+  };
+  const analogy = await timed("analogy", () => chat(tutorInstructions("probe"), analogyPrompt(card), { temperature: modeTemperature("probe") }));
+  const wb: any = {
+    ...createEmptyBoard(t.topic),
+    nodes: [
+      { id: "q", kind: "concept", title: t.topic, body: "", parentId: null, order: 0, status: "unseen", question: true },
+      ...ladder.slice(1, 4).map((l, i) => ({ id: `w${i}`, kind: "concept", title: l.desc, body: l.keyPoints.join("；"), parentId: "q", order: i, status: "explained", seal: "test" })),
+    ],
+    route: ["w0", "w1", "w2"],
+  };
+  const wrapText = ladder.slice(1, 3).map((l) => l.keyPoints[0]).join("。") + "。";
+  const wrap = await timed("wrap", () => chat(tutorInstructions("mark"), wrapPrompt(wb, wrapText), { temperature: 0 }));
+  const report = {
+    topic: t.id,
+    levels: ladder.length,
+    choiceProbes: ladder.filter((l) => l.probe.type === "choice").length,
+    selfReportProbes: ladder.filter((l) => /你(了解|知道|熟悉).{0,10}吗/.test(l.probe.q)).length,
+    yesNoProbes: ladder.filter((l) => /^(是否|是不是)|对吗？$|对不对/.test(l.probe.q)).length,
+    graded,
+    frontier: state.frontier,
+    expectedFrontier: KNOWN,
+    asked: state.answers.length,
+    analogy: parseAnalogy(analogy.content),
+    wrap: parseWrap(wb, wrap.content),
+    ladder: ladder.map((l) => ({ level: l.level, desc: l.desc, q: l.probe.q, type: l.probe.type })),
+    steps,
+  };
+  await writeFile(join(out, `${t.id}.probe.json`), JSON.stringify(report, null, 2));
+  return report;
+}
+
 async function main() {
+  if (process.env.EVAL_MODE === "probe") {
+    const pick = process.env.EVAL_TOPICS?.split(",").map((s) => s.trim()) ?? ["critical-illness"];
+    const out = process.env.EVAL_OUT ?? join("evals", "results", "probe");
+    await mkdir(out, { recursive: true });
+    const reports = [];
+    for (const t of TOPICS.filter((x) => pick.includes(x.id))) reports.push(await probeSample(t, out));
+    const summary = { model: MODEL, usage: totals, reports };
+    await writeFile(join(out, "summary.json"), JSON.stringify(summary, null, 2));
+    console.log(JSON.stringify(summary, null, 1));
+    return;
+  }
   if (process.env.EVAL_MODE === "gate") {
     const pick = process.env.EVAL_TOPICS?.split(",").map((s) => s.trim()) ?? ["critical-illness"];
     const out = process.env.EVAL_OUT ?? join("evals", "results", "gate");

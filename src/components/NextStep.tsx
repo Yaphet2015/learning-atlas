@@ -36,12 +36,28 @@ export function NextStepBar({
         </button>
       </div>
     );
+  if (step.kind === "wrapped")
+    return (
+      <div className="chrome next-step" role="region" aria-label="下一步">
+        <span className="ns-no star" aria-hidden="true">★</span>
+        <div className="ns-text">
+          <span className="ns-k">全部讲清楚了</span>
+          <span className="ns-main">{step.why}</span>
+        </div>
+      </div>
+    );
   const station = "station" in step ? step.station : undefined;
   const head =
-    step.kind === "wrap" ? "下一步 · 合起来讲" : `下一步${station ? ` · 第 ${station} 站` : ""}`;
-  const main =
     step.kind === "wrap"
-      ? "回到起点问题，不看卡片，用几句话把它讲出来"
+      ? "★ 下一步 · 收尾"
+      : step.kind === "probe"
+        ? "下一步 · 摸底"
+        : `下一步${station ? ` · 第 ${station} 站` : ""}`;
+  const main =
+    step.kind === "probe"
+      ? "继续摸底，找到你的起点"
+      : step.kind === "wrap"
+      ? "把所有站合起来，讲回你的起点问题"
       : step.kind === "continue"
         ? `${step.card.title} —— 继续：${BEAT_LABEL[step.beat]}`
         : step.kind === "deeper"
@@ -60,9 +76,9 @@ export function NextStepBar({
         <span className="ns-why">{why}</span>
       </div>
       <button className="btn primary" onClick={onStart} aria-keyshortcuts="Enter">
-        开始 <span className="kbd">↵</span>
+        {step.kind === "wrap" ? "开始讲" : "开始"} <span className="kbd">↵</span>
       </button>
-      {onSkip && step.kind !== "wrap" && (
+      {onSkip && step.kind !== "wrap" && step.kind !== "probe" && (
         <button className="btn quiet" onClick={onSkip}>
           换一个
         </button>
