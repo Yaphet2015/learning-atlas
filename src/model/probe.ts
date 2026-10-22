@@ -24,7 +24,7 @@ export const pointId = (p: LadderLevel) => p.id ?? `p${p.level}`;
 
 // ── Generation prompts (small model, batched: points and their questions in one call) ──────────
 
-const QUESTION_RULES = `每个点配一道选择题：只考这一个概念；题干 30–80 字，最好是具体情境（某人在某时遇到某事）；3 个选项，错误选项必须是常见误解、不能明显离谱；不要出是非题，不要出“你了解 X 吗”这类自评题；答案不能在题干里泄露；越深的点越可以用“为什么/会怎样”的推理题，不考记忆细节。不要编造费率、条款号；需要数字时写明“示例”。不要加“不了解”选项（界面会自动加）。`;
+const QUESTION_RULES = `每个点配一道选择题：只考这一个概念；题干 30–80 字，必须是具体情境（某人在某时遇到某事），不要写“关于 X，下面哪个说法对”；3 个选项都写出完整内容（不要“说法甲/选项A”这类占位），2 个错误选项必须是学习者真会有的常见误解、不能明显离谱；不要出是非题，不要出“你了解 X 吗”这类自评题；答案不能在题干里泄露；越深的点越可以用“为什么/会怎样”的推理题，不考记忆细节。不要编造费率、条款号；需要数字时写明“示例”。不要加“不了解”选项（界面会自动加）。`;
 const POINT_JSON = `{"concept":"≤20 字的具体概念","keyPoints":["答对必须理解的 1–2 个要点"],"probe":{"q":"…","options":["…","…","…"],"answer":1}}`;
 
 /** The first segment of the chain, or a deeper segment that builds on `from` (EXPAND). */
@@ -47,6 +47,21 @@ ${QUESTION_RULES}
 只输出 JSON：{"adjacent":false,"points":[${POINT_JSON}]}`;
 }
 
+/** A stem that is a template, a self-report or a bare "which is right" (README: 30–80 字情境题). */
+const BAD_STEM = /下面(哪个|哪一?项|哪种)说法|以下(哪个|哪一?项)说法|哪个说法(是)?(对|正确)|你(知道|了解|熟悉|听说过|懂).{0,12}吗|是否(了解|知道)|^关于「/;
+/** Placeholder or catch-all options. */
+const BAD_OPTION = /^(说法|选项)\s*[甲乙丙丁一二三四A-Da-d1-4]$|[:：]\s*说法[甲乙丙丁]$|^(以上|都)(都)?(对|不对|正确|错误)|^[A-Da-d]$/;
+/** Exposed for tests: why a generated question is rejected ("" = ok). */
+export function questionProblem(q: string, options: string[]): string {
+  const len = [...q].length;
+  if (len < 30 || len > 80) return "题干要 30–80 字的具体情境";
+  if (BAD_STEM.test(q)) return "题干是模板或自评题";
+  if (options.length < 3) return "选项不足 3 个";
+  if (options.some((o) => BAD_OPTION.test(o.trim()))) return "选项是占位符";
+  if (new Set(options.map((o) => o.trim())).size !== options.length) return "选项重复";
+  return "";
+}
+
 /** Parse points (with their questions). Only multiple-choice points with 3–4 options survive. */
 export function parsePoints(reply: string): { points: LadderLevel[]; adjacent: boolean } | null {
   let j: any;
@@ -59,10 +74,12 @@ export function parsePoints(reply: string): { points: LadderLevel[]; adjacent: b
   const points: LadderLevel[] = [];
   for (const r of raw) {
     const p = r?.probe ?? {};
-    const desc = text(r?.concept ?? r?.desc, 40);
+    // Concept names only: never keep a depth index (L3 …, … · 2) a model may echo back.
+    const desc = text(r?.concept ?? r?.desc, 40).replace(/^L\d+\s*[:：.、]?\s*/, "").replace(/\s*[·・(（]\s*\d+\s*[)）]?$/, "").trim();
     const q = text(p.q, 240);
     const options: string[] = Array.isArray(p.options) ? p.options.map((o: unknown) => text(o, 120)).filter(Boolean).slice(0, 4) : [];
     if (!desc || !q || options.length < 3 || !Number.isInteger(p.answer) || p.answer < 0 || p.answer >= options.length) continue;
+    if (questionProblem(q, options)) continue;
     const keyPoints: string[] = Array.isArray(r?.keyPoints) ? r.keyPoints.map((k: unknown) => text(k, 80)).filter(Boolean).slice(0, 3) : [];
     points.push({ level: 0, desc, keyPoints: keyPoints.length ? keyPoints : [desc], probe: { type: "choice", q, options, answer: p.answer } });
   }
@@ -304,9 +321,11 @@ export function probeResult(s: ProbeState, _stations = 0): string {
 
 /** The learner profile every generation prompt gets (plan, first level, expand, regen). */
 export function probeLearner(s: ProbeState): string {
-  if (s.status === "asking" || !s.ladder.length) return "";
+  if (s.status === "asking") return "";
+  // Skipped before the first chain arrived still counts as a skip.
+  if (s.status === "skipped" && !s.answers.length) return "学习者跳过了摸底，按初学者处理，从最基础的开始。";
+  if (!s.ladder.length) return "";
   const o = probeOutcome(s);
-  if (o.skipped && !o.questions) return "学习者跳过了摸底，按初学者处理，从最基础的开始。";
   const known = o.knownList.length ? `学习者已经懂：${o.knownList.map((p) => `「${p.desc}」`).join("、")}。` : "学习者还没有确认会的概念。";
   const start = o.start ? `路线从「${o.start.desc}」开始` : "";
   return `摸底结果：${known}${start}。已懂的内容不单独成卡、不重复解释，只在根卡或第一站开头用 1–2 句“你已经知道……”带过；需要前置知识时只用一句话提一下。讲法、举例和用词按这个深度来。`;

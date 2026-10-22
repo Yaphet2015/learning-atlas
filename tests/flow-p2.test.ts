@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Board, ConceptNode, LadderLevel, ProbeVerdict } from "../src/shared/types";
 import {
+  questionProblem,
   answerProbe,
   applyExpand,
   applyRefine,
@@ -207,10 +208,10 @@ describe("摸底 v2: open-ended nested bisection", () => {
   it("parses points with their questions; drops points without a 3-option question", () => {
     const reply = JSON.stringify({
       points: [
-        { concept: "a", keyPoints: ["k"], probe: { q: "q1", options: ["1", "2", "3"], answer: 0 } },
-        { concept: "b", probe: { q: "q2", options: ["1", "2"], answer: 0 } },
-        { concept: "c", probe: { q: "q3", options: ["1", "2", "3"], answer: 2 } },
-        { concept: "d", probe: { q: "q4", options: ["1", "2", "3"], answer: 1 } },
+        { concept: "a", keyPoints: ["k"], probe: { q: "小李投保第 1 个月确诊了合同列明的重疾，去申请理赔时最可能遇到什么情况？", options: ["确诊即赔全额1", "等待期内只退保费1", "按比例先赔一半1"], answer: 0 } },
+        { concept: "b", probe: { q: "小李投保第 2 个月确诊了合同列明的重疾，去申请理赔时最可能遇到什么情况？", options: ["确诊即赔全额2", "等待期内只退保费2"], answer: 0 } },
+        { concept: "c", probe: { q: "小李投保第 3 个月确诊了合同列明的重疾，去申请理赔时最可能遇到什么情况？", options: ["确诊即赔全额3", "等待期内只退保费3", "按比例先赔一半3"], answer: 2 } },
+        { concept: "d", probe: { q: "小李投保第 4 个月确诊了合同列明的重疾，去申请理赔时最可能遇到什么情况？", options: ["确诊即赔全额4", "等待期内只退保费4", "按比例先赔一半4"], answer: 1 } },
       ],
     });
     expect(parsePoints(reply)!.points.map((p) => p.desc)).toEqual(["a", "c", "d"]);
@@ -335,5 +336,29 @@ describe("合起来讲", () => {
   });
   it("counts sentences", () => {
     expect(sentences("先看保哪些病。再看保额够不够！最后看保到几岁")).toBe(3);
+  });
+});
+
+describe("摸底 v2 · question quality", () => {
+  const ok = "小王投保重疾险第 2 个月就确诊了合同列明的重疾，保险公司最可能怎么处理这笔理赔？";
+  const opts = ["照常全额赔付，确诊即赔", "在等待期内，通常只退保费不赔", "先赔一半，剩下的过了观察期再补"];
+  const reply = (q: string, options = opts) => JSON.stringify({ points: [{ concept: "等待期", keyPoints: ["k"], probe: { q, options, answer: 1 } }] });
+  it("keeps a 30–80 字 scenario with real options", () => {
+    expect(questionProblem(ok, opts)).toBe("");
+    expect(parsePoints(reply(ok))?.points).toHaveLength(1);
+  });
+  it("drops depth indices from concept names", () => {
+    const r = JSON.stringify({ points: [{ concept: "L3 监管口径 · 2", keyPoints: ["k"], probe: { q: ok, options: opts, answer: 1 } }] });
+    expect(parsePoints(r)!.points[0].desc).toBe("监管口径");
+  });
+  it("rejects a template stem, a self-report stem and placeholder options", () => {
+    for (const q of [
+      "关于「给付型 vs 报销型」，下面哪个说法对？这是一个用来凑够三十个字的长句子而已。",
+      "你了解重疾险里的等待期吗？请根据你自己的理解，选出最符合你实际情况的一项回答。",
+      "等待期是什么？",
+    ])
+      expect(parsePoints(reply(q))?.points).toHaveLength(0);
+    expect(parsePoints(reply(ok, ["给付型：说法甲", "给付型：说法乙", "给付型：说法丙"]))?.points).toHaveLength(0);
+    expect(parsePoints(reply(ok, ["说法甲", "说法乙", "说法丙"]))?.points).toHaveLength(0);
   });
 });
