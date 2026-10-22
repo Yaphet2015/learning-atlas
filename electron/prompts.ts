@@ -9,6 +9,8 @@ export function tutorInstructions(mode: AIRequest["mode"]): string {
   // The gate judge and the check marker are short, cheap calls: no tutor preamble.
   if (mode === "gate")
     return "你是严格、简短的学习卡片审稿人。只依据提示里的候选卡片和比较对象判断，只输出提示要求的 JSON，不要解释。";
+  if (mode === "probe")
+    return "你是简短、具体的学习导师。只输出提示要求的 JSON，不要解释，不要编造具体费率、条款编号或金额。";
   if (mode === "mark")
     return "你是简短的判题老师。只依据题目、要点和学习者的回答判定，只输出提示要求的 JSON，不要解释。";
   const base = `你是 Studyboard 的中文学习教练。用简洁、具体、容易想象的语言帮助初学者。
@@ -129,6 +131,7 @@ export function canvasBundle(context: ContextBundle): ContextBundle {
 export function modeTemperature(mode: AIRequest["mode"]): number | undefined {
   if (mode === "map" || mode === "expand" || mode === "plan") return 0.4;
   if (mode === "hint") return 0.7;
+  if (mode === "probe") return 0.3;
   if (mode === "gate" || mode === "mark") return 0;
   return undefined;
 }

@@ -75,6 +75,8 @@ export type CardData = {
   station?: number;
   /** This card is the one next step: red outline + 下一步 label. */
   isNext?: boolean;
+  /** 合起来讲 reached this station: it lights up. */
+  lit?: boolean;
   onStartNext?: () => void;
 };
 export type GhostData = { [key: string]: unknown; w: number };
@@ -469,7 +471,7 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
   return (
     <article
       {...attention}
-      className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""} ${hintsOpen ? "hints-open" : ""} ${controlsActive ? "hint-controls-active" : ""}`}
+      className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""} ${data.lit ? "lit" : ""} ${hintsOpen ? "hints-open" : ""} ${controlsActive ? "hint-controls-active" : ""}`}
       aria-busy={data.generating || undefined}
     >
       {data.generating && <BorderBeam />}

@@ -3,7 +3,8 @@
  * 1 a stop with its four beats half done → continue that beat;
  * 3 children split off a stuck stop are unlearned → learn them first;
  * 4 the first unsealed stop in route order;
- * 6 every stop sealed → 合起来讲.
+ * 6 every stop sealed → 合起来讲 (then "wrapped").
+ * Before all of them: an unfinished 摸底 continues. Stops put off with 稍后 (meta.later) go last.
  * (Rule 2, spaced review, is out of scope; rule 5 is offered only when a stop missed a point.)
  */
 import type { Beat, Board, ConceptNode } from "../shared/types";
@@ -15,6 +16,8 @@ export type NextStep =
   | { kind: "station"; card: ConceptNode; station: number; why: string }
   | { kind: "deeper"; card: ConceptNode; station: number; why: string }
   | { kind: "wrap"; why: string }
+  | { kind: "wrapped"; why: string }
+  | { kind: "probe"; why: string }
   | { kind: "route"; why: string }
   | { kind: "none" };
 
@@ -31,6 +34,8 @@ export const beatProgress = (n: ConceptNode) =>
   n.status === "explained" ? 1 : n.beat ? BEATS.indexOf(n.beat as Beat) / 4 : 0;
 
 export function nextStep(board: Board, skip: ReadonlySet<string> = new Set()): NextStep {
+  if (board.probe?.status === "asking")
+    return { kind: "probe", why: "先用约 3 道题找到你的起点，路线会从那里开始。" };
   const route = routeOf(board);
   if (!route.length)
     return board.nodes.some((n) => n.parentId !== null)
@@ -48,9 +53,13 @@ export function nextStep(board: Board, skip: ReadonlySet<string> = new Set()): N
     }
     return undefined;
   };
-  // 1. A stop in progress.
+  const unlearnedSplit = (n: ConceptNode) =>
+    board.nodes.some((c) => c.parentId === n.id && !sealed(c));
+  // 1. A stop in progress (not one waiting for its split children, nor one put off for later).
   const inProgress = board.nodes.find(
-    (n) => n.beat && n.beat !== "done" && !sealed(n) && !skip.has(n.id),
+    (n) =>
+      n.beat && n.beat !== "done" && !sealed(n) && !skip.has(n.id) && !n.meta?.later &&
+      !((n.fails ?? 0) >= 2 && unlearnedSplit(n)),
   );
   if (inProgress)
     return {
@@ -58,7 +67,9 @@ export function nextStep(board: Board, skip: ReadonlySet<string> = new Set()): N
       card: inProgress,
       station: stationFor(inProgress),
       beat: inProgress.beat!,
-      why: "这一站做到一半，接着把它走完。",
+      why: board.nodes.some((c) => c.parentId === inProgress.id && c.meta?.split)
+        ? "拆出来的小问题学完了，回到这一站重新测。"
+        : "这一站做到一半，接着把它走完。",
     };
   // 3. Children split off a stuck stop.
   for (const parent of board.nodes.filter((n) => (n.fails ?? 0) >= 2 && !sealed(n))) {
@@ -76,7 +87,10 @@ export function nextStep(board: Board, skip: ReadonlySet<string> = new Set()): N
   }
   // 4. The first unsealed stop.
   const open = route.filter((n) => !sealed(n));
-  const pick = open.find((n) => !skip.has(n.id)) ?? open[0];
+  const pick =
+    open.find((n) => !skip.has(n.id) && !n.meta?.later) ??
+    open.find((n) => !skip.has(n.id)) ??
+    open[0];
   if (pick) {
     const i = route.indexOf(pick);
     const prev = route.slice(0, i).filter(sealed).at(-1);
@@ -97,5 +111,7 @@ export function nextStep(board: Board, skip: ReadonlySet<string> = new Set()): N
       why: `讲「${missed.title}」时漏了：${missed.meta!.missed}。值得再深一层。`,
     };
   // 6. Everything sealed.
+  if (board.wrap?.done)
+    return { kind: "wrapped", why: "全图讲通了。想继续，可以从任意一张卡往下长出新问题。" };
   return { kind: "wrap", why: "所有站都盖了印，回到起点问题，把它合起来讲一遍。" };
 }

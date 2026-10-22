@@ -66,6 +66,8 @@ export interface ConceptNode {
   explain?: string;
   /** How the A seal was earned: by passing 测, or inferred from 摸底. */
   seal?: "test" | "probe";
+  /** 换个类比: a second explanation the learner asked for when stuck (shown in 学). */
+  analogy?: string;
   /** Internal data, never rendered or exported. */
   meta?: CardMeta;
 }
@@ -100,6 +102,12 @@ export interface CardMeta {
   check?: { keyPoints: string[]; answer?: number };
   /** The 讲/测 marker said a key point was missed (next-step rule 5). */
   missed?: string;
+  /** The depth-ladder level this station teaches (摸底 maps the frontier onto it). */
+  level?: number;
+  /** Split from a stuck stop (往下拆): learning it sends the learner back to the parent's 测. */
+  split?: boolean;
+  /** 稍后: the learner put this stuck stop off; it goes to the end of the queue. */
+  later?: boolean;
 }
 /** The depth ladder: what → why → how → edge → apply; compare sits beside it. */
 export type DepthType = "what" | "why" | "how" | "edge" | "apply" | "compare";
@@ -180,6 +188,32 @@ export interface Board {
   plan?: BoardPlan;
   /** The numbered learning path: card ids in recommended order (第 1 站, 第 2 站…). */
   route?: string[];
+  /** The bisection 摸底: the depth ladder, the answers and the converged frontier. */
+  probe?: ProbeState;
+  /** 合起来讲 on the root: the learner's wrap-up and the stations it lit up. */
+  wrap?: { text: string; lit: string[]; missing?: string; done: boolean };
+}
+export type ProbeVerdict = "correct" | "partial" | "wrong" | "unsure";
+export interface LadderLevel {
+  level: number;
+  desc: string;
+  keyPoints: string[];
+  probe: { type: "choice" | "explain"; q: string; options?: string[]; answer?: number };
+}
+export interface ProbeAnswer {
+  level: number;
+  verdict: ProbeVerdict;
+  text?: string;
+  missing?: string;
+  /** The monotonicity recheck (the allowed 4th question). */
+  recheck?: boolean;
+}
+export interface ProbeState {
+  status: "asking" | "done" | "skipped";
+  ladder: LadderLevel[];
+  answers: ProbeAnswer[];
+  /** The first level to learn: lo + 1 (0 = from the start). */
+  frontier?: number;
 }
 export type PlanIntent =
   | "concept"
@@ -307,7 +341,8 @@ export interface AIRequest {
     | "enrich"
     | "plan"
     | "gate"
-    | "mark";
+    | "mark"
+    | "probe";
 }
 export interface AIUpdate {
   boardId: string;

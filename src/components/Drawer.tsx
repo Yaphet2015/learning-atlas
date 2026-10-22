@@ -537,6 +537,7 @@ export function Drawer({
   onNewSession,
   onHistory,
   study,
+  lead,
 }: {
   note: StickyNote;
   /** Reading a selected card keeps focus on the canvas for shortcuts. */
@@ -569,6 +570,8 @@ export function Drawer({
   onHistory: () => void;
   /** The four beats, when the anchor is a card the learner studies. */
   study?: StudyProps;
+  /** The root's 摸底 or 合起来讲 panel, shown above the notes. */
+  lead?: React.ReactNode;
 }) {
   const [prompt, setPrompt] = useState("");
   const [menu, setMenu] = useState(false);
@@ -812,6 +815,7 @@ export function Drawer({
             {anchor.visual && (!study || anchor.status === "explained" || (anchor.beat ?? "guess") !== "guess") && <StructuredVisual visual={anchor.visual} />}
           </section>
         )}
+        {lead}
         <label className={`my-note ${note.text ? "has" : ""}`}>
           <span className="my-note-k">
             <Pencil size={14} className="ico" />

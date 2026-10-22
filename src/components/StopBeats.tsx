@@ -12,6 +12,8 @@ export interface StudyProps {
   onMark: (kind: "explain" | "test", answer: string, choice: number | null) => Promise<Mark | null>;
   /** Two wrong 测 answers: the stuck exits (phase 2 fills these in). */
   stuck?: React.ReactNode;
+  /** A light (摸底) seal failed its recheck: drop it and queue the stop after the current one. */
+  onRecheckFail?: () => void;
 }
 
 const BULLET = /^\s*([-•·]|\d+[.、])\s*/;
@@ -32,7 +34,8 @@ export function CardProse({ body }: { body: string }) {
 
 /** The four beats of one stop: 先猜 → 学 → 讲 → 测; passing 测 earns the A seal. */
 export function StopBeats({ card, study }: { card: ConceptNode; study: StudyProps }) {
-  const beat: Beat = card.status === "explained" ? "done" : (card.beat ?? "guess");
+  const [recheck, setRecheck] = useState(false);
+  const beat: Beat = recheck ? "test" : card.status === "explained" ? "done" : (card.beat ?? "guess");
   const [text, setText] = useState("");
   const [choice, setChoice] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,7 +63,14 @@ export function StopBeats({ card, study }: { card: ConceptNode; study: StudyProp
       return;
     }
     if (mark.pass) {
+      setRecheck(false);
       go({ beat: "done", status: "explained", seal: "test", fails: 0 });
+      return;
+    }
+    if (recheck) {
+      setRecheck(false);
+      go({});
+      study.onRecheckFail?.();
       return;
     }
     const fails = (card.fails ?? 0) + 1;
@@ -113,6 +123,12 @@ export function StopBeats({ card, study }: { card: ConceptNode; study: StudyProp
       {beat === "learn" && (
         <div className="beat-pane">
           {card.guess && <p className="beat-note">你猜的是：{card.guess}</p>}
+          {card.analogy && (
+            <p className="beat-analogy">
+              <span className="lab">换个类比</span>
+              {card.analogy}
+            </p>
+          )}
           <div className="beat-acts">
             <button className="btn primary" onClick={() => go({ beat: "explain" })}>
               读完了，我来讲讲
@@ -203,7 +219,12 @@ export function StopBeats({ card, study }: { card: ConceptNode; study: StudyProp
       {beat === "done" && (
         <p className="beat-sealed">
           <span className="seal-a" aria-hidden="true">A</span>
-          {card.seal === "probe" ? "你已经会了 · 摸底推断" : "这一站讲清楚了"}
+          {card.seal === "probe" ? "你已经会了 · 可跳过" : "这一站讲清楚了"}
+          {card.seal === "probe" && (
+            <button className="btn quiet" onClick={() => setRecheck(true)}>
+              复查一下
+            </button>
+          )}
         </p>
       )}
     </section>

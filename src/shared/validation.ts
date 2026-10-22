@@ -160,6 +160,7 @@ export const conceptNodeSchema = z
     guess: z.string().max(2_000).optional(),
     explain: z.string().max(4_000).optional(),
     seal: z.enum(["test", "probe"]).optional(),
+    analogy: z.string().max(2_000).optional(),
     meta: z
       .object({
         gate: z
@@ -196,6 +197,9 @@ export const conceptNodeSchema = z
           .strict()
           .optional(),
         missed: z.string().max(200).optional(),
+        level: z.number().int().min(0).max(5).optional(),
+        split: z.boolean().optional(),
+        later: z.boolean().optional(),
       })
       .strict()
       .optional(),
@@ -259,6 +263,45 @@ const relationV1Schema = z
     source: idSchema,
     target: idSchema,
     label: z.string().max(200),
+  })
+  .strict();
+const probeVerdictSchema = z.enum(["correct", "partial", "wrong", "unsure"]);
+export const probeStateSchema = z
+  .object({
+    status: z.enum(["asking", "done", "skipped"]),
+    ladder: z
+      .array(
+        z
+          .object({
+            level: z.number().int().min(0).max(5),
+            desc: z.string().max(80),
+            keyPoints: z.array(z.string().max(120)).max(3),
+            probe: z
+              .object({
+                type: z.enum(["choice", "explain"]),
+                q: z.string().max(400),
+                options: z.array(z.string().max(160)).max(4).optional(),
+                answer: z.number().int().min(0).max(3).optional(),
+              })
+              .strict(),
+          })
+          .strict(),
+      )
+      .max(6),
+    answers: z
+      .array(
+        z
+          .object({
+            level: z.number().int().min(0).max(5),
+            verdict: probeVerdictSchema,
+            text: z.string().max(1_000).optional(),
+            missing: z.string().max(80).optional(),
+            recheck: z.boolean().optional(),
+          })
+          .strict(),
+      )
+      .max(8),
+    frontier: z.number().int().min(0).max(6).optional(),
   })
   .strict();
 export const chatMessageSchema = z
@@ -372,6 +415,16 @@ export const boardSchema = z
     viewport: viewportSchema.optional(),
     plan: boardPlanSchema.optional(),
     route: z.array(idSchema).max(LIMITS.nodes).optional(),
+    probe: probeStateSchema.optional(),
+    wrap: z
+      .object({
+        text: z.string().max(4_000),
+        lit: z.array(idSchema).max(LIMITS.nodes),
+        missing: z.string().max(400).optional(),
+        done: z.boolean(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((board, ctx) => {
@@ -554,6 +607,7 @@ export const aiRequestSchema = z
       "plan",
       "gate",
       "mark",
+      "probe",
     ]),
   })
   .strict();
