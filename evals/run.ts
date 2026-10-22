@@ -79,7 +79,7 @@ type Msg = { role: "system" | "user" | "assistant"; content: string };
 async function chat(
   system: string,
   user: string | Msg[],
-  opts: { temperature?: number } = {},
+  opts: { temperature?: number; effort?: "low" | "high" } = {},
   tries = 3,
 ) {
   const turns: Msg[] =
@@ -109,6 +109,7 @@ async function chat(
           ...(opts.temperature !== undefined
             ? { temperature: opts.temperature }
             : {}),
+          ...(opts.effort ? { reasoning_effort: opts.effort } : {}),
           messages: [{ role: "system", content: system }, ...turns],
         }),
         signal: abort.signal,
@@ -155,7 +156,9 @@ async function chat(
     if (totals.retryReasons.length < 40)
       totals.retryReasons.push(`${Math.round((Date.now() - started) / 1000)}s ${last.slice(0, 80)}`);
     console.error(`  retry ${i + 1}/${tries} after ${Math.round((Date.now() - started) / 1000)}s: ${last.slice(0, 120)}`);
-    await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+    // Balance (402), rate (429) and server (5xx) errors are often transient: wait longer before retrying.
+    const transient = /^HTTP (402|429|5\d\d)/.test(last);
+    await new Promise((r) => setTimeout(r, (transient ? 20_000 : 2000) * (i + 1)));
   }
   totals.failures++;
   throw new Error(last);
@@ -163,6 +166,7 @@ async function chat(
 
 interface Step {
   kind: "map" | "expand" | "kickoff" | "plan";
+  parseRetries?: number;
   round: number;
   anchor: string;
   anchorTitle: string;
@@ -207,25 +211,32 @@ async function generate(
     added: 0,
   };
   steps.push(step);
-  try {
-    const r = await chat(system, prompt, {
-      temperature: modeTemperature(mode),
-    });
-    Object.assign(step, {
-      raw: r.content,
-      reasoningChars: r.reasoningChars,
-      finish: r.finish,
-      ms: r.ms,
-      usage: r.usage,
-    });
-    const next = buildMapFromAI(r.content, board, anchorId, mode, context);
-    step.added = next.nodes.length - board.nodes.length;
-    return next;
-  } catch (e) {
-    step.error = String((e as Error).message ?? e);
-    return board;
+  // A reply that fails to parse is asked for once more (same request), as a learner's retry would.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await chat(system, prompt, {
+        temperature: modeTemperature(mode),
+      });
+      Object.assign(step, {
+        raw: r.content,
+        reasoningChars: r.reasoningChars,
+        finish: r.finish,
+        ms: r.ms,
+        usage: r.usage,
+      });
+      const next = buildMapFromAI(r.content, board, anchorId, mode, context);
+      step.added = next.nodes.length - board.nodes.length;
+      delete step.error;
+      return next;
+    } catch (e) {
+      step.error = String((e as Error).message ?? e);
+      if (!/图谱|JSON/.test(step.error)) break;
+      step.parseRetries = (step.parseRetries ?? 0) + 1;
+    }
   }
+  return board;
 }
+
 
 function levels(board: Board): EvalNode[] {
   const byId = new Map(board.nodes.map((n) => [n.id, n]));
@@ -625,6 +636,7 @@ async function main() {
       newInfo: r.metrics.newInfoRatio,
       avgBody: r.metrics.avgBodyChars,
       failedSteps: r.steps.filter((s: Step) => s.error).length,
+      parseRetries: r.steps.reduce((a: number, s: Step) => a + (s.parseRetries ?? 0), 0),
       emptyExpansions: r.steps.filter(
         (s: Step) => s.kind === "expand" && !s.error && s.added === 0,
       ).length,

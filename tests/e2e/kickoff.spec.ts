@@ -61,6 +61,10 @@ test("a new question starts the guided kickoff and accepts the first level onto 
   expect(asks[2].prompt).toContain("[b1] 白光由哪些颜色组成？");
   expect(asks[2].prompt).not.toContain("副虹");
   expect(asks[2].context.plan).toContain("学习目标：学完后，能解释彩虹");
+  // New cards get the quiet enrich follow-up.
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__atlasEnriches.length))
+    .toBe(1);
   // Conversation requests carry the outline; card bodies are read through tools.
   expect(asks[1].canvas).toBe(true);
   expect(asks[1].context.structure).toContain("白板结构");
