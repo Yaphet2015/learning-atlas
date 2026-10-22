@@ -47,8 +47,9 @@ for (const outcome of ["success", "failed", "cancel"] as const) {
       await page.waitForTimeout(1000);
       await expect(card).toContainText(board.nodes[1].title);
     }
-    await page.getByRole("button", { name: "画布记录", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "画布记录" })).toBeVisible();
+    await page.getByRole("button", { name: "画布操作" }).click();
+    await page.getByRole("menuitem", { name: /整理记录与恢复/ }).click();
+    await expect(page.getByRole("dialog", { name: "整理记录与恢复" })).toBeVisible();
     const requests = await page.evaluate(() => (window as any).__atlasAsks);
     expect(requests[0].context.review).toBeUndefined();
     expect(requests[0].context.references).toEqual([]);

@@ -192,6 +192,8 @@ export interface Board {
   probe?: ProbeState;
   /** 合起来讲 on the root: the learner's wrap-up and the stations it lit up. */
   wrap?: { text: string; lit: string[]; missing?: string; done: boolean };
+  /** Stamped on save for the sidebar list (model/progress.ts); older boards are backfilled on list. */
+  progress?: BoardProgress;
 }
 export type ProbeVerdict = "correct" | "partial" | "wrong" | "unsure";
 export interface LadderLevel {
@@ -252,6 +254,15 @@ export interface BoardSummary {
   kind: Board["kind"];
   updatedAt: string;
   archivedAt?: string;
+  /** Sealed / total cards and whether the canvas is done (model/progress.ts), computed on save. */
+  sealed?: number;
+  total?: number;
+  done?: boolean;
+}
+export interface BoardProgress {
+  sealed: number;
+  total: number;
+  done: boolean;
 }
 export type Selection = {
   kind: "node" | "relation" | "note";

@@ -82,7 +82,8 @@ for (const scheme of ["light", "dark"] as const)
     const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
     const sw = await box(".workspace-sidebar");
     expect([sw.x, sw.y]).toEqual([0, 0]);
-    const pr = await box(".progress");
+    // The top-right corner is [理解进度][⋯]; the ⋯ button sits at the edge.
+    const pr = await box(".canvas-corner");
     expect([Math.round(vw - pr.x - pr.width), pr.y]).toEqual([6, 6]);
     const dock = await box(".dock");
     expect(Math.round(vh - dock.y - dock.height)).toBe(6);

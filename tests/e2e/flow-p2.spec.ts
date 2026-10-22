@@ -76,10 +76,14 @@ test("二分摸底: L3 ✗ → L1 ✓ → L2 ✓ converges on L3; stations below
   await page.locator(".drawer").getByLabel("关闭").click();
   const bar = page.getByRole("region", { name: "下一步" });
   await expect(bar).toContainText("下一步 · 第 2 站");
-  // 重新摸底 lives in the root card's ⋯ menu, not the drawer.
+  // 重新摸底 lives only in the canvas ⋯ menu (first item), not the drawer or the root card.
   await page.locator(".react-flow__node-root").click();
-  await page.locator(".select-toolbar").getByRole("button", { name: "更多操作" }).click();
-  await expect(page.getByRole("menuitem", { name: "重新摸底" })).toBeVisible();
+  await expect(page.locator(".select-toolbar").getByRole("button", { name: "更多操作" })).toHaveCount(0);
+  const openDrawer = page.locator(".drawer");
+  if (await openDrawer.count()) await openDrawer.getByLabel("关闭").click();
+  await page.getByRole("button", { name: "画布操作" }).click();
+  await expect(page.locator(".canvas-menu [role=menuitem]").first()).toHaveText("重新摸底");
+  await expect(page.getByRole("menuitem", { name: "重新摸底" })).toBeEnabled();
   await page.keyboard.press("Escape");
   // 我想从头学: the light seals go, the route starts at 第 1 站.
   await page.locator(".react-flow__node-root").click();

@@ -39,6 +39,8 @@ import {
 import { reconcileCanvasResult } from "./model/canvas-result";
 import { CanvasRunProgress } from "./components/CanvasRunProgress";
 import { CanvasActivity } from "./components/CanvasActivity";
+import { boardProgress } from "./model/progress";
+import { CanvasMenu, PausedPill } from "./components/CanvasMenu";
 import { contextForNote, leanForGeneration } from "./model/context";
 import {
   HINT_DELAY,
@@ -474,7 +476,7 @@ export default function App() {
           canvasPreviewRunId.current = null;
         }
         if (run.status === "paused")
-          showToast("画布任务已暂停，进度已保存。可在画布记录中继续。");
+          showToast("画布任务已暂停，进度已保存。可在画布右上角 ⋯ 的「整理记录与恢复」中继续。");
         if (run.error) showToast(errorText(run.error));
       }
     },
@@ -1000,7 +1002,9 @@ export default function App() {
           (meta) =>
             meta.request.mode !== "answer" &&
             meta.request.mode !== "enrich" &&
-            meta.request.mode !== "plan",
+            meta.request.mode !== "plan" &&
+            // Background ghost-hint fetches must not swallow a click on 再看一层.
+            meta.request.mode !== "hint",
         )
       )
         return;
@@ -2319,10 +2323,7 @@ export default function App() {
                 kickoffStarted: Boolean(kickoffNote(board)?.messages.length),
               }
             : {}),
-          // 重新摸底 lives in the root card's ⋯ menu once a probe has settled and a route exists.
-          ...(n.id === rootId && board.kind === "ai" && board.probe && board.probe.status !== "asking" && board.route?.length
-            ? { onReprobe: reprobe }
-            : {}),
+
         },
       });
     }
@@ -2696,7 +2697,9 @@ export default function App() {
               <MapUnit showMap={panning || tool === "hand"} />
             </ReactFlow>
             <WorkspaceSidebar
-              boards={boards.filter((b) => !b.archivedAt)}
+              boards={boards
+                .filter((b) => !b.archivedAt)
+                .map((b) => (b.id === board.id ? { ...b, title: board.title, ...boardProgress(board) } : b))}
               currentId={board.id}
               collapsed={sidebarCollapsed}
               switchingId={switchingBoardId}
@@ -2709,7 +2712,6 @@ export default function App() {
               onNew={() => setShowNew(true)}
               onSearch={() => setPalette(true)}
               onSettings={() => setShowSettings(true)}
-              onCanvasActivity={() => setShowCanvasActivity(true)}
               sessions={listSessions(board)}
               currentSessionId={drawer?.id}
               onOpenSession={(boardId, sessionId) =>
@@ -2717,7 +2719,32 @@ export default function App() {
               }
               onNewSession={() => addNote(undefined, { fresh: true })}
             />
-            <Progress nodes={board.nodes} />
+            {(() => {
+              const paused = canvasRuns.filter((r) => r.boardId === board.id && r.status === "paused").length;
+              // Always listed; disabled with the reason when it can't run.
+              const reprobeBlocked =
+                board.kind !== "ai"
+                  ? "示例画布没有摸底"
+                  : !settings.configured
+                    ? "先在设置里连接 AI"
+                    : board.probe?.status === "asking" || probeBusy
+                      ? "摸底正在进行"
+                      : undefined;
+              return (
+                <div className="canvas-corner">
+                  {paused > 0 && <PausedPill onOpen={() => setShowCanvasActivity(true)} />}
+                  <Progress nodes={board.nodes} />
+                  <CanvasMenu
+                    paused={paused}
+                    onReprobe={reprobe}
+                    {...(reprobeBlocked ? { reprobeBlocked } : {})}
+                    onActivity={() => setShowCanvasActivity(true)}
+                    onExport={() => setShowExport(true)}
+                    onArchive={() => void setBoardArchived(board.id, true)}
+                  />
+                </div>
+              );
+            })()}
             {!drawer && (
               <NextStepBar
                 step={next}

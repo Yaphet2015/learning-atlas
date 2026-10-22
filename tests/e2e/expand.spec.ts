@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { installFakeAtlas } from "./fake-atlas";
 import { insuranceBoard } from "./fixtures";
-import { gotoApp } from "./ready";
+import { gotoApp, viewportSettled } from "./ready";
 
 test("an expanded AI card can add more concepts and report no useful additions", async ({
   page,
@@ -37,6 +37,8 @@ test("an expanded AI card can add more concepts and report no useful additions",
   await expect(expand).toBeDisabled();
   await expect(cards).toHaveCount(count + 1);
   await expect(expand).toBeEnabled();
+  // New cards can trigger the next-step auto-pan; click once the canvas holds still.
+  await viewportSettled(page);
   await expand.click();
   await expect(
     page.getByText(

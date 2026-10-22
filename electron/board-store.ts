@@ -3,6 +3,7 @@ import { mkdir, lstat, open, readdir, rename, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Board, BoardSummary } from "../src/shared/types.js";
+import { boardProgress, withProgress } from "../src/model/progress.js";
 import {
   canvasFingerprint,
   mergeCanvasDraft,
@@ -163,6 +164,8 @@ export class BoardStore {
           kind: board.kind,
           updatedAt: board.updatedAt,
           ...(board.archivedAt ? { archivedAt: board.archivedAt } : {}),
+          // Boards saved before progress existed are backfilled here; the next save stores it.
+          ...(board.progress ?? boardProgress(board)),
         });
     }
     return result.sort(
@@ -242,7 +245,7 @@ export class BoardStore {
         "INVALID_BOARD",
         { cause: result.error },
       );
-    const board = result.data;
+    const board = withProgress(result.data);
     this.path(board.id);
     return this.enqueue(board.id, async () => {
       await this.ensureDirectory();

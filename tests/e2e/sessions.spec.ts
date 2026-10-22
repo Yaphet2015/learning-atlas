@@ -102,11 +102,11 @@ test("expanding another canvas lists its sessions and opens the selected convers
   const target = entries(page).filter({ hasText: "另一个画布的会话" });
   await expect(target).toBeVisible();
   await expect(
-    page.locator('.workspace-board[aria-current="page"]'),
+    page.locator('.workspace-board[aria-current="page"] .workspace-board-title'),
   ).toHaveText(first.title);
   await target.click();
   await expect(
-    page.locator('.workspace-board[aria-current="page"]'),
+    page.locator('.workspace-board[aria-current="page"] .workspace-board-title'),
   ).toHaveText(second.title);
   await expect(page.getByLabel("批注标题")).toHaveValue("另一个画布的会话");
   await expect(target).toHaveAttribute("aria-current", "true");

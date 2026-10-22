@@ -9,6 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
+import { boardProgress, withProgress } from "../src/model/progress";
 import { tmpdir } from "node:os";
 import { BoardStore } from "../electron/board-store";
 import { createEmptyBoard, createWalkthroughBoard } from "../src/model/boards";
@@ -36,13 +37,14 @@ describe("atomic private board storage", () => {
     board.viewport = { x: 20, y: 30, zoom: 0.8 };
     await store.save(board);
     const reopened = new BoardStore(join(directory, "boards"));
-    expect(await reopened.load(board.id)).toEqual(board);
+    expect(await reopened.load(board.id)).toEqual(withProgress(board));
     expect(await reopened.list()).toEqual([
       {
         id: board.id,
         title: board.title,
         kind: board.kind,
         updatedAt: board.updatedAt,
+        ...boardProgress(board),
       },
     ]);
     expect(
@@ -55,12 +57,12 @@ describe("atomic private board storage", () => {
     board.archivedAt = new Date().toISOString();
     await store.save(board);
     const reopened = new BoardStore(join(directory, "boards"));
-    expect(await reopened.load(board.id)).toEqual(board);
+    expect(await reopened.load(board.id)).toEqual(withProgress(board));
     expect((await reopened.list())[0].archivedAt).toBe(board.archivedAt);
     delete board.archivedAt;
     await reopened.save(board);
     expect((await store.list())[0].archivedAt).toBeUndefined();
-    expect(await store.load(board.id)).toEqual(board);
+    expect(await store.load(board.id)).toEqual(withProgress(board));
   });
   it("serializes rapid writes to the same board and snapshots inputs immediately", async () => {
     const board = createEmptyBoard("initial");
@@ -84,7 +86,7 @@ describe("atomic private board storage", () => {
     expect(await store.load(board.id)).toBeNull();
     await store.delete(board.id);
     await store.save(board);
-    expect(await store.load(board.id)).toEqual(board);
+    expect(await store.load(board.id)).toEqual(withProgress(board));
   });
   it("lists newest boards first", async () => {
     const a = createEmptyBoard("older");
@@ -124,7 +126,7 @@ describe("atomic private board storage", () => {
     expect(await readFile(path, "utf8")).toBe("{broken");
     // A failed read must not poison the per-board queue.
     await store.save(board);
-    expect(await store.load(board.id)).toEqual(board);
+    expect(await store.load(board.id)).toEqual(withProgress(board));
   });
   it("rejects schema-invalid persisted data and mismatched ids", async () => {
     const board = createEmptyBoard("invalid schema");
@@ -166,5 +168,16 @@ describe("atomic private board storage", () => {
     await expect(store.load(board.id)).rejects.toMatchObject({
       code: "TOO_LARGE",
     });
+  });
+  it("backfills sealed/total for boards saved before progress existed", async () => {
+    const board = createEmptyBoard("旧画布");
+    board.nodes.push({ ...board.nodes[0], id: "c1", parentId: board.nodes[0].id, status: "explained" });
+    await store.save(board);
+    const path = join(directory, "boards", `${board.id}.json`);
+    const { progress, ...legacy } = JSON.parse(await readFile(path, "utf8"));
+    expect(progress).toEqual({ sealed: 1, total: 1, done: true });
+    await writeFile(path, JSON.stringify(legacy));
+    const [summary] = await new BoardStore(join(directory, "boards")).list();
+    expect(summary).toMatchObject({ sealed: 1, total: 1, done: true });
   });
 });

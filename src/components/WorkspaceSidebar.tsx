@@ -10,7 +10,6 @@ import {
   Archive,
   ChevronRight,
   Compass,
-  History,
   LoaderCircle,
   MessageSquare,
   PanelLeftClose,
@@ -29,7 +28,7 @@ import {
 import { MOD } from "../model/shortcuts";
 import { tip } from "./Tooltip";
 
-export const SIDEBAR_DEFAULT_WIDTH = 244;
+export const SIDEBAR_DEFAULT_WIDTH = 256;
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 400;
 
@@ -51,7 +50,6 @@ type WorkspaceSidebarProps = {
   onNew: () => void;
   onSearch: () => void;
   onSettings: () => void;
-  onCanvasActivity?: () => void;
   sessions: SessionEntry[];
   currentSessionId?: string;
   onOpenSession: (boardId: string, sessionId: string) => void;
@@ -167,7 +165,7 @@ function BoardGroup({
           </button>
         )}
         <button
-          className="workspace-board"
+          className={`workspace-board ${board.done ? "is-done" : ""}`}
           aria-label={board.title}
           title={board.title}
           data-tip={collapsed ? board.title : undefined}
@@ -176,16 +174,51 @@ function BoardGroup({
           onClick={onPick}
           onContextMenu={onContextMenu}
         >
-          {switchingId === board.id && (
-            <LoaderCircle size={14} className="ico spin" />
+          {collapsed ? (
+            <>
+              {switchingId === board.id ? (
+                <LoaderCircle size={14} className="ico spin" />
+              ) : (
+                <span className="workspace-initial" aria-hidden="true">
+                  {Array.from(board.title)[0]}
+                </span>
+              )}
+              {!!board.total && (
+                <i
+                  className="workspace-rail-bar"
+                  aria-hidden="true"
+                  style={{ ["--p" as string]: `${Math.round(((board.sealed ?? 0) / board.total) * 100)}%` }}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <span className="workspace-copy workspace-board-title">{board.title}</span>
+              <span className="workspace-meta">
+                {board.done ? (
+                  <span className="workspace-done">
+                    <span aria-hidden="true">A</span> 全部讲通
+                  </span>
+                ) : board.total ? (
+                  <>
+                    <Segments sealed={board.sealed ?? 0} total={board.total} />
+                    <span className="workspace-count">
+                      {board.sealed ?? 0}/{board.total}
+                    </span>
+                  </>
+                ) : (
+                  <span className="workspace-count">还没有卡片</span>
+                )}
+                <span className="workspace-date">
+                  {switchingId === board.id ? (
+                    <LoaderCircle size={12} className="ico spin" />
+                  ) : (
+                    relativeDay(board.updatedAt)
+                  )}
+                </span>
+              </span>
+            </>
           )}
-          {collapsed && switchingId !== board.id && (
-            <span aria-hidden="true">{Array.from(board.title)[0]}</span>
-          )}
-          <span className="workspace-copy workspace-board-title">
-            {board.title}
-          </span>
-          {current && <span className="workspace-current" aria-hidden="true" />}
         </button>
       </div>
       {!collapsed && (
@@ -214,6 +247,35 @@ function BoardGroup({
   );
 }
 
+/** One segment per card (a long list becomes one proportional bar); sealed segments are filled. */
+function Segments({ sealed, total }: { sealed: number; total: number }): ReactElement {
+  if (total > 12)
+    return (
+      <span className="workspace-segs long" aria-hidden="true">
+        <i className="on" style={{ flexGrow: sealed }} />
+        <i style={{ flexGrow: total - sealed }} />
+      </span>
+    );
+  return (
+    <span className="workspace-segs" aria-hidden="true">
+      {Array.from({ length: total }, (_, i) => (
+        <i key={i} className={i < sealed ? "on" : ""} />
+      ))}
+    </span>
+  );
+}
+
+/** 今天 / 昨天 / 10月15日, in local time. */
+export function relativeDay(iso: string, today = new Date()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(today) - day(d)) / 86_400_000);
+  if (diff === 0) return "今天";
+  if (diff === 1) return "昨天";
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
 /** Each entry selects the whole knowledge canvas and its conversations. */
 export function WorkspaceSidebar({
   boards,
@@ -229,7 +291,6 @@ export function WorkspaceSidebar({
   onNew,
   onSearch,
   onSettings,
-  onCanvasActivity,
   sessions,
   currentSessionId,
   onOpenSession,
@@ -289,6 +350,48 @@ export function WorkspaceSidebar({
     ? boards
     : boards.filter((b) => b.title.toLocaleLowerCase().includes(search));
 
+  const row = (b: BoardSummary): ReactElement => (
+    <BoardGroup
+      key={b.id}
+      board={b}
+      current={b.id === currentId}
+      collapsed={collapsed}
+      switchingId={switchingId}
+      sessions={sessions}
+      currentSessionId={currentSessionId}
+      onPick={() => onPick(b.id)}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        if (switchingId !== null) return;
+        const box = event.currentTarget.getBoundingClientRect();
+        setMenu({
+          id: b.id,
+          x: Math.max(
+            8,
+            Math.min(
+              event.clientX || box.left,
+              window.innerWidth - 184,
+            ),
+          ),
+          y: Math.max(
+            8,
+            Math.min(
+              event.clientY || box.bottom,
+              window.innerHeight - 56,
+            ),
+          ),
+          trigger: event.currentTarget,
+        });
+      }}
+      onOpenSession={(id) => onOpenSession(b.id, id)}
+      onNewSession={onNewSession}
+    />
+  );
+  const groups = [
+    { key: "active", label: "进行中", items: visibleBoards.filter((b) => !b.done) },
+    { key: "done", label: "已完成", items: visibleBoards.filter((b) => b.done) },
+  ];
+
   return (
     <aside
       className="workspace-sidebar"
@@ -303,41 +406,31 @@ export function WorkspaceSidebar({
           <span className="workspace-copy">Studyboard</span>
         </span>
         <button
+          className="workspace-icon workspace-new"
+          {...tip("新建画布", `${MOD}N`)}
+          onClick={onNew}
+          disabled={switchingId !== null}
+        >
+          <Plus size={17} />
+        </button>
+        <button
           className="workspace-toggle"
           {...tip(collapsed ? "展开左侧边栏" : "收起左侧边栏", `${MOD}\\`)}
           aria-expanded={!collapsed}
           aria-controls="workspace-navigation"
           onClick={onToggle}
         >
-          {collapsed ? (
-            <PanelLeftOpen size={18} />
-          ) : (
-            <PanelLeftClose size={18} />
-          )}
+          {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
         </button>
       </header>
       <div className="workspace-actions">
-        <button
-          className="workspace-action workspace-new"
-          {...tip("新建画布", `${MOD}N`)}
-          onClick={onNew}
-          disabled={switchingId !== null}
-        >
-          <Plus size={18} className="ico" />
-          <span className="workspace-copy">新建画布</span>
-          <kbd className="workspace-copy">{MOD}N</kbd>
-        </button>
         {collapsed ? (
-          <button
-            className="workspace-action"
-            {...tip("搜索知识画布", `${MOD}K`)}
-            onClick={onSearch}
-          >
-            <Search size={17} className="ico" />
+          <button className="workspace-icon" {...tip("搜索画布与卡片", `${MOD}K`)} onClick={onSearch}>
+            <Search size={15} strokeWidth={2} />
           </button>
         ) : (
           <label className="workspace-search">
-            <Search size={16} className="ico" />
+            <Search size={15} strokeWidth={2} className="ico" />
             <input
               aria-label="搜索知识画布"
               placeholder="搜索画布…"
@@ -351,11 +444,17 @@ export function WorkspaceSidebar({
                 }
               }}
             />
+            <kbd
+              title="搜索画布与卡片"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onSearch();
+              }}
+            >
+              {MOD} K
+            </kbd>
           </label>
         )}
-      </div>
-      <div className="workspace-section workspace-copy">
-        <span>知识画布</span>
       </div>
       <nav
         id="workspace-navigation"
@@ -364,47 +463,24 @@ export function WorkspaceSidebar({
         aria-busy={switchingId !== null}
       >
         <div className="workspace-board-list">
-          <ul>
-            {visibleBoards.map((b) => (
-              <BoardGroup
-                key={b.id}
-                board={b}
-                current={b.id === currentId}
-                collapsed={collapsed}
-                switchingId={switchingId}
-                sessions={sessions}
-                currentSessionId={currentSessionId}
-                onPick={() => onPick(b.id)}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  if (switchingId !== null) return;
-                  const box = event.currentTarget.getBoundingClientRect();
-                  setMenu({
-                    id: b.id,
-                    x: Math.max(
-                      8,
-                      Math.min(
-                        event.clientX || box.left,
-                        window.innerWidth - 184,
-                      ),
-                    ),
-                    y: Math.max(
-                      8,
-                      Math.min(
-                        event.clientY || box.bottom,
-                        window.innerHeight - 56,
-                      ),
-                    ),
-                    trigger: event.currentTarget,
-                  });
-                }}
-                onOpenSession={(id) => onOpenSession(b.id, id)}
-                onNewSession={onNewSession}
-              />
-            ))}
-          </ul>
+          {!boards.length && !collapsed ? (
+            <p className="workspace-start">提一个问题，开始第一张画布</p>
+          ) : (
+            groups.map((g) =>
+              g.items.length ? (
+                <section key={g.key} className="workspace-group" aria-label={g.label}>
+                  {!collapsed && (
+                    <h2 className="workspace-section">
+                      {g.label} <span>{g.items.length}</span>
+                    </h2>
+                  )}
+                  <ul>{g.items.map(row)}</ul>
+                </section>
+              ) : null,
+            )
+          )}
         </div>
-        {!visibleBoards.length && (
+        {!!boards.length && !visibleBoards.length && (
           <p className="workspace-empty">没有找到画布，换个词试试。</p>
         )}
       </nav>
@@ -439,22 +515,12 @@ export function WorkspaceSidebar({
           document.body,
         )}
       <div className="workspace-settings">
-        {onCanvasActivity && (
-          <button
-            className="workspace-action"
-            {...tip("画布记录")}
-            onClick={onCanvasActivity}
-          >
-            <History size={17} className="ico" />
-            <span className="workspace-copy">画布记录</span>
-          </button>
-        )}
         <button
           className="workspace-action"
           {...tip("设置", `${MOD}.`)}
           onClick={onSettings}
         >
-          <Settings2 size={17} className="ico" />
+          <Settings2 size={15} className="ico" />
           <span className="workspace-copy">设置</span>
         </button>
       </div>
