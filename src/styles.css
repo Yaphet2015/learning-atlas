@@ -468,8 +468,10 @@ kbd,
 .card.s-explained .card-heading {
   padding-right: 30px;
 }
+/* Selection everywhere: one 1.5px vermilion border plus --shadow-2, no outer glow. */
 .card.is-selected {
-  box-shadow: var(--ring), var(--shadow-1);
+  border: 1.5px solid var(--accent);
+  box-shadow: var(--shadow-2);
 }
 .card.dimmed {
   opacity: 0.4;
@@ -652,11 +654,8 @@ kbd,
   box-shadow: var(--shadow-2);
 }
 .origin.is-selected {
-  box-shadow:
-    0 0 0 4px var(--paper),
-    0 0 0 5.5px var(--accent),
-    0 0 0 10px var(--accent-wash),
-    var(--shadow-2);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-2);
 }
 .origin-head {
   display: flex;
@@ -4385,9 +4384,6 @@ kbd,
 }
 .react-flow__node:has(.station.next) .card {
   border-color: var(--accent);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent),
-    var(--shadow-1);
 }
 .card .face-body {
   display: -webkit-box;
@@ -4429,15 +4425,16 @@ kbd,
   color: #fff;
   background: rgba(255, 255, 255, 0.2);
 }
+/* Docked just above the toolbar (dock height + 8px). */
 .next-step {
   left: 50%;
-  bottom: calc(var(--gutter) + 64px);
+  bottom: calc(var(--gutter) + var(--dock-h, 44px) + 8px);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 14px;
-  width: min(560px, calc(100vw - 2 * var(--gutter)));
-  padding: 12px 14px;
+  gap: 12px;
+  width: min(520px, calc(100vw - 2 * var(--gutter)));
+  padding: 9px 12px;
   box-shadow: var(--shadow-2);
 }
 .next-step .ns-no {
@@ -4463,12 +4460,21 @@ kbd,
   color: var(--accent);
 }
 .next-step .ns-main {
-  font: 700 14.5px/1.4 var(--kai);
+  font: 700 14px/1.4 var(--kai);
   color: var(--ink);
 }
 .next-step .ns-why {
   font: 400 12px/1.4 var(--kai);
   color: var(--ink-3);
+}
+.next-step .ns-text {
+  min-width: 0;
+}
+.next-step .ns-main,
+.next-step .ns-why {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .next-step .btn {
   flex: none;
@@ -4756,4 +4762,23 @@ kbd,
 }
 .ns-no.star {
   color: var(--accent);
+}
+.select-toolbar .more {
+  position: relative;
+  display: inline-flex;
+}
+.menu.card-menu {
+  left: auto;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 188px;
+}
+.menu.card-menu .dig-head {
+  padding: 4px 10px 6px;
+  font: 400 12px var(--kai);
+  color: var(--ink-3);
+}
+.menu.card-menu .ico-gap {
+  display: inline-block;
+  width: 14px;
 }

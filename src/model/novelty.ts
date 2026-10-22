@@ -127,9 +127,12 @@ export function cheapGate(
   if (/\d/.test(body) && subs.some((s) => /\d/.test(String(s.text)) && s.isExample) && !/比如|例如|示例|假设|举例/.test(body))
     reasons.push("正文里的示例数字旁要写明“比如/示例”");
   // 5. The check question must use a new situation.
+  // A clear restatement is rejected; a check that merely shares wording with the body is left to the judge.
   const q = card.check?.q ?? "";
-  if (q && (containment(q, body) >= 0.5 || /是什么[？?]?$|重要吗[？?]?$|^什么是/.test(q.trim())))
+  const qOverlap = q ? containment(q, body) : 0;
+  if (q && (qOverlap >= 0.7 || /是什么[？?]?$|重要吗[？?]?$|^什么是/.test(q.trim())))
     reasons.push("检查题在复述正文，要换成新情境");
+  else if (qOverlap >= 0.5) ambiguous = true;
   const answer = card.check?.options?.[card.check.answer ?? -1];
   if (answer && answer.length >= 6 && norm(body).includes(norm(answer)))
     reasons.push("检查题答案能在正文里直接找到");
@@ -187,11 +190,11 @@ export function judgePrompt(board: Board, items: { card: RawCard; against: strin
     const x = title(against);
     return {
       id: card.id,
-      card: { title: card.title, body: card.body, claims: card.claims },
+      card: { title: card.title, body: card.body, claims: card.claims, check: card.check?.q },
       compareWith: x ? { title: x.title, claims: claimsOf(x) } : null,
     };
   });
-  return `判断每张候选卡片相对“比较对象”是否带来具体的新知识。adds 写出它比比较对象多了什么（一句话，≤30 字；说不出具体差异就留空）。pass 为 true 仅当 adds 具体、且正文不是空话或复述。不因内容深、难而扣分。
+  return `判断每张候选卡片相对“比较对象”是否带来具体的新知识。adds 写出它比比较对象多了什么（一句话，≤30 字；说不出具体差异就留空）。pass 为 true 仅当 adds 具体、正文不是空话或复述，并且检查题 check 把知识点用到了正文没写过的新情境（只是换词复述正文则不通过）。不因内容深、难而扣分。
 只输出 JSON：{"verdicts":[{"id":"…","adds":"…","pass":true}]}
 候选：${JSON.stringify(rows)}`;
 }
@@ -214,9 +217,22 @@ export const judgeKey = (card: RawCard, against: string) =>
   `${against}|${norm(card.title)}|${norm(String(card.body)).slice(0, 200)}`;
 
 /** The regenerate prompt: rewrite just the rejected cards, with the reasons. */
-export function regeneratePrompt(base: string, rejected: { card: RawCard; reasons: string[] }[], board: Board): string {
-  const existing = board.nodes.flatMap((n) => claimsOf(n)).slice(0, 40);
-  return `${base}
+/**
+ * The one regenerate call: self-contained and slim (no board context, no tutor preamble). It carries
+ * the topic, the parent card, the sibling titles and the existing claims; the slim "regen" system
+ * prompt carries the card schema.
+ */
+export function regeneratePrompt(
+  base: string,
+  rejected: { card: RawCard; reasons: string[] }[],
+  board: Board,
+  anchorId: string | null = null,
+): string {
+  const existing = board.nodes.flatMap((n) => claimsOf(n)).slice(0, 30);
+  const parent = anchorId ? board.nodes.find((n) => n.id === anchorId) : undefined;
+  const siblings = board.nodes.filter((n) => anchorId && n.parentId === anchorId).map((n) => n.title).slice(0, 12);
+  return `起点问题：${board.topic.slice(0, 200)}
+${parent ? `父卡（anchor）：「${parent.title}」${parent.body ? `：${parent.body.slice(0, 300)}` : ""}\n` : ""}${siblings.length ? `已有兄弟卡：${JSON.stringify(siblings)}\n` : ""}原始要求（节选）：${base.slice(0, 300)}
 上一轮有 ${rejected.length} 张候选没有通过新知识检查，请只重写这几张（同样的 JSON 格式，id 保持不变），逐条改掉问题：
 ${rejected.map(({ card, reasons }) => `- ${card.id}「${card.title}」：${reasons.join("；")}`).join("\n")}
 已有卡片的关键论断如下，不要重复：${JSON.stringify(existing)}`;
@@ -257,7 +273,7 @@ export async function runGate(
   text: string,
   board: Board,
   anchorId: string | null,
-  ask: (mode: "expand" | "gate", prompt: string) => Promise<string>,
+  ask: (mode: "regen" | "gate", prompt: string) => Promise<string>,
   regenBase: string,
 ): Promise<GateOutcome & { rest: Record<string, unknown> }> {
   const { cards, rest } = parseCards(text);
@@ -277,11 +293,14 @@ export async function runGate(
     return rejected;
   };
   const rejected = pass(cards, false);
-  if (rejected.length) {
-    const prompt = regeneratePrompt(regenBase, rejected, board);
+  // Token budget: only spend a regenerate call when more than half the batch failed (or <2 survive).
+  const survivors = out.kept.length + border.length;
+  if (rejected.length && survivors >= 2 && rejected.length * 2 <= cards.length) out.dropped.push(...rejected);
+  else if (rejected.length) {
+    const prompt = regeneratePrompt(regenBase, rejected, board, anchorId);
     out.calls.regen++;
     try {
-      const again = await ask("expand", prompt);
+      const again = await ask("regen", prompt);
       out.tokens += roughTokens(prompt, again);
       const ids = new Set(rejected.map((r) => r.card.id));
       const redo = parseCards(again).cards.filter((c) => ids.has(c.id));

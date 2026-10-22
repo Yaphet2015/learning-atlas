@@ -39,7 +39,7 @@ import {
 import { reconcileCanvasResult } from "./model/canvas-result";
 import { CanvasRunProgress } from "./components/CanvasRunProgress";
 import { CanvasActivity } from "./components/CanvasActivity";
-import { contextForNote } from "./model/context";
+import { contextForNote, leanForGeneration } from "./model/context";
 import {
   HINT_DELAY,
   cachedHints,
@@ -63,7 +63,7 @@ import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
 import { CoveragePanel } from "./components/CoveragePanel";
 import { coverTarget } from "./model/plan";
 import { ANGLE_DEPTH, type DigAngle } from "./model/angles";
-import { expandPrompt } from "./model/expand";
+import { expandPrompt, hintCardNote } from "./model/expand";
 import { applyEnrichment, enrichPrompt } from "./model/enrich";
 import {
   confirmPlan,
@@ -305,7 +305,7 @@ export default function App() {
   const boardCache = useRef(new Map<string, Board>()),
     completionQueues = useRef(new Map<string, Promise<void>>());
   const askQuietRef = useRef<
-    (mode: "gate" | "mark" | "expand" | "probe", prompt: string, stickyId: string, context?: AIRequest["context"]) => Promise<string>
+    (mode: "gate" | "mark" | "expand" | "probe" | "regen", prompt: string, stickyId: string, context?: AIRequest["context"]) => Promise<string>
   >(() => Promise.reject(new Error("not ready")));
   const boardRef = useRef<Board | null>(null),
     saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
@@ -320,6 +320,8 @@ export default function App() {
           newIds?: string[];
           /** expand from a stuck stop (往下拆): the new cards are its split children. */
           split?: boolean;
+          /** A picked ghost hint: select the card it becomes. */
+          selectNew?: boolean;
           /** Quiet requests (gate judge, regenerate, check marking) resolve a promise. */
           resolve?: (text: string) => void;
           reject?: (error: Error) => void;
@@ -718,8 +720,7 @@ export default function App() {
                   update.text,
                   target,
                   anchorId,
-                  (m, prompt) =>
-                    askQuietRef.current(m, prompt, `${m}-gate-${anchorId}`, m === "expand" ? meta.request.context : undefined),
+                  (m, prompt) => askQuietRef.current(m, prompt, `${m}-gate-${anchorId}`),
                   meta.request.prompt,
                 ).finally(() => setMapBusy(false));
                 const tokens = outcome.tokens + roughTokens(meta.request.prompt, JSON.stringify(meta.request.context));
@@ -729,6 +730,10 @@ export default function App() {
                   );
                 const applied = applyGate(target, anchorId, outcome, mode, meta.request.context);
                 next = applied.board;
+                if (meta.selectNew && applied.added[0]) {
+                  const born = applied.added[0];
+                  setTimeout(() => setSelection({ kind: "node", id: born }), 0);
+                }
                 if (meta.split && applied.added.length) {
                   const born = new Set(applied.added);
                   next = { ...next, nodes: next.nodes.map((n) => (born.has(n.id) ? { ...n, meta: { ...n.meta, split: true } } : n)) };
@@ -880,8 +885,8 @@ export default function App() {
     [edit, openDrawer],
   );
   const sendAI = useCallback(
-    async (request: AIRequest, anchor?: string) => {
-      requestMeta.current.set(request.requestId, { request, anchor });
+    async (request: AIRequest, anchor?: string, extra?: { selectNew?: boolean; split?: boolean }) => {
+      requestMeta.current.set(request.requestId, { request, anchor, ...extra });
       setPending((p) => ({
         ...p,
         [`${request.boardId}/${request.stickyId}`]: { text: "", busy: true },
@@ -914,7 +919,7 @@ export default function App() {
   );
   /** A quiet request (no thread, no toast) whose reply text resolves the promise. */
   const askQuiet = useCallback(
-    (mode: "gate" | "mark" | "expand" | "probe", prompt: string, stickyId: string, context?: AIRequest["context"]) =>
+    (mode: "gate" | "mark" | "expand" | "probe" | "regen", prompt: string, stickyId: string, context?: AIRequest["context"]) =>
       new Promise<string>((resolve, reject) => {
         const b = boardRef.current;
         if (!b) return reject(new Error("no board"));
@@ -988,7 +993,7 @@ export default function App() {
     [settings.configured, selection, sendAI, edit],
   );
   const expand = useCallback(
-    (id: string, angle?: DigAngle, promptOverride?: string) => {
+    (id: string, angle?: DigAngle, promptOverride?: string, extra?: { selectNew?: boolean; split?: boolean }) => {
       if (locked()) return;
       if (
         [...requestMeta.current.values()].some(
@@ -1017,9 +1022,10 @@ export default function App() {
       const node = b.nodes.find((n) => n.id === id);
       if (!node) return;
       const virtual = newNote(b, { x: 0, y: 0 }, { kind: "node", id });
-      const context = contextForNote(
-        { ...b, notes: [...b.notes, virtual] },
-        virtual.id,
+      const context = leanForGeneration(
+        contextForNote({ ...b, notes: [...b.notes, virtual] }, virtual.id),
+        b,
+        id,
       );
       setMapBusy(true);
       void sendAI(
@@ -1032,6 +1038,7 @@ export default function App() {
           context,
         },
         id,
+        extra,
       );
     },
     [putBoard, settings.configured, sendAI, showToast],
@@ -1713,6 +1720,29 @@ export default function App() {
   // 欢迎回来: the bar greets once per board open when a stop is half done.
   const [welcome, setWelcome] = useState(true);
   useEffect(() => setWelcome(true), [board?.id]);
+  // The 下一步 bar floats over the canvas: pan so the highlighted card and its children sit above it.
+  useEffect(() => {
+    if (!nextId || drawer) return;
+    const t = setTimeout(() => {
+      const bar = document.querySelector(".next-step");
+      const b = boardRef.current;
+      if (!bar || !b) return;
+      const ids = [nextId, ...b.nodes.filter((c) => c.parentId === nextId).map((c) => c.id)];
+      const rects = ids
+        .map((id) => document.querySelector(`.react-flow__node[data-id="${id}"]`)?.getBoundingClientRect())
+        .filter((r): r is DOMRect => !!r);
+      if (!rects.length) return;
+      const bottom = Math.max(...rects.map((r) => r.bottom));
+      const top = Math.min(...rects.map((r) => r.top));
+      const limit = bar.getBoundingClientRect().top - 16;
+      // Never push the card itself off the top; a small overlap is better than losing the card.
+      const dy = Math.min(bottom - limit, top - 72);
+      if (dy <= 0) return;
+      const vp = flow.getViewport();
+      void flow.setViewport({ ...vp, y: vp.y - dy }, { duration: 350 });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [nextId, drawer, board?.id, flow]);
   const startNextRef = useRef(() => {});
   startNextRef.current = () => {
     setWelcome(false);
@@ -2035,6 +2065,14 @@ export default function App() {
       const b = boardRef.current;
       const node = b?.nodes.find((n) => n.id === from);
       if (!b || !node) return;
+      // AI maps: a chosen hint below or beside a card becomes one gated card (real body + check
+      // question), generated under the right parent. A broader parent above stays a plain title.
+      const anchor = side === "below" ? from : side === "right" ? node.parentId : null;
+      if (b.kind === "ai" && settings.configured && anchor) {
+        setPreview(null);
+        expand(anchor, angle, expandPrompt(b, anchor, angle) + hintCardNote(title), { selectNew: true });
+        return;
+      }
       const id = newId(
         node.parentId === null && side !== "below" ? "root" : "concept",
       );
@@ -2059,7 +2097,7 @@ export default function App() {
       });
       setSelection({ kind: "node", id });
     },
-    [edit],
+    [edit, expand, settings.configured],
   );
   const hoverAdd = useCallback((id: string | null) => {
     const b = boardRef.current;

@@ -198,3 +198,45 @@ export function contextForNote(
     review: cardReview(board, reviewFocus, note.excludedRefs),
   });
 }
+
+/**
+ * Card generation (map / expand) sends a leaner bundle: full bodies only for the anchor and its path;
+ * siblings and the anchor's subtree keep an 80-char gist; other branches in the review keep their titles
+ * (bodyExcluded). Node references that the review already carries are not sent twice.
+ */
+/** Siblings and the anchor's own subtree keep a gist: enough to avoid repeats, not the full prose. */
+const gist = (body: string) => (body.length > 80 ? `${body.slice(0, 80)}…` : body);
+
+export function leanForGeneration(context: ContextBundle, board: Board, anchorId: string): ContextBundle {
+  const review = context.review;
+  if (!review || review.scope === "all") return context;
+  const parentOf = new Map(board.nodes.map((n) => [n.id, n.parentId]));
+  const anchorParent = parentOf.get(anchorId) ?? null;
+  const keep = new Set<string>([anchorId]);
+  for (let up = anchorParent; up; up = parentOf.get(up) ?? null) keep.add(up);
+  const near = new Set<string>();
+  for (const n of board.nodes) if (n.parentId === anchorParent && anchorParent !== null && n.id !== anchorId) near.add(n.id);
+  const under = (id: string): boolean => {
+    for (let up: string | null | undefined = id; up; up = parentOf.get(up)) if (up === anchorId) return true;
+    return false;
+  };
+  const nodes = review.nodes.map((n) =>
+    keep.has(n.id) || !n.body
+      ? n
+      : near.has(n.id) || under(n.id)
+        ? { ...n, body: gist(n.body) }
+        : { ...n, body: "", bodyExcluded: true, visual: undefined },
+  );
+  const inReview = new Set(review.nodes.map((n) => n.id));
+  const references = context.references.filter((r) => r.kind !== "node" || !inReview.has(r.id));
+  // The summary repeats the references verbatim; the outline only adds cards outside the review.
+  const { structure, ...rest } = context;
+  const outlineAdds = board.nodes.some((n) => !inReview.has(n.id));
+  return {
+    ...rest,
+    ...(structure && outlineAdds ? { structure } : {}),
+    references,
+    summary: references.map((r) => `[${r.kind}:${r.id}] ${r.title}`).join("\n"),
+    review: { ...review, nodes: nodes.map(({ visual, ...rest }) => (visual ? { ...rest, visual } : rest)) },
+  };
+}

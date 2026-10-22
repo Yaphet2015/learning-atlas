@@ -608,6 +608,7 @@ export const aiRequestSchema = z
       "gate",
       "mark",
       "probe",
+      "regen",
     ]),
   })
   .strict();

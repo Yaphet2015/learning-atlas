@@ -17,7 +17,7 @@ import {
   tutorInstructions,
 } from "../electron/prompts";
 import { buildMapFromAI, createEmptyBoard, newNote } from "../src/model/boards";
-import { contextForNote } from "../src/model/context";
+import { contextForNote, leanForGeneration } from "../src/model/context";
 import { answerProbe, gradePrompt, ladderPrompt, localGrade, newProbe, nextProbe, parseGrade, parseLadder } from "../src/model/probe";
 import { analogyPrompt, parseAnalogy } from "../src/model/stuck";
 import { parseWrap, wrapPrompt } from "../src/model/wrap";
@@ -117,6 +117,11 @@ async function chat(
             ? { temperature: opts.temperature }
             : {}),
           ...(opts.effort ? { reasoning_effort: opts.effort } : {}),
+          // Same as the app: DeepSeek V4 runs structured calls with thinking off unless asked
+          // (EVAL_THINKING=on reproduces the old default-thinking baseline).
+          ...(/deepseek/i.test(BASE) && process.env.EVAL_THINKING !== "on"
+            ? { thinking: { type: opts.effort ? "enabled" : "disabled" } }
+            : {}),
           messages: [{ role: "system", content: system }, ...turns],
         }),
         signal: abort.signal,
@@ -604,11 +609,16 @@ async function gateSample(t: EvalTopic, out: string) {
   const expandOnce = async (anchorId: string, mode: "map" | "expand", prompt: string) => {
     const before = usageNow();
     const virtual = newNote(board, { x: 0, y: 0 }, { kind: "node", id: anchorId });
-    const context = contextForNote({ ...board, notes: [...board.notes, virtual] }, virtual.id);
+    const context = leanForGeneration(contextForNote({ ...board, notes: [...board.notes, virtual] }, virtual.id), board, anchorId);
     const system = (m: string) => `${tutorInstructions(m as any)}\n\n${renderScopedContext(context)}`;
+    if (process.env.EVAL_DEBUG) {
+      const { topic, structure, review, plan, ...sel } = context as any;
+      console.error("sizes", mode, JSON.stringify({ tutor: tutorInstructions(mode).length, structure: structure?.length ?? 0, review: JSON.stringify(review ?? "").length, selected: JSON.stringify(sel).length, prompt: prompt.length }));
+    }
     const first = await chat(system(mode), prompt, { temperature: modeTemperature(mode) });
+    const firstTokens = { prompt: totals.prompt - before.prompt, completion: totals.completion - before.completion };
     const outcome = await runGate(first.content, board, anchorId, async (m, p) =>
-      (await chat(m === "gate" ? tutorInstructions("gate") : system("expand"), p, { temperature: modeTemperature(m) })).content, prompt);
+      (await chat(tutorInstructions(m), p, { temperature: modeTemperature(m) })).content, prompt);
     const applied = applyGate(board, anchorId, outcome, mode, context);
     board = applied.board;
     const after = usageNow();
@@ -620,6 +630,7 @@ async function gateSample(t: EvalTopic, out: string) {
       dropped: outcome.dropped.map((d) => ({ title: d.card.title, reasons: d.reasons })),
       calls: outcome.calls,
       roughTokens: outcome.tokens,
+      firstCall: firstTokens,
       tokens: { prompt: after.prompt - before.prompt, completion: after.completion - before.completion },
     });
     return applied.added;

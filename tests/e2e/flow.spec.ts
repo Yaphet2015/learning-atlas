@@ -134,7 +134,7 @@ test("the gate rejects a card restating its parent, regenerates once, then drops
   await page.getByRole("button", { name: "再看一层", exact: true }).click();
   await expect(page.getByText(/这一块暂时挖不出新东西了/)).toBeVisible();
   await expect(page.locator(".react-flow__node")).toHaveCount(before);
-  const regen = (await gates(page)).filter((r) => r.mode === "expand");
+  const regen = (await gates(page)).filter((r) => r.mode === "regen");
   expect(regen).toHaveLength(1);
   expect(regen[0].prompt).toContain("没有通过新知识检查");
 });

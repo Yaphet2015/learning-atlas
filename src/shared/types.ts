@@ -342,7 +342,8 @@ export interface AIRequest {
     | "plan"
     | "gate"
     | "mark"
-    | "probe";
+    | "probe"
+    | "regen";
 }
 export interface AIUpdate {
   boardId: string;

@@ -3,7 +3,7 @@ import { buildMapFromAI, newId } from "./boards";
 import type { GateOutcome, RawCard } from "./novelty";
 
 /** Keys the board map schema accepts; gate and check fields are taken out before it. */
-const MAP_KEYS = ["id", "title", "body", "parent", "emoji", "color", "visual", "block"];
+const MAP_KEYS = ["id", "title", "body", "parent", "emoji", "color", "visual", "block", "depthType"];
 const clean = (c: RawCard) =>
   Object.fromEntries(MAP_KEYS.filter((k) => c[k] !== undefined).map((k) => [k, c[k]]));
 

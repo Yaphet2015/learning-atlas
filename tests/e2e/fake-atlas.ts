@@ -123,7 +123,24 @@ export async function installFakeAtlas(
             })),
           });
         }
-        if (request.mode === "expand")
+        const picked = /学习者从提示里选了这个方向：「([^」]+)」/.exec(request.prompt);
+        if (request.mode === "expand" && picked && !(window as any).__atlasExpansionAnswers?.length)
+          return gateFill(
+            JSON.stringify({
+              nodes: [
+                {
+                  id: "hint-card",
+                  parent: "anchor",
+                  title: picked[1],
+                  body: `${picked[1]}：比如在一个示例情况里，条件一变，结果就跟着变，所以判断前先看清条件。`,
+                  substance: [{ kind: "example", text: "比如在一个示例情况里，条件一变，结果就跟着变", isExample: true }],
+                  ...(/depthType 写 "(\w+)"/.exec(request.prompt) ? { depthType: /depthType 写 "(\w+)"/.exec(request.prompt)![1] } : {}),
+                },
+              ],
+              relations: [],
+            }),
+          );
+                if (request.mode === "expand" || request.mode === "regen")
           return gateFill(
             (window as any).__atlasExpansionAnswers?.shift() ??
             JSON.stringify({ nodes: [], relations: [] })
@@ -393,7 +410,7 @@ export async function installFakeAtlas(
             throw new Error("整理请求失败，请重试。");
           (request.mode === "hint"
             ? hints
-            : request.mode === "gate" || request.mode === "mark" || request.mode === "probe" || String(request.stickyId).includes("-gate-")
+            : request.mode === "gate" || request.mode === "mark" || request.mode === "probe" || request.mode === "regen" || String(request.stickyId).includes("-gate-")
               ? gates
             : request.mode === "enrich"
               ? enriches
