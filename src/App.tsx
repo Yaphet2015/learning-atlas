@@ -60,6 +60,8 @@ import {
 import { tip, TooltipLayer } from "./components/Tooltip";
 import { latestNoteOn, listSessions } from "./model/sessions";
 import { WINDOW_CHROME_CLASSES, windowChromeClasses } from "./model/platform";
+import { CoveragePanel } from "./components/CoveragePanel";
+import { coverTarget } from "./model/plan";
 import { ANGLE_DEPTH, type DigAngle } from "./model/angles";
 import { expandPrompt } from "./model/expand";
 import { applyEnrichment, enrichPrompt } from "./model/enrich";
@@ -941,6 +943,14 @@ export default function App() {
       );
     },
     [putBoard, settings.configured, sendAI, showToast],
+  );
+  const coverBlock = useCallback(
+    (blockId: string) => {
+      const b = boardRef.current;
+      const target = b && coverTarget(b, blockId);
+      if (target) expand(target.anchorId, undefined, target.prompt);
+    },
+    [expand],
   );
   const organizeBoard = useCallback(() => {
     const current = boardRef.current;
@@ -2338,6 +2348,7 @@ export default function App() {
               onNewSession={() => addNote(undefined, { fresh: true })}
             />
             <Progress nodes={board.nodes} />
+            <CoveragePanel board={board} busy={mapBusy} onCover={coverBlock} />
             <Dock
               tool={tool}
               setTool={setTool}
