@@ -1002,7 +1002,9 @@ export default function App() {
           (meta) =>
             meta.request.mode !== "answer" &&
             meta.request.mode !== "enrich" &&
-            meta.request.mode !== "plan",
+            meta.request.mode !== "plan" &&
+            // Background ghost-hint fetches must not swallow a click on 再看一层.
+            meta.request.mode !== "hint",
         )
       )
         return;
