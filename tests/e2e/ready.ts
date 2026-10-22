@@ -7,6 +7,29 @@ import type { Page } from "@playwright/test";
  */
 export async function waitForApp(page: Page) {
   await page.locator("html[data-app-ready]").waitFor({ state: "attached" });
+  await viewportSettled(page);
+}
+/**
+ * The next-step bar can auto-pan the canvas just after load; a hover made before it lands misses
+ * the card (seen on the macOS CI runner). Wait until the viewport transform has held for 500ms.
+ */
+export async function viewportSettled(page: Page) {
+  await page
+    .waitForFunction(
+      () => {
+        const w = window as any;
+        const t = document.querySelector(".react-flow__viewport")?.getAttribute("style") ?? "";
+        const now = performance.now();
+        if (w.__vpLast !== t) {
+          w.__vpLast = t;
+          w.__vpSince = now;
+        }
+        return now - w.__vpSince >= 500;
+      },
+      undefined,
+      { polling: 100, timeout: 3000 },
+    )
+    .catch(() => undefined);
 }
 export async function gotoApp(page: Page, path = "/") {
   await page.goto(path);
