@@ -405,6 +405,10 @@ export const boardSchema = z
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
     archivedAt: timestampSchema.optional(),
+    progress: z
+      .object({ sealed: z.number().int().min(0), total: z.number().int().min(0), done: z.boolean() })
+      .strict()
+      .optional(),
     canvasVersion: idSchema.optional(),
     appliedCanvasRuns: z.array(idSchema).max(1000).optional(),
     cardArchives: z.array(canvasArchiveSchema).max(1000).optional(),

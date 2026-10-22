@@ -36,13 +36,13 @@ export function CanvasActivity({
         className="chrome canvas-activity"
         role="dialog"
         aria-modal="true"
-        aria-label="画布记录"
+        aria-label="整理记录与恢复"
       >
         <header>
-          <h2>画布记录</h2>
+          <h2>整理记录与恢复</h2>
           <button
             className="btn sm"
-            aria-label="关闭画布记录"
+            aria-label="关闭整理记录与恢复"
             onClick={onClose}
           >
             <X size={16} />

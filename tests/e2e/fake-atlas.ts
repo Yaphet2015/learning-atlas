@@ -213,6 +213,7 @@ export async function installFakeAtlas(
       };
       const canvasListeners = new Set<(event: any) => void>();
       const canvasRuns = new Map<string, any>();
+      for (const run of (window as any).__atlasSeedRuns ?? []) canvasRuns.set(run.id, run);
       const emitCanvas = (run: any) => {
         canvasRuns.set(run.id, run);
         canvasListeners.forEach((callback) =>
@@ -260,13 +261,19 @@ export async function installFakeAtlas(
         onBeforeClose: () => () => {},
         listBoards: async () =>
           [...boards.values()].map(
-            ({ id, title, kind, updatedAt, archivedAt }) => ({
-              id,
-              title,
-              kind,
-              updatedAt,
-              ...(archivedAt ? { archivedAt } : {}),
-            }),
+            ({ id, title, kind, updatedAt, archivedAt, progress, nodes, wrap }) => {
+              // Mirrors model/progress.ts (stored on save, backfilled on list), as the real store does.
+              const cards = nodes.filter((n: any) => n.parentId !== null);
+              const sealed = cards.filter((n: any) => n.status === "explained").length;
+              return {
+                id,
+                title,
+                kind,
+                updatedAt,
+                ...(archivedAt ? { archivedAt } : {}),
+                ...(progress ?? { sealed, total: cards.length, done: !!wrap?.done || (cards.length > 0 && sealed === cards.length) }),
+              };
+            },
           ),
         loadBoard: async (id: string) => boards.get(id) ?? null,
         saveBoard: async (board: any) => {

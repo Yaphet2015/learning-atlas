@@ -10,6 +10,7 @@ import {
   transferMarkdown,
 } from "./shared/transfer";
 import { downloadFile } from "./export-file";
+import { boardProgress, withProgress } from "./model/progress";
 const key = PREVIEW_KEY;
 const historiesKey = "studyboard-preview-histories-v1";
 function readHistories(): Record<string, Record<string, ChatMessage[]>> {
@@ -35,18 +36,20 @@ const preview: AtlasAPI = {
     return () => {};
   },
   async listBoards() {
-    return read().map(({ id, title, kind, updatedAt, archivedAt }) => ({
-      id,
-      title,
-      kind,
-      updatedAt,
-      ...(archivedAt ? { archivedAt } : {}),
+    return read().map((b) => ({
+      id: b.id,
+      title: b.title,
+      kind: b.kind,
+      updatedAt: b.updatedAt,
+      ...(b.archivedAt ? { archivedAt: b.archivedAt } : {}),
+      ...(b.progress ?? boardProgress(b)),
     }));
   },
   async loadBoard(id) {
     return read().find((b) => b.id === id) ?? null;
   },
-  async saveBoard(board) {
+  async saveBoard(input) {
+    const board = withProgress(input);
     const all = read();
     const index = all.findIndex((b) => b.id === board.id);
     if (index < 0) all.push(board);

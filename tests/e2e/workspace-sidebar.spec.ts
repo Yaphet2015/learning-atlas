@@ -90,13 +90,13 @@ test("collapse and expand persist, and both sidebars leave the canvas controls c
         dockInside: dock.left >= flow.left && dock.right <= flow.right,
       };
     });
-  await expect(panel).toHaveCSS("width", "244px");
+  await expect(panel).toHaveCSS("width", "256px");
   await expect
     .poll(() =>
       panel.locator("nav").evaluate((el) => el.scrollWidth <= el.clientWidth),
     )
     .toBe(true);
-  await expect.poll(async () => (await geometry()).canvasLeft).toBe(244);
+  await expect.poll(async () => (await geometry()).canvasLeft).toBe(256);
   const expandedWidth = (await canvas.boundingBox())!.width;
   await panel.getByRole("button", { name: "收起左侧边栏" }).click();
   await expect(panel).toHaveCSS("width", "56px");
@@ -109,7 +109,7 @@ test("collapse and expand persist, and both sidebars leave the canvas controls c
   await reloadApp(page);
   await expect(panel).toHaveCSS("width", "56px");
   await panel.getByRole("button", { name: "展开左侧边栏" }).click();
-  await expect(panel).toHaveCSS("width", "244px");
+  await expect(panel).toHaveCSS("width", "256px");
 
   await page.setViewportSize({ width: 1060, height: 780 });
   await card(page, "topic-ci").click();
@@ -206,9 +206,9 @@ test("dragging the sidebar resizes the canvas, clamps width and remembers it aft
   }
 
   await dragBy(80);
-  await expect(panel).toHaveCSS("width", "324px");
+  await expect(panel).toHaveCSS("width", "336px");
   await expect(panel).toHaveCSS("transition-duration", "0s");
-  expect((await page.locator(".react-flow").boundingBox())!.x).toBe(324);
+  expect((await page.locator(".react-flow").boundingBox())!.x).toBe(336);
   const flow = (await page.locator(".react-flow").boundingBox())!;
   const dock = (await page.locator(".dock").boundingBox())!;
   expect(
@@ -220,15 +220,15 @@ test("dragging the sidebar resizes the canvas, clamps width and remembers it aft
     .poll(() =>
       page.evaluate(() => localStorage.getItem("studyboard-sidebar-width")),
     )
-    .toBe("324");
+    .toBe("336");
   await reloadApp(page);
-  await expect(panel).toHaveCSS("width", "324px");
+  await expect(panel).toHaveCSS("width", "336px");
   await panel.getByRole("button", { name: "收起左侧边栏" }).click();
   await expect(panel).toHaveCSS("width", "56px");
   await expect(handle).toHaveCount(0);
   await expect(panel.locator(".workspace-board").first()).toContainText("重");
   await panel.getByRole("button", { name: "展开左侧边栏" }).click();
-  await expect(panel).toHaveCSS("width", "324px");
+  await expect(panel).toHaveCSS("width", "336px");
 
   await dragBy(500);
   await expect(panel).toHaveCSS("width", "400px");
@@ -244,7 +244,7 @@ test("dragging the sidebar resizes the canvas, clamps width and remembers it aft
   // Let the width transition land before double-clicking the moving handle (macOS CI flake).
   await expect(panel).toHaveCSS("width", "400px");
   await handle.dblclick();
-  await expect(panel).toHaveCSS("width", "244px");
+  await expect(panel).toHaveCSS("width", "256px");
 });
 
 test("collapsed sidebar entries center their visible content", async ({
@@ -289,7 +289,7 @@ test("the application sidebar fills the window and the canvas starts at its divi
   for (const collapsed of [false, true]) {
     if (collapsed)
       await panel.getByRole("button", { name: "收起左侧边栏" }).click();
-    await expect(panel).toHaveCSS("width", collapsed ? "56px" : "244px");
+    await expect(panel).toHaveCSS("width", collapsed ? "56px" : "256px");
     const box = (await panel.boundingBox())!;
     expect([box.x, box.y, box.height]).toEqual([
       0,
@@ -352,10 +352,10 @@ test("archiving the current canvas switches away and archiving the last creates 
   await entries.click({ button: "right" });
   await page.getByRole("menuitem", { name: "归档", exact: true }).click();
   await expect(entries).toHaveCount(1);
-  await expect(entries).toHaveText("新的知识主题");
+  await expect(entries.locator(".workspace-board-title")).toHaveText("新的知识主题");
   await reloadApp(page);
   await expect(entries).toHaveCount(1);
-  await expect(entries).toHaveText("新的知识主题");
+  await expect(entries.locator(".workspace-board-title")).toHaveText("新的知识主题");
   await sidebar(page)
     .getByRole("button", { name: "设置", exact: true })
     .click();
@@ -387,7 +387,7 @@ test("archive menu dismisses with Escape and failed saves leave the canvas activ
   await page.getByRole("menuitem", { name: "归档", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("归档保存失败");
   await expect(sidebar(page).locator(".workspace-board")).toHaveCount(2);
-  await expect(current).toHaveText("重疾险条款");
+  await expect(current.locator(".workspace-board-title")).toHaveText("重疾险条款");
   await reloadApp(page);
   await expect(sidebar(page).locator(".workspace-board")).toHaveCount(2);
 });
