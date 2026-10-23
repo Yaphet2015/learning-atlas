@@ -24,7 +24,7 @@ const node = (
 
 function board(extra: ConceptNode[] = []): Board {
   return {
-    version: 2,
+    version: 3,
     id: "board-s",
     title: "重疾险",
     topic: "重疾险有哪些重要条款",

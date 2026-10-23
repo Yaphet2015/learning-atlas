@@ -59,7 +59,9 @@ for (const withVisual of [false, true]) {
     await thread.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
-    await expect(page.locator(".drawer .my-note")).toBeInViewport();
+    await expect.poll(() => thread.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    // The panel has no 我的笔记 field: the conversation follows the card directly.
+    await expect(page.locator(".drawer .my-note")).toHaveCount(0);
     await card.click();
     await expect.poll(() => thread.evaluate((el) => el.scrollTop)).toBe(0);
     // The card also exposes a visible reading entry, without a keyboard shortcut.
@@ -291,14 +293,10 @@ test("参考 keeps a trailing +N, and 我的笔记 is one quiet row when empty",
   // The count sits after the names and inside the row.
   expect(more!.x).toBeGreaterThanOrEqual(items!.x + items!.width - 1);
   expect(more!.x + more!.width).toBeLessThanOrEqual(box!.x + box!.width);
-  const note = drawer.locator(".my-note");
-  await expect(note).toContainText("我的笔记");
-  const h = (await note.boundingBox())!.height;
-  expect(h).toBeLessThan(36);
-  const border = await note.evaluate(
-    (e) => getComputedStyle(e).borderLeftWidth,
-  );
-  expect(border).toBe("0px");
+  // 我的笔记 is gone; nothing takes its place.
+  await expect(drawer.locator(".my-note")).toHaveCount(0);
+  await expect(drawer.getByLabel("批注内容")).toHaveCount(0);
+  await expect(drawer).not.toContainText("我的笔记");
 });
 
 test("the root's + stays off the connector origin unless hovered", async ({
@@ -316,4 +314,50 @@ test("the root's + stays off the connector origin unless hovered", async ({
       return plus.evaluate((e) => getComputedStyle(e).opacity);
     })
     .toBe("1");
+});
+
+test("the 带上 chip ellipsizes on one line with the full list in its tooltip", async ({
+  page,
+}) => {
+  const drawer = await open(page, insuranceBoard(true));
+  const text = drawer.locator(".cchip .cchip-text");
+  await expect(text).toHaveCSS("text-overflow", "ellipsis");
+  await expect(text).toHaveCSS("white-space", "nowrap");
+  const full = (await text.textContent())!.trim();
+  await expect(drawer.locator(".cchip")).toHaveAttribute(
+    "data-tip",
+    new RegExp(`^${full.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+  );
+  const h = (await text.boundingBox())!.height;
+  expect(h).toBeLessThan(24);
+});
+
+test("an empty conversation shows one faint invitation that goes once a message exists", async ({
+  page,
+}) => {
+  const board = insuranceBoard(true);
+  board.notes = [
+    {
+      id: "note-asked",
+      title: "",
+      text: "",
+      position: { x: 0, y: 0 },
+      attachedTo: { kind: "node", id: "c-how" },
+      messages: [
+        { id: "m1", role: "user", text: "等待期多长？", createdAt: board.updatedAt },
+      ],
+    },
+  ];
+  await page.addInitScript(
+    (value) => localStorage.setItem("studyboard-preview-boards-v1", value),
+    JSON.stringify([board]),
+  );
+  await gotoApp(page);
+  await page.locator('.react-flow__node[data-id="c-what"]').click();
+  const empty = page.locator(".drawer .thread-empty");
+  await expect(empty).toHaveText("对这张卡有疑问？直接问");
+  await expect(empty).toHaveCSS("text-align", "center");
+  await page.locator('.react-flow__node[data-id="c-how"]').click();
+  await expect(page.locator(".drawer .msg")).toHaveCount(1);
+  await expect(page.locator(".drawer .thread-empty")).toHaveCount(0);
 });

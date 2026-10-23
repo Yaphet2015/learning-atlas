@@ -61,7 +61,7 @@ describe("migrateV1toV2", () => {
       ),
     );
     expect(boardSchema.safeParse(board).success).toBe(true);
-    expect(board.version).toBe(2);
+    expect(board.version).toBe(3);
     const by = Object.fromEntries(board.nodes.map((n) => [n.id, n]));
     expect(by.root).toMatchObject({ parentId: null, order: 0 });
     // siblings ordered by old position.x

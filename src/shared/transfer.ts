@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Board, ChatMessage } from "./types.js";
 import {
+  safeParseBoard,
   boardSchema,
   chatMessageSchema,
   idSchema,
@@ -83,6 +84,11 @@ export function parseBoardTransfer(text: string): BoardTransfer {
     input = JSON.parse(text);
   } catch {
     throw new Error("无法读取数据文件：JSON 格式无效。");
+  }
+  // Older exports carry an older board version; upgrade it like a board from disk.
+  if (input && typeof input === "object" && "board" in input) {
+    const board = safeParseBoard((input as { board: unknown }).board);
+    if (board.success) input = { ...input, board: board.data };
   }
   const result = boardTransferSchema.safeParse(input);
   if (!result.success)

@@ -19,7 +19,7 @@ const node = (id: string, title: string, parentId: string | null, order: number,
   ...extra,
 });
 const board = (nodes: ConceptNode[], extra: Partial<Board> = {}): Board => ({
-  version: 2,
+  version: 3,
   id: "board-f",
   title: "重疾险",
   topic: "重疾险有哪些重要条款？",

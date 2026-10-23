@@ -97,7 +97,7 @@ export function insuranceBoard(withLevel = true) {
       ]
     : [];
   return {
-    version: 2,
+    version: 3,
     id: "board-ci",
     title: "重疾险有哪些比较重要的条款（教会我 12 条及以上）",
     topic: "重疾险有哪些比较重要的条款（教会我 12 条及以上）",
