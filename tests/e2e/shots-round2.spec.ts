@@ -63,24 +63,6 @@ for (const mode of ["light", "dark"] as const) {
     await page.screenshot({ path: `${dir}/multiselect-asked-${mode}.png` });
   });
 
-  test(`context picker · ${mode}`, async ({ page }) => {
-    await open(page, mode);
-    await card(page, "c-how").click();
-    await page.keyboard.press("/");
-    const drawer = page.locator(".drawer");
-    await drawer.locator(".ctx").click();
-    await drawer.getByRole("button", { name: "添加卡片" }).click();
-    const picker = drawer.getByRole("group", { name: "添加卡片" });
-    await picker
-      .locator("label", { hasText: "等待期是什么" })
-      .getByRole("checkbox")
-      .check();
-    await picker.getByLabel("搜索卡片").fill("赔");
-    await page.waitForTimeout(400);
-    await drawer.screenshot({ path: `${dir}/picker-${mode}.png` });
-    await page.screenshot({ path: `${dir}/picker-full-${mode}.png` });
-  });
-
   test(`session list · ${mode}`, async ({ page }) => {
     await open(page, mode);
     const drawer = page.locator(".drawer");

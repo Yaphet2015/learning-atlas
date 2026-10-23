@@ -179,28 +179,13 @@ test("the ⋯ menu deletes the note without a confirm, and ⌘Z brings it back",
   await expect(page.locator(".drawer .msg.assistant")).toHaveCount(1);
 });
 
-test("参考 is one line that opens into a checklist; unticked items are remembered", async ({
+test("no 参考 row and no 带上 chip: chat turns send no references", async ({
   page,
 }) => {
   const drawer = await open(page, insuranceBoard(true));
-  const ctx = drawer.locator(".ctx");
-  await expect(ctx).toContainText("起点问题");
-  await expect(drawer.locator(".ctx-list")).toHaveCount(0);
-  await ctx.click();
-  const list = drawer.locator(".ctx-list");
-  await expect(list.getByRole("checkbox").first()).toBeDisabled();
-  const item = list.getByRole("checkbox", { name: /保什么/ });
-  await item.uncheck();
-  await expect(drawer.locator(".cchip")).toContainText("第一层");
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          JSON.parse(localStorage.getItem("studyboard-preview-boards-v1")!)[0]
-            .notes[0].excludedRefs,
-      ),
-    )
-    .toEqual(["node:c-what"]);
+  await expect(drawer.locator(".ctx")).toHaveCount(0);
+  await expect(drawer.locator(".cchip")).toHaveCount(0);
+  await expect(drawer).not.toContainText("带上：");
 });
 
 test("the composer shows its state: empty, typing", async ({ page }) => {
@@ -279,21 +264,8 @@ test("laying the outline flips it to the done state right away", async ({
   await expect(drawer.locator(".lay.done")).toContainText("在画布上定位");
 });
 
-test("参考 keeps a trailing +N, and 我的笔记 is one quiet row when empty", async ({
-  page,
-}) => {
+test("我的笔记 is gone; nothing takes its place", async ({ page }) => {
   const drawer = await open(page, insuranceBoard(true));
-  const ctx = drawer.locator(".ctx");
-  await expect(ctx.locator(".more")).toHaveText(/^\+\d+$/);
-  const [items, more, box] = await Promise.all([
-    ctx.locator(".items").boundingBox(),
-    ctx.locator(".more").boundingBox(),
-    ctx.boundingBox(),
-  ]);
-  // The count sits after the names and inside the row.
-  expect(more!.x).toBeGreaterThanOrEqual(items!.x + items!.width - 1);
-  expect(more!.x + more!.width).toBeLessThanOrEqual(box!.x + box!.width);
-  // 我的笔记 is gone; nothing takes its place.
   await expect(drawer.locator(".my-note")).toHaveCount(0);
   await expect(drawer.getByLabel("批注内容")).toHaveCount(0);
   await expect(drawer).not.toContainText("我的笔记");
@@ -314,22 +286,6 @@ test("the root's + stays off the connector origin unless hovered", async ({
       return plus.evaluate((e) => getComputedStyle(e).opacity);
     })
     .toBe("1");
-});
-
-test("the 带上 chip ellipsizes on one line with the full list in its tooltip", async ({
-  page,
-}) => {
-  const drawer = await open(page, insuranceBoard(true));
-  const text = drawer.locator(".cchip .cchip-text");
-  await expect(text).toHaveCSS("text-overflow", "ellipsis");
-  await expect(text).toHaveCSS("white-space", "nowrap");
-  const full = (await text.textContent())!.trim();
-  await expect(drawer.locator(".cchip")).toHaveAttribute(
-    "data-tip",
-    new RegExp(`^${full.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
-  );
-  const h = (await text.boundingBox())!.height;
-  expect(h).toBeLessThan(24);
 });
 
 test("an empty conversation shows one faint invitation that goes once a message exists", async ({

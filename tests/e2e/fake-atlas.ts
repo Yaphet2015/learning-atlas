@@ -65,6 +65,12 @@ export async function installFakeAtlas(
       const plans: any[] = [];
       (window as any).__atlasPlans = plans;
       const answer = (request: any) => {
+        // The post-probe chat: queued replies (with an optional ```json proposal tail), else a plain answer.
+        if (request.mode === "chat")
+          return (
+            (window as any).__atlasChatAnswers?.shift() ??
+            "等待期是合同生效后的一段观察时间，这段时间里首次确诊的重疾通常不赔，只退保费。"
+          );
         if (request.mode === "plan")
           return (
             (window as any).__atlasPlanAnswers?.shift() ??
@@ -461,7 +467,7 @@ export async function installFakeAtlas(
             );
           // Tests that look at the streaming state set __atlasSlow: think, stream half, finish.
           const slow = (window as any).__atlasSlow as number | undefined;
-          if (slow && request.mode === "answer") {
+          if (slow && (request.mode === "answer" || request.mode === "chat")) {
             const full = answer(request);
             setTimeout(() => emit("", "streaming"), 20);
             setTimeout(

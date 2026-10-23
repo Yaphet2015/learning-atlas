@@ -5150,3 +5150,105 @@ h2.workspace-section span {
 .probe-known { padding-left: 18px; font-size: 13.5px; color: var(--ink-2); line-height: 1.8; }
 .probe-start { border: 1.5px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
 .probe-start .no { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; margin-right: 6px; }
+
+/* ── Post-probe chat (v2): route preview on the canvas, inline diff and buttons in the drawer ── */
+.card.pv-replace {
+  outline: 1.5px dashed var(--accent);
+  outline-offset: 4px;
+}
+.card .pv-tag {
+  position: absolute;
+  right: 12px;
+  top: -20px;
+  font: 400 11.5px var(--kai);
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.card.pv-remove h3 {
+  text-decoration: line-through;
+  color: var(--ink-3);
+}
+.card.pv-remove {
+  opacity: 0.7;
+}
+.card.route-flash {
+  box-shadow: var(--ring);
+  transition: box-shadow 0.3s ease;
+}
+.drawer .msg.chat .route-diff {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--card);
+}
+.route-diff .rd-k {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.route-diff .rd-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.route-diff .rd-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.route-diff .rd-old {
+  color: var(--ink-3);
+}
+.route-diff .rd-new {
+  color: var(--accent);
+}
+.route-diff .rd-note {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.route-diff .rd-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.route-diff .rd-state {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.route-diff.stale {
+  opacity: 0.55;
+}
+.route-diff.stale .rd-new {
+  color: var(--ink-3);
+}
+.drawer .msg.chat .chat-start {
+  margin-top: 10px;
+  max-width: 100%;
+}
+.drawer .msg.chat .chat-done,
+.drawer .msg.chat .chat-saved {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.drawer .msg.chat .chat-acts {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.drawer .msg.chat .chat-save {
+  color: var(--accent);
+}
+.drawer .msg.chat .route-diff .btn.primary,
+.drawer .msg.chat .chat-start {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}

@@ -26,6 +26,7 @@ import type {
   Selection,
   StickyNote,
   Understanding,
+  ChatProposal,
 } from "./shared/types";
 import { api, isDesktop } from "./api";
 import {
@@ -131,7 +132,8 @@ import {
 import { Drawer } from "./components/Drawer";
 import { NextStepBar } from "./components/NextStep";
 import { nextStep } from "./model/next-step";
-import { defaultRoute, stationOf } from "./model/route";
+import { applyRouteOps, defaultRoute, previewRoute, routeOf, stationOf } from "./model/route";
+import { chatRequest, displayChat, expireProposals, isGoAhead, parseChatReply, pendingProposal } from "./model/chat";
 import { runGate, roughTokens } from "./model/novelty";
 import { applyGate } from "./model/gate";
 import { answerProbe, applyExpand, applyFrontier, applyRefine, bounds as probeBounds, cacheChain, cachedChain, chainKey, chainPrompt, failRecheck, gradePrompt, localGrade, newProbe, nextStep as probeStep, parseGrade, parsePoints, probeLearner, refinePrompt, restartProbe, skipProbe } from "./model/probe";
@@ -306,6 +308,14 @@ export default function App() {
   const locked = () => editingLocked.current || canvasWriteLocked.current;
   const boardCache = useRef(new Map<string, Board>()),
     completionQueues = useRef(new Map<string, Promise<void>>());
+  /** The chat turn in flight per note (its own stickyId), so 停止 can stop it. */
+  const chatActive = useRef(new Map<string, string>());
+  /** Stops a just-applied route edit changed: highlighted for 1.2s. */
+  const [flash, setFlash] = useState<Set<string>>(() => new Set());
+  /** Act on a chat proposal: 应用 / 撤销 / 取消 / 开始第 N 站. Set once the handlers exist. */
+  const proposalActRef = useRef<(noteId: string, messageId: string, act: "apply" | "undo" | "cancel" | "start") => void>(() => {});
+  /** Route snapshots from before each applied proposal, for its 撤销 (this session only). */
+  const routeSnapshots = useRef(new Map<string, Pick<Board, "nodes" | "route" | "cardArchives">>());
   const askQuietRef = useRef<
     (mode: "gate" | "mark" | "expand" | "probe" | "regen", prompt: string, stickyId: string, context?: AIRequest["context"]) => Promise<string>
   >(() => Promise.reject(new Error("not ready")));
@@ -324,6 +334,8 @@ export default function App() {
           split?: boolean;
           /** A picked ghost hint: select the card it becomes. */
           selectNew?: boolean;
+          /** chat: the note whose thread this turn belongs to (each turn has its own stickyId). */
+          noteId?: string;
           /** Quiet requests (gate judge, regenerate, check marking) resolve a promise. */
           resolve?: (text: string) => void;
           reject?: (error: Error) => void;
@@ -678,6 +690,53 @@ export default function App() {
           if (next !== b) putBoard(next, false);
           return;
         }
+        // The post-probe chat: an ordinary answer plus at most one proposal; never writes cards.
+        if (hintMeta?.request.mode === "chat") {
+          const noteId = hintMeta.noteId!;
+          const chatKey = `${update.boardId}/${noteId}`;
+          if (update.status === "streaming") {
+            setPending((p) => ({ ...p, [chatKey]: { text: displayChat(update.text), busy: true } }));
+            return;
+          }
+          requestMeta.current.delete(update.requestId);
+          if (chatActive.current.get(noteId) === update.stickyId) chatActive.current.delete(noteId);
+          setPending((p) => ({
+            ...p,
+            [chatKey]: { text: "", busy: false, ...(update.status === "error" ? { error: errorText(update.error ?? "AI 暂时无法回答") } : {}) },
+          }));
+          if (update.status === "error") return;
+          const b = boardRef.current;
+          if (b?.id !== update.boardId) return;
+          const { reply, proposal } = update.status === "done" ? parseChatReply(update.text, b) : { reply: displayChat(update.text), proposal: undefined };
+          if (!reply && !proposal) {
+            if (update.status === "cancelled") showToast("已停止回答。");
+            return;
+          }
+          edit(
+            (current) => ({
+              ...current,
+              notes: current.notes.map((n) =>
+                n.id === noteId
+                  ? {
+                      ...n,
+                      messages: cacheMessages([
+                        ...n.messages,
+                        {
+                          id: update.requestId + "-answer",
+                          role: "assistant" as const,
+                          text: reply || "好。",
+                          createdAt: now(),
+                          meta: { chat: true, ...(proposal ? { proposal } : {}) },
+                        },
+                      ]),
+                    }
+                  : n,
+              ),
+            }),
+            false,
+          );
+          return;
+        }
         const key = `${update.boardId}/${update.stickyId}`;
         setPending((p) => ({
           ...p,
@@ -947,48 +1006,53 @@ export default function App() {
         setShowSettings(true);
         return false;
       }
-      const context = contextForNote(b, noteId, selection, false, "outline");
-      const request: AIRequest = {
-        boardId: b.id,
-        stickyId: noteId,
-        requestId: uid(),
+      const note = b.notes.find((n) => n.id === noteId);
+      // 「好 / 开始吧 / 应用」right after a proposal is the same as clicking its button.
+      const waiting = !retry ? pendingProposal(note) : undefined;
+      if (waiting && isGoAhead(prompt)) {
+        proposalActRef.current(noteId, waiting.id, waiting.meta?.proposal?.type === "startStop" ? "start" : "apply");
+        return true;
+      }
+      // Free text is an ordinary chat turn: canvas:false, so it can never write cards.
+      const requestId = uid();
+      const request = chatRequest(
+        b,
+        retry && note ? { ...note, messages: note.messages.slice(0, -1) } : note,
         prompt,
-        context,
-        mode: "answer",
-        canvas: true,
-        excludedCardIds: b.notes
-          .find((note) => note.id === noteId)
-          ?.excludedRefs?.filter((ref) => ref.startsWith("node:"))
-          .map((ref) => ref.slice(5)),
-      };
-      // A retry resends the question already in the thread.
-      if (!retry)
-        edit(
-          (current) => ({
-            ...current,
-            notes: current.notes.map((n) =>
-              n.id === noteId
-                ? {
-                    ...n,
-                    messages: cacheMessages([
-                      ...n.messages,
-                      {
-                        id: request.requestId,
-                        role: "user" as const,
-                        text: prompt,
-                        createdAt: now(),
-                      },
-                    ]),
-                  }
-                : n,
-            ),
-          }),
-          false,
-        );
-      void sendAI(request);
+        { requestId, stickyId: `chat-${noteId}-${requestId}` },
+      );
+      chatActive.current.set(noteId, request.stickyId);
+      edit(
+        (current) => ({
+          ...current,
+          notes: current.notes.map((n) =>
+            n.id === noteId
+              ? {
+                  ...n,
+                  messages: cacheMessages(
+                    retry
+                      ? n.messages
+                      : [
+                          ...expireProposals(n.messages),
+                          { id: requestId, role: "user" as const, text: prompt, createdAt: now(), meta: { chat: true } },
+                        ],
+                  ),
+                }
+              : n,
+          ),
+        }),
+        false,
+      );
+      requestMeta.current.set(request.requestId, { request, noteId });
+      setPending((p) => ({ ...p, [`${b.id}/${noteId}`]: { text: "", busy: true } }));
+      api.ask(request).catch((error) => {
+        requestMeta.current.delete(request.requestId);
+        chatActive.current.delete(noteId);
+        setPending((p) => ({ ...p, [`${b.id}/${noteId}`]: { text: "", busy: false, error: errorText(error) } }));
+      });
       return true;
     },
-    [settings.configured, selection, sendAI, edit],
+    [settings.configured, edit],
   );
   const expand = useCallback(
     (id: string, angle?: DigAngle, promptOverride?: string, extra?: { selectNew?: boolean; split?: boolean }) => {
@@ -999,6 +1063,7 @@ export default function App() {
             meta.request.mode !== "answer" &&
             meta.request.mode !== "enrich" &&
             meta.request.mode !== "plan" &&
+            meta.request.mode !== "chat" &&
             // Background ghost-hint fetches must not swallow a click on 再看一层.
             meta.request.mode !== "hint",
         )
@@ -1854,6 +1919,87 @@ export default function App() {
     setSelection({ kind: "node", id });
     addNote({ kind: "node", id }, { cards: false });
   };
+  /** Set one chat message's proposal state (no undo entry: the route edit carries that). */
+  const setProposal = (noteId: string, messageId: string, patch: Partial<ChatProposal>) =>
+    edit(
+      (b) => ({
+        ...b,
+        notes: b.notes.map((n) =>
+          n.id === noteId
+            ? {
+                ...n,
+                messages: n.messages.map((m) =>
+                  m.id === messageId && m.meta?.proposal
+                    ? { ...m, meta: { ...m.meta, proposal: { ...m.meta.proposal, ...patch } as ChatProposal } }
+                    : m,
+                ),
+              }
+            : n,
+        ),
+      }),
+      false,
+    );
+  proposalActRef.current = (noteId, messageId, act) => {
+    const b = boardRef.current;
+    if (!b || locked()) return;
+    const message = b.notes.find((n) => n.id === noteId)?.messages.find((m) => m.id === messageId);
+    const p = message?.meta?.proposal;
+    if (!p) return;
+    if (act === "cancel") return setProposal(noteId, messageId, { state: "cancelled" });
+    if (act === "undo") {
+      const snap = routeSnapshots.current.get(messageId);
+      if (!snap) return showToast("这次改动已经不能单独撤销了，可以用 ⌘Z。");
+      routeSnapshots.current.delete(messageId);
+      edit((cur) => ({ ...cur, ...snap }));
+      setProposal(noteId, messageId, { state: "undone" });
+      return;
+    }
+    if (p.state !== "pending") return;
+    if (p.type === "editRoute") {
+      const rows = previewRoute(b, p.ops);
+      const { board: next, changed } = applyRouteOps(b, p.ops, `chat-${messageId}`, now(), () => newId("concept"));
+      if (next === b) return setProposal(noteId, messageId, { state: "expired" });
+      routeSnapshots.current.set(messageId, { nodes: b.nodes, route: b.route, cardArchives: b.cardArchives });
+      edit(() => next);
+      setProposal(noteId, messageId, { state: "applied", rows } as Partial<ChatProposal>);
+      setFlash(new Set(changed));
+      setTimeout(() => setFlash(new Set()), 1200);
+      return;
+    }
+    const stop = routeOf(b).find((n) => n.id === p.stopId);
+    if (!stop || stop.status === "explained") return setProposal(noteId, messageId, { state: "expired" });
+    setProposal(noteId, messageId, { state: "applied" });
+    if (stop.meta?.later) patchNode(stop.id, { meta: { ...stop.meta, later: false } });
+    if (!stop.beat) patchNode(stop.id, { beat: "guess" });
+    setSelection({ kind: "node", id: stop.id });
+    // A stop that only has a title gets its content through the usual expand flow.
+    if (!stop.body.trim() && !b.nodes.some((n) => n.parentId === stop.id)) expand(stop.id);
+    addNote({ kind: "node", id: stop.id }, { cards: false });
+  };
+  /** 存成批注卡: the question and this answer become a new note on the same card. */
+  const saveChatAnswer = (noteId: string, messageId: string) => {
+    const b = boardRef.current;
+    const source = b?.notes.find((n) => n.id === noteId);
+    const i = source?.messages.findIndex((m) => m.id === messageId) ?? -1;
+    if (!b || !source || i < 0) return;
+    const answer = source.messages[i];
+    const question = source.messages.slice(0, i).reverse().find((m) => m.role === "user");
+    const saved = newNote(b, { x: 0, y: 0 }, source.attachedTo);
+    saved.title = (question?.text ?? answer.text).replace(/\s+/g, " ").slice(0, 60);
+    saved.text = question ? `问：${question.text}\n\n${answer.text}` : answer.text;
+    edit((cur) => ({
+      ...cur,
+      notes: [
+        ...cur.notes.map((n) =>
+          n.id === noteId
+            ? { ...n, messages: n.messages.map((m) => (m.id === messageId ? { ...m, meta: { ...m.meta, savedNote: saved.id } } : m)) }
+            : n,
+        ),
+        saved,
+      ],
+    }));
+    showToast("已存成批注卡。⌘Z 可以撤销。");
+  };
   function removeSelected() {
     if (!selection) return;
     if (
@@ -2219,6 +2365,15 @@ export default function App() {
   };
   const kickoffReady = needsKickoff(board) && !board?.probe && !mapBusy && !study;
   const drawerNote = board?.notes.find((n) => n.id === drawer?.id);
+  // Before 应用: the open thread's pending route edit marks the stops it would replace or remove.
+  const routePreview = useMemo(() => {
+    const out = new Map<string, "replace" | "remove">();
+    const waiting = pendingProposal(drawerNote)?.meta?.proposal;
+    if (!board || waiting?.type !== "editRoute") return out;
+    for (const row of previewRoute(board, waiting.ops))
+      if (row.nodeId && (row.kind === "replace" || row.kind === "remove")) out.set(row.nodeId, row.kind);
+    return out;
+  }, [board, drawerNote]);
   const drawerNoteAttachment = drawerNote?.attachedTo;
   const drawerAnchor =
     drawerNoteAttachment?.kind === "node" ? drawerNoteAttachment.id : null;
@@ -2377,6 +2532,8 @@ export default function App() {
           station: stationOf(board, n.id),
           isNext: nextId === n.id,
           lit: !!board.wrap?.lit.includes(n.id),
+          ...(routePreview.get(n.id) ? { preview: routePreview.get(n.id) } : {}),
+          ...(flash.has(n.id) ? { flash: true } : {}),
           ...(nextId === n.id ? { onStartNext: () => startNextRef.current() } : {}),
           // Ghost hints only on the current stop or a card the learner picked (no 大海感).
           ...(settings.configured && tool === "select" && (!board.route?.length || nextId === n.id || selectedNodeId === n.id)
@@ -2414,6 +2571,8 @@ export default function App() {
     }
     return out;
   }, [
+    routePreview,
+    flash,
     shown,
     board,
     layout,
@@ -3021,9 +3180,17 @@ export default function App() {
           }
           onStop={() =>
             void api
-              .stop(board.id, drawerNote.id)
+              .stop(board.id, chatActive.current.get(drawerNote.id) ?? drawerNote.id)
               .catch((e) => showToast(errorText(e)))
           }
+          chat={{
+            board,
+            onApply: (id) => proposalActRef.current(drawerNote.id, id, "apply"),
+            onUndo: (id) => proposalActRef.current(drawerNote.id, id, "undo"),
+            onCancel: (id) => proposalActRef.current(drawerNote.id, id, "cancel"),
+            onStart: (id) => proposalActRef.current(drawerNote.id, id, "start"),
+            onSave: (id) => saveChatAnswer(drawerNote.id, id),
+          }}
           onPromote={(text) =>
             setPromote({ noteId: drawerNote.id, title: "新的发现", text })
           }

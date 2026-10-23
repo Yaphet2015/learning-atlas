@@ -73,11 +73,10 @@ test("a marquee on empty canvas picks cards and 问 AI sends them all", async ({
   await drawer.getByLabel("发送提问").click();
   await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
-  const ids = asks[0].context.references.map((r: any) => r.id);
-  expect(ids).toEqual(expect.arrayContaining(["c-how", "c-money"]));
-  expect(asks[0].canvas).toBe(true);
-  expect(asks[0].context.structure).toContain("白板结构");
-  expect(asks[0].context.review).toBeUndefined();
+  // v2: an ordinary chat call that never writes cards; the picked cards ride in its prompt.
+  expect(asks[0]).toMatchObject({ mode: "chat", canvas: false });
+  expect(asks[0].prompt).toContain("「怎么赔」");
+  expect(asks[0].prompt).toContain("「钱和手续」");
   expect(asks[0].context.review).toBeUndefined();
   await expect(bar).toHaveCount(0);
 });
@@ -130,47 +129,6 @@ test("Space-drag pans instead of drawing a marquee", async ({ page }) => {
   await page.keyboard.up("Space");
   await expect(page.getByRole("toolbar", { name: "多选" })).toHaveCount(0);
   await expect.poll(() => viewport.getAttribute("style")).not.toBe(before);
-});
-
-test("「添加卡片」 searches the board and adds or removes context cards", async ({
-  page,
-}) => {
-  await open(page);
-  await card(page, "c-how").click();
-  await page.keyboard.press("/");
-  const drawer = page.locator(".drawer");
-  await drawer.locator(".ctx").click();
-  await drawer.getByRole("button", { name: "添加卡片" }).click();
-  const picker = drawer.getByRole("group", { name: "添加卡片" });
-  await picker.getByLabel("搜索卡片").fill("等待期");
-  await expect(picker.locator("li")).toHaveCount(1);
-  await picker.getByRole("checkbox").check();
-  await picker.getByLabel("搜索卡片").fill("");
-  await expect(picker.locator("li")).toHaveCount(6);
-  // The card now shows in the reference list as well.
-  await expect(drawer.locator(".ctx-list").first()).toContainText(
-    "等待期是什么",
-  );
-  await drawer.getByLabel("向 AI 提问").fill("等待期算在哪一块？");
-  await drawer.getByLabel("发送提问").click();
-  await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
-  let asks = await page.evaluate(() => (window as any).__atlasAsks);
-  expect(asks[0].context.references.map((r: any) => r.id)).toContain("c-wait");
-  expect(asks[0].canvas).toBe(true);
-  expect(asks[0].context.structure).toContain("白板结构");
-  expect(asks[0].context.review).toBeUndefined();
-  expect(asks[0].context.review).toBeUndefined();
-  // Unticking takes it out of the next request.
-  await picker.getByLabel("搜索卡片").fill("等待期");
-  await picker.getByRole("checkbox").uncheck();
-  await drawer.getByLabel("向 AI 提问").fill("那怎么赔呢？");
-  await drawer.getByLabel("发送提问").click();
-  await expect(drawer.locator(".msg.assistant")).toHaveCount(2);
-  asks = await page.evaluate(() => (window as any).__atlasAsks);
-  expect(asks[1].context.references.map((r: any) => r.id)).not.toContain(
-    "c-wait",
-  );
-  expect(asks[1].excludedCardIds).toContain("c-wait");
 });
 
 const notes = (page: Page) =>
