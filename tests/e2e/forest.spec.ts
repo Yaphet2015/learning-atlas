@@ -90,13 +90,9 @@ test("roots side by side: a new root beside, its own tree, chat and 走一遍 re
   await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
   const request = asks.at(-1);
-  expect(request.canvas).toBe(true);
-  expect(request.context.structure).toContain("白板结构");
-  expect(request.context.review).toBeUndefined();
-  expect(request.context.review).toBeUndefined();
-  expect(request.context.references.map((ref: any) => ref.title)).toEqual(
-    expect.arrayContaining(["医疗险怎么选", "免赔额"]),
-  );
+  // v2: free text is an ordinary chat call (canvas:false) about the card it hangs on.
+  expect(request).toMatchObject({ mode: "chat", canvas: false });
+  expect(request.prompt).toContain("「免赔额」");
   await page.keyboard.press("Escape");
   // 走一遍 walks the cards of both trees.
   // Clear the selected card with Escape: a fixed pane coordinate can hit a

@@ -213,3 +213,20 @@ export function routedBoard() {
   });
   return board;
 }
+
+/** After 摸底: the routed board with the titles of the v2 chat mockups, and no notes yet. */
+export function chatBoard() {
+  const board: any = routedBoard();
+  const titles: Record<string, string> = {
+    "c-what": "保费豁免条款",
+    "c-when-not": "保额怎么定才够",
+    "c-how": "等待期与观察期",
+    "c-money": "重疾、中症、轻症的赔付比例",
+  };
+  for (const n of board.nodes) if (titles[n.id]) n.title = titles[n.id];
+  board.notes = [];
+  board.topic = board.title = "怎么挑一份合适的重疾险";
+  const root = board.nodes.find((n: any) => n.parentId === null);
+  root.title = board.topic;
+  return board;
+}

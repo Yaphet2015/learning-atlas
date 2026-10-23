@@ -27,7 +27,7 @@ test("the drawer shows thinking → streaming → settled, with elapsed time", a
   // Streaming: the label changes and text arrives with a caret.
   await expect(live.locator(".shimmer")).toHaveText("正在回答");
   await expect(live.locator(".streaming-caret")).toHaveCount(1);
-  await expect(live).toContainText("在开始之前");
+  await expect(live).toContainText("等待期是合同生效后");
   await expect(drawer.getByRole("button", { name: "停止回答" })).toBeVisible();
   // Settled: the indicator is gone, the answer and its actions are there.
   await expect(live).toHaveCount(0);

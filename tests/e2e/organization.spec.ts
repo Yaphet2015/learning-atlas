@@ -75,7 +75,7 @@ test("a rejected canvas task permits retry", async ({ page }) => {
   await expect(page.locator(".canvas-run-progress")).toHaveCount(0);
 });
 
-test("ordinary conversation previews edits and preserves the response after commit and undo", async ({
+test("v2: an ordinary conversation never starts a canvas run, even when asked to edit a card", async ({
   page,
 }) => {
   const board = insuranceBoard(true);
@@ -88,23 +88,15 @@ test("ordinary conversation previews edits and preserves the response after comm
   }, draft);
   await gotoApp(page);
   await page.locator('.react-flow__node[data-id="c-what"]').click();
+  await page.keyboard.press("/");
   const drawer = page.locator(".drawer");
   await drawer.getByLabel("向 AI 提问").fill("请修改这张卡片的标题。");
   await drawer.getByLabel("发送提问").click();
-  await expect(page.locator(".canvas-run-progress")).toBeVisible();
-  await expect(
-    page.locator('.react-flow__node[data-id="c-what"]'),
-  ).toContainText("对话校对后的卡片");
+  await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
   await expect(page.locator(".canvas-run-progress")).toHaveCount(0);
-  await expect(drawer.locator(".msg.assistant")).not.toHaveCount(0);
-  await page
-    .locator(".react-flow__pane")
-    .click({ position: { x: 800, y: 600 } });
-  await page.keyboard.press("ControlOrMeta+z");
   await expect(
     page.locator('.react-flow__node[data-id="c-what"]'),
   ).toContainText(board.nodes[1].title);
   const requests = await page.evaluate(() => (window as any).__atlasAsks);
-  expect(requests[0].canvas).toBe(true);
-  expect(requests[0].context.review).toBeUndefined();
+  expect(requests[0]).toMatchObject({ mode: "chat", canvas: false });
 });

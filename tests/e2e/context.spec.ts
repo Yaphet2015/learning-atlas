@@ -73,11 +73,10 @@ test("a marquee on empty canvas picks cards and 问 AI sends them all", async ({
   await drawer.getByLabel("发送提问").click();
   await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
   const asks = await page.evaluate(() => (window as any).__atlasAsks);
-  const ids = asks[0].context.references.map((r: any) => r.id);
-  expect(ids).toEqual(expect.arrayContaining(["c-how", "c-money"]));
-  expect(asks[0].canvas).toBe(true);
-  expect(asks[0].context.structure).toContain("白板结构");
-  expect(asks[0].context.review).toBeUndefined();
+  // v2: an ordinary chat call that never writes cards; the picked cards ride in its prompt.
+  expect(asks[0]).toMatchObject({ mode: "chat", canvas: false });
+  expect(asks[0].prompt).toContain("「怎么赔」");
+  expect(asks[0].prompt).toContain("「钱和手续」");
   expect(asks[0].context.review).toBeUndefined();
   await expect(bar).toHaveCount(0);
 });
@@ -155,11 +154,8 @@ test("「添加卡片」 searches the board and adds or removes context cards", 
   await drawer.getByLabel("发送提问").click();
   await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
   let asks = await page.evaluate(() => (window as any).__atlasAsks);
-  expect(asks[0].context.references.map((r: any) => r.id)).toContain("c-wait");
-  expect(asks[0].canvas).toBe(true);
-  expect(asks[0].context.structure).toContain("白板结构");
-  expect(asks[0].context.review).toBeUndefined();
-  expect(asks[0].context.review).toBeUndefined();
+  expect(asks[0]).toMatchObject({ mode: "chat", canvas: false });
+  expect(asks[0].prompt).toContain("「等待期是什么");
   // Unticking takes it out of the next request.
   await picker.getByLabel("搜索卡片").fill("等待期");
   await picker.getByRole("checkbox").uncheck();
@@ -167,10 +163,7 @@ test("「添加卡片」 searches the board and adds or removes context cards", 
   await drawer.getByLabel("发送提问").click();
   await expect(drawer.locator(".msg.assistant")).toHaveCount(2);
   asks = await page.evaluate(() => (window as any).__atlasAsks);
-  expect(asks[1].context.references.map((r: any) => r.id)).not.toContain(
-    "c-wait",
-  );
-  expect(asks[1].excludedCardIds).toContain("c-wait");
+  expect(asks[1].prompt).not.toContain("「等待期是什么");
 });
 
 const notes = (page: Page) =>
