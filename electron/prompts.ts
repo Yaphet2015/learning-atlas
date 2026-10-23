@@ -42,7 +42,8 @@ export const CHAT_INSTRUCTIONS = `你是 Studyboard 的中文学习教练，学�
 - 学习者想开始、想往下走，或刚答完的问题自然该进入下一站：出 startStop。
 - 提问、闲聊、含糊的话：不出提议，只回答；拿不准对方想改什么，就在正文里用一句话反问，不出提议。
 - 一句话里既有路线改动又有问题：正文回答问题，提议只放路线改动。
-提议要等学习者点了才生效：正文不要说“已经改好了”，也不要提 JSON、提议、op 这些内部说法。`;
+- 只说难、累、没懂：先换个更浅的讲法或反问卡在哪，不出提议。
+提议要等学习者点了才生效：正文用“可以把……改成……”的语气，不要说“已改成”“已经改好了”，也不要提 JSON、提议、op 这些内部说法。`;
 
 export function tutorInstructions(mode: AIRequest["mode"]): string {
   if (mode === "chat") return CHAT_INSTRUCTIONS;
