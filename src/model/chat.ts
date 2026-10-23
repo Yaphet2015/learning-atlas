@@ -36,14 +36,26 @@ export function chatPrompt(board: Board, note: StickyNote | undefined, text: str
     (current
       ? `当前站：第 ${stationOf(board, current.id)} 站「${clip(plain(current.title), 40)}」${current.body ? `：${clip(plain(current.body), 200)}` : ""}\n`
       : "");
+  // A card off the route that the thread hangs on, and cards the learner added on purpose.
+  const anchorId = note?.attachedTo?.kind === "node" ? note.attachedTo.id : undefined;
+  const anchor = board.nodes.find((n) => n.id === anchorId);
+  const extra = [
+    ...(anchor && anchor.id !== current?.id && anchor.parentId !== null && !stops.includes(anchor) ? [anchor] : []),
+    ...(note?.contextCards ?? []).map((id) => board.nodes.find((n) => n.id === id)).filter((n): n is NonNullable<typeof n> => !!n),
+  ]
+    .filter((n, i, all) => all.indexOf(n) === i)
+    .slice(0, 4);
+  const cards = extra.length
+    ? `学习者带上的卡片：\n${extra.map((n) => `- 「${clip(plain(n.title), 40)}」${n.body ? `：${clip(plain(n.body), 120)}` : ""}`).join("\n")}\n`
+    : "";
   const tail = `学习者现在说：「${clip(text.trim(), 600)}」`;
   const turns = (note?.messages ?? [])
     .slice(-HISTORY)
     .map((m) => `${m.role === "user" ? "学习者" : "教练"}：${clip(plain(m.text), 300)}`);
   // Over the cap, drop the oldest turns first.
   const budget = TURN_CAP - SYSTEM_TOKENS - OUTPUT_TOKENS;
-  while (turns.length && estimateTokens(head + turns.join("\n") + tail) > budget) turns.shift();
-  return head + (turns.length ? `最近对话：\n${turns.join("\n")}\n` : "") + tail;
+  while (turns.length && estimateTokens(head + cards + turns.join("\n") + tail) > budget) turns.shift();
+  return head + cards + (turns.length ? `最近对话：\n${turns.join("\n")}\n` : "") + tail;
 }
 
 /** One chat turn: an ordinary answer call that can never write cards. */

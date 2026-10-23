@@ -5226,8 +5226,8 @@ h2.workspace-section span {
 }
 .route-diff .rd-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px 10px;
+  flex-direction: column;
+  gap: 2px;
   font-size: 13.5px;
   line-height: 1.5;
 }
@@ -5275,4 +5275,10 @@ h2.workspace-section span {
 }
 .drawer .msg.chat .chat-save {
   color: var(--accent);
+}
+.drawer .msg.chat .route-diff .btn.primary,
+.drawer .msg.chat .chat-start {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
 }

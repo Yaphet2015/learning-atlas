@@ -1,6 +1,6 @@
 // One assistant turn of the post-probe chat: a plain answer, then at most one proposal —
 // an inline route diff (应用 / 取消, then 撤销) or a single 开始第 N 站 button.
-import { ArrowRight, Copy, NotebookPen, Undo2 } from "lucide-react";
+import { Copy, NotebookPen, Undo2 } from "lucide-react";
 import type { Board, ChatMessage } from "../shared/types";
 import { previewRoute, routeOf } from "../model/route";
 import { AnswerBlocks } from "./AnswerBlocks";
@@ -29,7 +29,6 @@ export function ChatTurn({ message, chat, busy, onCopy }: { message: ChatMessage
         return (
           <button className="btn primary chat-start" disabled={busy} onClick={() => chat.onStart(message.id)}>
             开始第 {no} 站 · {stop.title}
-            <ArrowRight size={15} className="ico" />
           </button>
         );
       })()}
@@ -43,7 +42,7 @@ export function ChatTurn({ message, chat, busy, onCopy }: { message: ChatMessage
               存成批注卡
             </button>
           )}
-          <button className="btn sm ghost" onClick={onCopy}>
+          <button className="btn sm" onClick={onCopy}>
             <Copy size={14} className="ico" />
             复制
           </button>
@@ -61,7 +60,6 @@ function RouteDiff({ message, chat }: { message: ChatMessage; chat: ChatActions 
   const stale = p.state === "expired" || p.state === "cancelled";
   return (
     <div className={`route-diff ${stale ? "stale" : ""}`} role="group" aria-label="路线改动">
-      <div className="rd-k">路线改动</div>
       <ol className="rd-rows">
         {rows.map((r, i) => (
           <li key={i} className={`rd-row ${r.kind}`}>
@@ -92,13 +90,13 @@ function RouteDiff({ message, chat }: { message: ChatMessage; chat: ChatActions 
         {p.state === "pending" && (
           <>
             <button className="btn primary sm" onClick={() => chat.onApply(message.id)}>应用</button>
-            <button className="btn sm ghost" onClick={() => chat.onCancel(message.id)}>取消</button>
+            <button className="btn sm" onClick={() => chat.onCancel(message.id)}>取消</button>
           </>
         )}
         {p.state === "applied" && (
           <>
             <span className="rd-state">已改路线</span>
-            <button className="btn sm ghost" onClick={() => chat.onUndo(message.id)}>
+            <button className="btn sm" onClick={() => chat.onUndo(message.id)}>
               <Undo2 size={14} className="ico" />
               撤销
             </button>
