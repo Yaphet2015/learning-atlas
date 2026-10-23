@@ -315,3 +315,49 @@ test("the root's + stays off the connector origin unless hovered", async ({
     })
     .toBe("1");
 });
+
+test("the 带上 chip ellipsizes on one line with the full list in its tooltip", async ({
+  page,
+}) => {
+  const drawer = await open(page, insuranceBoard(true));
+  const text = drawer.locator(".cchip .cchip-text");
+  await expect(text).toHaveCSS("text-overflow", "ellipsis");
+  await expect(text).toHaveCSS("white-space", "nowrap");
+  const full = (await text.textContent())!.trim();
+  await expect(drawer.locator(".cchip")).toHaveAttribute(
+    "data-tip",
+    new RegExp(`^${full.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+  );
+  const h = (await text.boundingBox())!.height;
+  expect(h).toBeLessThan(24);
+});
+
+test("an empty conversation shows one faint invitation that goes once a message exists", async ({
+  page,
+}) => {
+  const board = insuranceBoard(true);
+  board.notes = [
+    {
+      id: "note-asked",
+      title: "",
+      text: "",
+      position: { x: 0, y: 0 },
+      attachedTo: { kind: "node", id: "c-how" },
+      messages: [
+        { id: "m1", role: "user", text: "等待期多长？", createdAt: board.updatedAt },
+      ],
+    },
+  ];
+  await page.addInitScript(
+    (value) => localStorage.setItem("studyboard-preview-boards-v1", value),
+    JSON.stringify([board]),
+  );
+  await gotoApp(page);
+  await page.locator('.react-flow__node[data-id="c-what"]').click();
+  const empty = page.locator(".drawer .thread-empty");
+  await expect(empty).toHaveText("对这张卡有疑问？直接问");
+  await expect(empty).toHaveCSS("text-align", "center");
+  await page.locator('.react-flow__node[data-id="c-how"]').click();
+  await expect(page.locator(".drawer .msg")).toHaveCount(1);
+  await expect(page.locator(".drawer .thread-empty")).toHaveCount(0);
+});

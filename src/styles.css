@@ -2404,6 +2404,27 @@ kbd,
 .cchip .ico {
   flex: none;
 }
+/* The chip is a flex row, so the ellipsis lives on the text span. */
+.cchip-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* An empty conversation: one faint invitation, centered in the free space. */
+.thread-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 24px 0;
+  font: 400 13px var(--kai);
+  color: var(--ink-3);
+  opacity: 0.8;
+  text-align: center;
+  user-select: none;
+}
 .hint-kbd {
   display: none;
   white-space: nowrap;

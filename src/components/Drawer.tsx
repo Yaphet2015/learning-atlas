@@ -867,6 +867,9 @@ export function Drawer({
             </div>
           );
         })}
+        {!note.messages.length && !lead && !busy && !canvasRun && (
+          <p className="thread-empty">对这张卡有疑问？直接问</p>
+        )}
         {canvasRun && (
           <div
             className="canvas-drawer-progress"
@@ -990,11 +993,14 @@ export function Drawer({
         <div className="row">
           <button
             className="cchip"
-            data-tip="AI 会参考这些内容，点开可以调整"
+            data-tip={`带上：${refSummary(refs, note.excludedRefs ?? [], nodes)}（点开可以调整）`}
+            aria-label={`带上：${refSummary(refs, note.excludedRefs ?? [], nodes)}`}
             onClick={() => setRefsOpen(true)}
           >
             <Link2 size={13} className="ico" />
-            带上：{refSummary(refs, note.excludedRefs ?? [], nodes)}
+            <span className="cchip-text">
+              带上：{refSummary(refs, note.excludedRefs ?? [], nodes)}
+            </span>
           </button>
           <span className="grow" />
           <span className="kbd hint-kbd">
