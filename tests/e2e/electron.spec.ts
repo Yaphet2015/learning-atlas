@@ -73,7 +73,7 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     await page.getByRole("button", { name: "批注", exact: true }).click();
     const nativeWindow = await app.browserWindow(page);
     await page
-      .getByLabel("批注内容")
+      .getByLabel("批注标题")
       .fill("Close immediately: this edit must survive.");
 
     // Trigger the same native close event as the macOS window button. Do not wait
@@ -93,7 +93,7 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     const persisted = JSON.parse(
       await readFile(path.join(boardDirectory, boardFiles[0]), "utf8"),
     );
-    expect(persisted.notes.at(-1).text).toBe(
+    expect(persisted.notes.at(-1).title).toBe(
       "Close immediately: this edit must survive.",
     );
     // Conversations carry their creation time for the session list.
@@ -105,7 +105,7 @@ test("macOS desktop bridge, edit flush on immediate close, and durable reopening
     await waitForApp(nextPage);
     // Nothing selected: N goes back to the board's latest conversation.
     await nextPage.keyboard.press("n");
-    await expect(nextPage.getByLabel("批注内容")).toHaveValue(
+    await expect(nextPage.getByLabel("批注标题")).toHaveValue(
       "Close immediately: this edit must survive.",
     );
     // The reopened board lists and selects that conversation in the sidebar.

@@ -840,7 +840,6 @@ export default function App() {
     (
       attachment?: StickyNote["attachedTo"],
       opts: {
-        text?: string;
         fresh?: boolean;
         cards?: boolean;
         autoFocus?: boolean;
@@ -865,14 +864,11 @@ export default function App() {
         attachment && !opts.fresh && !extra.length
           ? latestNoteOn(b, attachment)
           : undefined;
-      if (existing && !opts.text) {
+      if (existing) {
         openDrawer(existing.id, opts.autoFocus);
         return existing.id;
       }
       const note = newNote(b, { x: 0, y: 0 }, attachment);
-      if (attachment?.id === "scene-browser" && b.scene.explanation)
-        note.text = b.scene.explanation;
-      if (opts.text) note.text = opts.text;
       if (attachment?.kind === "node")
         note.title = b.nodes.find((n) => n.id === attachment.id)?.title ?? "";
       if (extra.length) {
@@ -3136,7 +3132,9 @@ export default function App() {
           onRate={setStatus}
           onAskAI={(id, text) => {
             setStudy(null);
-            addNote({ kind: "node", id }, { text, cards: false });
+            // The explanation goes out as the question; the drawer has no note field.
+            const noteId = addNote({ kind: "node", id }, { fresh: true, cards: false });
+            if (noteId) askNote(noteId, `请检查我的理解：\n${text}`);
           }}
           onClose={() => setStudy(null)}
         />

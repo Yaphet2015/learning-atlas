@@ -1951,57 +1951,6 @@ kbd,
   flex: none;
   pointer-events: none;
 }
-/* 我的笔记: a quiet field. Empty, it is one hint row; with text, label above. */
-.my-note {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex: none;
-  padding: 2px 0 6px;
-  border-bottom: 1px solid var(--border);
-  cursor: text;
-}
-.my-note.has,
-.my-note:focus-within {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-}
-.my-note-k {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  font: 400 12.5px var(--kai);
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-.my-note-k .ico {
-  align-self: center;
-}
-.note-text {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  resize: none;
-  field-sizing: content;
-  min-height: 0;
-  max-height: 160px;
-  outline: none;
-  color: var(--ink-2);
-  font: 14px/1.6 var(--kai);
-}
-.my-note:not(.has):not(:focus-within) .note-text {
-  height: 1.6em;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.note-text::placeholder {
-  color: var(--ink-3);
-}
 /* ---- answers, rendered as blocks (never raw markdown) */
 .bubble {
   align-self: flex-end;

@@ -33,7 +33,7 @@ test("the sidebar switches the whole canvas, saves edits and clears the previous
   ).toHaveAttribute("aria-current", "page");
 
   await card(page, "c-what").click();
-  await page.getByLabel("批注内容").fill("切换前写下的理解");
+  await page.getByLabel("批注标题").fill("切换前写下的理解");
   await page.getByRole("button", { name: "查看全图" }).click();
   await card(page, "c-how").click({ modifiers: ["Shift"] });
   await expect(page.getByRole("toolbar", { name: "多选" })).toBeVisible();
@@ -63,7 +63,7 @@ test("the sidebar switches the whole canvas, saves edits and clears the previous
 
   await nav.getByRole("button", { name: "重疾险条款", exact: true }).click();
   await card(page, "c-what").click();
-  await expect(page.getByLabel("批注内容")).toHaveValue("切换前写下的理解");
+  await expect(page.getByLabel("批注标题")).toHaveValue("切换前写下的理解");
 });
 
 test("collapse and expand persist, and both sidebars leave the canvas controls centered", async ({

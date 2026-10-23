@@ -52,7 +52,7 @@ export function listSessions(board: Board): SessionEntry[] {
           ? note.title
           : question
             ? displayMessage("user", question.text).replace(/[*_`#>]/g, "")
-            : note.text || node?.title || "新对话"
+            : node?.title || "新对话"
       )
         .replace(/\s+/g, " ")
         .trim()

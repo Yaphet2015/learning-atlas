@@ -816,21 +816,6 @@ export function Drawer({
           </section>
         )}
         {lead}
-        <label className={`my-note ${note.text ? "has" : ""}`}>
-          <span className="my-note-k">
-            <Pencil size={14} className="ico" />
-            我的笔记
-          </span>
-          <textarea
-            className="note-text"
-            aria-label="批注内容"
-            placeholder="写下你的理解，或一个没想通的地方……"
-            rows={1}
-            value={note.text}
-            onChange={(e) => onChange({ text: e.target.value })}
-            onKeyDown={(e) => e.stopPropagation()}
-          />
-        </label>
         {note.messages.map((m) => {
           if (m.role === "user")
             return (

@@ -59,7 +59,9 @@ for (const withVisual of [false, true]) {
     await thread.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
-    await expect(page.locator(".drawer .my-note")).toBeInViewport();
+    await expect.poll(() => thread.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    // The panel has no 我的笔记 field: the conversation follows the card directly.
+    await expect(page.locator(".drawer .my-note")).toHaveCount(0);
     await card.click();
     await expect.poll(() => thread.evaluate((el) => el.scrollTop)).toBe(0);
     // The card also exposes a visible reading entry, without a keyboard shortcut.
@@ -291,14 +293,10 @@ test("参考 keeps a trailing +N, and 我的笔记 is one quiet row when empty",
   // The count sits after the names and inside the row.
   expect(more!.x).toBeGreaterThanOrEqual(items!.x + items!.width - 1);
   expect(more!.x + more!.width).toBeLessThanOrEqual(box!.x + box!.width);
-  const note = drawer.locator(".my-note");
-  await expect(note).toContainText("我的笔记");
-  const h = (await note.boundingBox())!.height;
-  expect(h).toBeLessThan(36);
-  const border = await note.evaluate(
-    (e) => getComputedStyle(e).borderLeftWidth,
-  );
-  expect(border).toBe("0px");
+  // 我的笔记 is gone; nothing takes its place.
+  await expect(drawer.locator(".my-note")).toHaveCount(0);
+  await expect(drawer.getByLabel("批注内容")).toHaveCount(0);
+  await expect(drawer).not.toContainText("我的笔记");
 });
 
 test("the root's + stays off the connector origin unless hovered", async ({
