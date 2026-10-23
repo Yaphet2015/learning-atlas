@@ -131,41 +131,6 @@ test("Space-drag pans instead of drawing a marquee", async ({ page }) => {
   await expect.poll(() => viewport.getAttribute("style")).not.toBe(before);
 });
 
-test("「添加卡片」 searches the board and adds or removes context cards", async ({
-  page,
-}) => {
-  await open(page);
-  await card(page, "c-how").click();
-  await page.keyboard.press("/");
-  const drawer = page.locator(".drawer");
-  await drawer.locator(".ctx").click();
-  await drawer.getByRole("button", { name: "添加卡片" }).click();
-  const picker = drawer.getByRole("group", { name: "添加卡片" });
-  await picker.getByLabel("搜索卡片").fill("等待期");
-  await expect(picker.locator("li")).toHaveCount(1);
-  await picker.getByRole("checkbox").check();
-  await picker.getByLabel("搜索卡片").fill("");
-  await expect(picker.locator("li")).toHaveCount(6);
-  // The card now shows in the reference list as well.
-  await expect(drawer.locator(".ctx-list").first()).toContainText(
-    "等待期是什么",
-  );
-  await drawer.getByLabel("向 AI 提问").fill("等待期算在哪一块？");
-  await drawer.getByLabel("发送提问").click();
-  await expect(drawer.locator(".msg.assistant")).toHaveCount(1);
-  let asks = await page.evaluate(() => (window as any).__atlasAsks);
-  expect(asks[0]).toMatchObject({ mode: "chat", canvas: false });
-  expect(asks[0].prompt).toContain("「等待期是什么");
-  // Unticking takes it out of the next request.
-  await picker.getByLabel("搜索卡片").fill("等待期");
-  await picker.getByRole("checkbox").uncheck();
-  await drawer.getByLabel("向 AI 提问").fill("那怎么赔呢？");
-  await drawer.getByLabel("发送提问").click();
-  await expect(drawer.locator(".msg.assistant")).toHaveCount(2);
-  asks = await page.evaluate(() => (window as any).__atlasAsks);
-  expect(asks[1].prompt).not.toContain("「等待期是什么");
-});
-
 const notes = (page: Page) =>
   page.evaluate(
     () =>

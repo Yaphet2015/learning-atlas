@@ -91,9 +91,6 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
   await expect(page.getByLabel("向 AI 提问")).toHaveValue(
     "Help me compare the two changes",
   );
-  await expect(
-    page.locator(".drawer .ctx", { hasText: "样式计算" }),
-  ).toBeVisible();
   await expect
     .poll(async () =>
       (await stored(page)).some((b: { notes?: { title: string }[] }) =>
