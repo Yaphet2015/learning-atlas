@@ -6,8 +6,6 @@ import {
   AlertCircle,
   ArrowUp,
   ChevronDown,
-  ChevronUp,
-  Link2,
   Copy,
   Delete,
   Layers3,
@@ -18,7 +16,6 @@ import {
   Pencil,
   Plus,
   RotateCcw,
-  Search,
   Square,
   SquarePen,
   SquarePlus,
@@ -37,259 +34,10 @@ import { displayMessage } from "../model/kickoff";
 import { outlineOf, type OutlineItem } from "../model/answer";
 import { AnswerBlocks } from "./AnswerBlocks";
 import { ChatTurn, type ChatActions } from "./ChatTurn";
-import { refKey } from "../model/context";
 import { tip } from "./Tooltip";
-import { toggleContextCard } from "../model/selection";
 import { sectionNumbers } from "../model/layout";
-import { LIMITS } from "../shared/validation";
 import { isQuestionRoot } from "../model/kickoff";
 import { StreamStatus } from "./StreamStatus";
-
-const LEVEL = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
-const STATUS: Record<string, string> = {
-  unseen: "未看",
-  exploring: "探索中",
-  explained: "讲清楚了",
-};
-function depth(nodes: ConceptNode[], id: string) {
-  let d = 0;
-  for (
-    let n = nodes.find((x) => x.id === id);
-    n?.parentId && d < 50;
-    n = nodes.find((x) => x.id === n!.parentId)
-  )
-    d++;
-  return d;
-}
-const refTitle = (r: ContextReference) =>
-  r.kind === "topic"
-    ? "起点问题"
-    : r.kind === "relation"
-      ? `~ ${r.title}`
-      : r.title;
-/** 「起点问题 + 第一层 4 张」: what the next question carries. */
-function refSummary(
-  refs: ContextReference[],
-  excluded: string[],
-  nodes: ConceptNode[],
-) {
-  const on = refs.filter(
-    (r) => r.kind !== "note" && !excluded.includes(refKey(r)),
-  );
-  const parts: string[] = [];
-  if (on.some((r) => r.kind === "topic")) parts.push("起点问题");
-  const levels = new Map<number, number>();
-  for (const r of on)
-    if (r.kind === "node") {
-      const d = depth(nodes, r.id);
-      if (d > 0) levels.set(d, (levels.get(d) ?? 0) + 1);
-    }
-  for (const [d, k] of [...levels].sort((a, b) => a[0] - b[0]))
-    parts.push(`第${LEVEL[d] ?? d}层 ${k} 张`);
-  const links = on.filter((r) => r.kind === "relation").length;
-  if (links) parts.push(`${links} 条连线`);
-  return parts.join(" + ") || "只有这张批注";
-}
-
-/** 参考: one line normally; opens in place into a checklist. */
-/** Every card on the board, searchable; ticking one adds it to this conversation. */
-function CardPicker({
-  nodes,
-  included,
-  full,
-  onToggle,
-  onDone,
-}: {
-  nodes: ConceptNode[];
-  included: (id: string) => boolean;
-  full: boolean;
-  onToggle: (id: string) => void;
-  onDone: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const numbers = sectionNumbers(nodes);
-  const q = query.trim().toLowerCase();
-  const cards = nodes
-    .filter((n) => !isQuestionRoot(nodes, n))
-    .map((n) => ({ n, no: numbers.get(n.id) ?? "" }))
-    .sort((a, b) => a.no.localeCompare(b.no, undefined, { numeric: true }))
-    .filter(
-      ({ n, no }) =>
-        !q || n.title.toLowerCase().includes(q) || no.toLowerCase().includes(q),
-    );
-  return (
-    <div className="ctx-picker" role="group" aria-label="添加卡片">
-      <div className="ctx-search">
-        <Search size={14} className="ico" />
-        <input
-          autoFocus
-          aria-label="搜索卡片"
-          placeholder="搜索这张白板的卡片…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.stopPropagation();
-              onDone();
-            }
-          }}
-        />
-        <button className="btn sm" onClick={onDone}>
-          完成
-        </button>
-      </div>
-      <ul className="ctx-list">
-        {cards.map(({ n, no }) => {
-          const on = included(n.id);
-          return (
-            <li key={n.id}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={on}
-                  disabled={!on && full}
-                  onChange={() => onToggle(n.id)}
-                />
-                <span className="no">{no}</span>
-                <span className="tt" title={n.title}>
-                  {n.title}
-                </span>
-                <span className="lv">
-                  L{depth(nodes, n.id)} · {STATUS[n.status] ?? ""}
-                </span>
-              </label>
-            </li>
-          );
-        })}
-        {!cards.length && <li className="add-hint">没有匹配的卡片</li>}
-      </ul>
-    </div>
-  );
-}
-
-function Refs({
-  refs,
-  excluded,
-  contextCards,
-  nodes,
-  open,
-  onToggleOpen,
-  onExclude,
-  onCards,
-}: {
-  refs: ContextReference[];
-  excluded: string[];
-  contextCards: string[];
-  nodes: ConceptNode[];
-  open: boolean;
-  onToggleOpen: () => void;
-  onExclude: (next: string[]) => void;
-  onCards: (patch: { contextCards: string[]; excludedRefs: string[] }) => void;
-}) {
-  const [adding, setAdding] = useState(false);
-  // The root card is the 起点问题 itself; list it once.
-  const list = refs.filter(
-    (r) =>
-      r.kind !== "note" &&
-      !(
-        r.kind === "node" &&
-        nodes.some((n) => n.id === r.id && isQuestionRoot(nodes, n))
-      ),
-  );
-  const on = list.filter((r) => !excluded.includes(refKey(r)));
-  // A few names, ellipsized; the +N count after them never gets cut off.
-  const shown = on.slice(0, 3);
-  return (
-    <div className={`ctx-wrap ${open ? "open" : ""}`}>
-      <button
-        className={`ctx ${open ? "open" : ""}`}
-        aria-expanded={open}
-        aria-label={`AI 会参考 ${on.length} 项，点开调整`}
-        onClick={onToggleOpen}
-      >
-        <span className="k">参考</span>
-        <span className="items" title={on.map(refTitle).join(" · ")}>
-          {open
-            ? `${on.length} 项附加参考 · AI 可按需查看本画布，未勾选卡片除外`
-            : shown.map(refTitle).join(" · ")}
-        </span>
-        {!open && on.length > shown.length && (
-          <span className="more">+{on.length - shown.length}</span>
-        )}
-        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-      </button>
-      {open && (
-        <ul className="ctx-list">
-          {list.map((r) => {
-            const key = refKey(r);
-            const locked = r.kind === "topic";
-            const checked = locked || !excluded.includes(key);
-            const node =
-              r.kind === "node" ? nodes.find((n) => n.id === r.id) : undefined;
-            return (
-              <li key={key}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={locked}
-                    onChange={() =>
-                      onExclude(
-                        checked
-                          ? [...excluded, key]
-                          : excluded.filter((k) => k !== key),
-                      )
-                    }
-                  />
-                  <span className="tt" title={r.text}>
-                    {refTitle(r)}
-                  </span>
-                  <span className="lv">
-                    {r.kind === "topic"
-                      ? "L0 · 总是带上"
-                      : node
-                        ? `L${depth(nodes, node.id)} · ${STATUS[node.status] ?? ""}`
-                        : "连线"}
-                  </span>
-                </label>
-              </li>
-            );
-          })}
-          {!adding && (
-            <li>
-              <button className="add-card" onClick={() => setAdding(true)}>
-                <Plus size={14} className="ico" />
-                添加卡片
-              </button>
-            </li>
-          )}
-        </ul>
-      )}
-      {open && adding && (
-        <CardPicker
-          nodes={nodes}
-          full={contextCards.length >= LIMITS.contextReferences - 2}
-          included={(id) =>
-            contextCards.includes(id) ||
-            (refs.some((r) => r.kind === "node" && r.id === id) &&
-              !excluded.includes(`node:${id}`))
-          }
-          onToggle={(id) =>
-            onCards(
-              toggleContextCard(
-                { contextCards, excludedRefs: excluded },
-                id,
-                !contextCards.includes(id) &&
-                  refs.some((r) => r.kind === "node" && r.id === id),
-              ),
-            )
-          }
-          onDone={() => setAdding(false)}
-        />
-      )}
-    </div>
-  );
-}
 
 const clock = (iso: string) => {
   const d = new Date(iso);
@@ -519,7 +267,6 @@ export function Drawer({
   anchor,
   anchorTitle,
   anchorHasChildren,
-  refs,
   pending,
   busy,
   canvasRun,
@@ -579,7 +326,6 @@ export function Drawer({
 }) {
   const [prompt, setPrompt] = useState("");
   const [menu, setMenu] = useState(false);
-  const [refsOpen, setRefsOpen] = useState(false);
   // Screen readers hear the streaming answer at most every 600ms.
   const [spoken, setSpoken] = useState("");
   const latest = useRef(pending);
@@ -791,16 +537,6 @@ export function Drawer({
           <X size={18} />
         </button>
       </header>
-      <Refs
-        refs={refs}
-        excluded={note.excludedRefs ?? []}
-        contextCards={note.contextCards ?? []}
-        nodes={nodes}
-        open={refsOpen}
-        onToggleOpen={() => setRefsOpen(!refsOpen)}
-        onExclude={(excludedRefs) => onChange({ excludedRefs })}
-        onCards={(patch) => onChange(patch)}
-      />
       <div className="rule-h" />
       <div className="thread" ref={thread} onScroll={onScroll}>
         {scrolled && <div className="fadeTop" aria-hidden="true" />}
@@ -1021,14 +757,6 @@ export function Drawer({
           }}
         />
         <div className="row">
-          <button
-            className="cchip"
-            data-tip="AI 会参考这些内容，点开可以调整"
-            onClick={() => setRefsOpen(true)}
-          >
-            <Link2 size={13} className="ico" />
-            带上：{refSummary(refs, note.excludedRefs ?? [], nodes)}
-          </button>
           <span className="grow" />
           <span className="kbd hint-kbd">
             {busy ? "Esc 停止" : prompt.trim() ? "⇧↵ 换行" : "↵ 发送"}
