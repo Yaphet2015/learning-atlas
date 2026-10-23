@@ -104,7 +104,8 @@ export function contextForNote(
     id: note.id,
     kind: "note",
     title: note.title || "当前便签",
-    text: note.text,
+    // note.text is legacy (the 我的笔记 field is gone; old text migrates into a 批注卡).
+    text: "",
   });
   // Cards the learner picked come before the neighbourhood, so they are never cut.
   for (const id of note.contextCards ?? []) addNode(id);

@@ -70,7 +70,7 @@ describe("local note context", () => {
       "topic",
       "note",
     ]);
-    expect(context.summary).toContain(current.text);
+    expect(context.summary).not.toContain(current.text);
     expect(context.summary).not.toContain("OTHER_NOTE_PRIVATE_TEXT");
     expect(context.summary).not.toContain("PRIVATE_CHAT_HISTORY");
     expect(context.summary).not.toContain("UNRELATED");
@@ -130,6 +130,12 @@ describe("local note context", () => {
       "note",
     ]);
     expect(context.summary).not.toContain("OTHER_NOTE_PRIVATE_TEXT");
+  });
+  it("no longer reads the legacy note.text", () => {
+    const { board, current } = fixture();
+    current.text = "LEGACY_NOTE_TEXT";
+    const context = contextForNote(board, current.id);
+    expect(JSON.stringify(context)).not.toContain("LEGACY_NOTE_TEXT");
   });
   it("bounds content, references and one-hop branches", () => {
     const { board, current } = fixture();
