@@ -20,7 +20,7 @@ const node = (id: string, title: string, parentId: string | null, order: number,
 });
 const fixture = (): Board =>
   boardSchema.parse({
-    version: 2,
+    version: 3,
     id: "board-c",
     title: "重疾险",
     topic: "怎么挑一份合适的重疾险",

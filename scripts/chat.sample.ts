@@ -13,7 +13,7 @@ const model = process.env.LLM_TEST_MODEL;
 
 const n = (id: string, title: string, parentId: string | null, order: number, extra = {}) => ({ id, kind: "concept", title, body: "", parentId, order, status: "unseen", ...extra });
 const board = boardSchema.parse({
-  version: 2, id: "b", title: "重疾险", topic: "怎么挑一份合适的重疾险", kind: "ai",
+  version: 3, id: "b", title: "重疾险", topic: "怎么挑一份合适的重疾险", kind: "ai",
   createdAt: "2026-10-23T00:00:00.000Z", updatedAt: "2026-10-23T00:00:00.000Z",
   nodes: [
     n("q", "怎么挑一份合适的重疾险", null, 0, { question: true }),
