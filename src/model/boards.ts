@@ -50,7 +50,7 @@ const relation = (
 export function createWalkthroughBoard(): Board {
   const timestamp = now();
   return {
-    version: 2,
+    version: 3,
     id: newId("board"),
     title: "浏览器如何画出一个页面",
     topic: "浏览器如何把 HTML、CSS 变成屏幕上的页面？",
@@ -111,7 +111,7 @@ export function createEmptyBoard(topic: string): Board {
     throw new Error("请输入 1–2000 字的学习主题。");
   const timestamp = now();
   return {
-    version: 2,
+    version: 3,
     id: newId("board"),
     title: trimmed.slice(0, 160),
     topic: trimmed,

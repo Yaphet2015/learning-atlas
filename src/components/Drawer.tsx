@@ -816,21 +816,6 @@ export function Drawer({
           </section>
         )}
         {lead}
-        <label className={`my-note ${note.text ? "has" : ""}`}>
-          <span className="my-note-k">
-            <Pencil size={14} className="ico" />
-            我的笔记
-          </span>
-          <textarea
-            className="note-text"
-            aria-label="批注内容"
-            placeholder="写下你的理解，或一个没想通的地方……"
-            rows={1}
-            value={note.text}
-            onChange={(e) => onChange({ text: e.target.value })}
-            onKeyDown={(e) => e.stopPropagation()}
-          />
-        </label>
         {note.messages.map((m) => {
           if (m.role === "user")
             return (
@@ -882,6 +867,9 @@ export function Drawer({
             </div>
           );
         })}
+        {!note.messages.length && !lead && !busy && !canvasRun && (
+          <p className="thread-empty">对这张卡有疑问？直接问</p>
+        )}
         {canvasRun && (
           <div
             className="canvas-drawer-progress"
@@ -1005,11 +993,14 @@ export function Drawer({
         <div className="row">
           <button
             className="cchip"
-            data-tip="AI 会参考这些内容，点开可以调整"
+            data-tip={`带上：${refSummary(refs, note.excludedRefs ?? [], nodes)}（点开可以调整）`}
+            aria-label={`带上：${refSummary(refs, note.excludedRefs ?? [], nodes)}`}
             onClick={() => setRefsOpen(true)}
           >
             <Link2 size={13} className="ico" />
-            带上：{refSummary(refs, note.excludedRefs ?? [], nodes)}
+            <span className="cchip-text">
+              带上：{refSummary(refs, note.excludedRefs ?? [], nodes)}
+            </span>
           </button>
           <span className="grow" />
           <span className="kbd hint-kbd">

@@ -83,7 +83,7 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
   await expect(card(page, "样式计算").locator(".seal")).toHaveCount(0);
   await card(page, "样式计算").click();
   await page.keyboard.press("/");
-  await page.getByLabel("批注内容").fill("What changes when width changes?");
+  await page.getByLabel("批注标题").fill("What changes when width changes?");
   await page.getByLabel("向 AI 提问").fill("Help me compare the two changes");
   await page.getByLabel("发送提问").click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -96,15 +96,15 @@ test("mastery lives on the card, is undoable, and the note drawer keeps input wi
   ).toBeVisible();
   await expect
     .poll(async () =>
-      (await stored(page)).some((b: { notes?: { text: string }[] }) =>
-        b.notes?.some((n) => n.text === "What changes when width changes?"),
+      (await stored(page)).some((b: { notes?: { title: string }[] }) =>
+        b.notes?.some((n) => n.title === "What changes when width changes?"),
       ),
     )
     .toBe(true);
   await reloadApp(page);
   await card(page, "样式计算").click();
   await page.keyboard.press("n");
-  await expect(page.getByLabel("批注内容")).toHaveValue(
+  await expect(page.getByLabel("批注标题")).toHaveValue(
     "What changes when width changes?",
   );
 });
