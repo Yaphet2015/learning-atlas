@@ -318,6 +318,19 @@ export const probeStateSchema = z
       .optional(),
   })
   .strict();
+const stopNo = z.number().int().min(0).max(LIMITS.nodes);
+export const routeOpSchema = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("add"), title: z.string().trim().min(1).max(80), after: stopNo }).strict(),
+  z.object({ op: z.literal("remove"), stop: stopNo }).strict(),
+  z.object({ op: z.literal("move"), stop: stopNo, to: stopNo }).strict(),
+  z.object({ op: z.literal("replace"), stop: stopNo, title: z.string().trim().min(1).max(80) }).strict(),
+  z.object({ op: z.literal("focus"), stop: stopNo, text: z.string().trim().min(1).max(200) }).strict(),
+]);
+const proposalStateSchema = z.enum(["pending", "applied", "undone", "cancelled", "expired"]);
+export const chatProposalSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("editRoute"), ops: z.array(routeOpSchema).min(1).max(4), state: proposalStateSchema }).strict(),
+  z.object({ type: z.literal("startStop"), stop: stopNo, stopId: idSchema, state: proposalStateSchema }).strict(),
+]);
 export const chatMessageSchema = z
   .object({
     id: idSchema,
@@ -328,6 +341,9 @@ export const chatMessageSchema = z
       .object({
         checked: z.array(z.number().int().min(0).max(50)).max(50).optional(),
         laid: z.boolean().optional(),
+        chat: z.boolean().optional(),
+        proposal: chatProposalSchema.optional(),
+        savedNote: idSchema.optional(),
       })
       .strict()
       .optional(),
@@ -627,6 +643,7 @@ export const aiRequestSchema = z
       "mark",
       "probe",
       "regen",
+      "chat",
     ]),
   })
   .strict();

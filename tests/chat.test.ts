@@ -1,0 +1,181 @@
+import { describe, expect, it } from "vitest";
+import type { Board, ConceptNode, StickyNote } from "../src/shared/types";
+import { applyRouteOps, previewRoute, routeOf, validRouteOps } from "../src/model/route";
+import {
+  chatPrompt,
+  chatRequest,
+  displayChat,
+  estimateTokens,
+  expireProposals,
+  isGoAhead,
+  parseChatReply,
+  pendingProposal,
+  TURN_CAP,
+} from "../src/model/chat";
+import { boardSchema } from "../src/shared/validation";
+import { CHAT_INSTRUCTIONS } from "../electron/prompts";
+
+const node = (id: string, title: string, parentId: string | null, order: number, extra: Partial<ConceptNode> = {}): ConceptNode => ({
+  id, kind: "concept", title, body: "", parentId, order, status: "unseen", ...extra,
+});
+const fixture = (): Board =>
+  boardSchema.parse({
+    version: 2,
+    id: "board-c",
+    title: "重疾险",
+    topic: "怎么挑一份合适的重疾险",
+    kind: "ai",
+    createdAt: "2026-10-22T08:00:00.000Z",
+    updatedAt: "2026-10-22T08:00:00.000Z",
+    nodes: [
+      node("q", "怎么挑一份合适的重疾险", null, 0, { question: true }),
+      node("s1", "保费豁免条款", "q", 0, { status: "explained", body: "投保人出事后免交后续保费。" }),
+      node("s1a", "豁免的触发条件", "s1", 0),
+      node("s2", "保额怎么定才够", "q", 1, { body: "保额要覆盖治疗费和几年的收入缺口。".repeat(20) }),
+      node("s3", "等待期与观察期", "q", 2, { body: "等待期内确诊不赔。" }),
+      node("s4", "重疾、中症、轻症的赔付比例", "q", 3),
+    ],
+    relations: [],
+    notes: [],
+    route: ["s1", "s2", "s3", "s4"],
+    scene: { width: 180, color: "#E9AE7E", prediction: "", explanation: "", changed: null },
+  }) as Board;
+const ids = (i: number) => `stop-new-${i}`;
+const titles = (b: Board) => routeOf(b).map((n) => n.title);
+
+describe("parseChatReply", () => {
+  it("reads a trailing ```json proposal and keeps only the text as the reply", () => {
+    const b = fixture();
+    const r = parseChatReply(
+      '好，第三站改讲等待期里的坑。\n```json\n{"proposal":{"type":"editRoute","ops":[{"op":"replace","stop":3,"title":"等待期里最容易踩的坑"}]}}\n```',
+      b,
+    );
+    expect(r.reply).toBe("好，第三站改讲等待期里的坑。");
+    expect(r.proposal).toEqual({
+      type: "editRoute",
+      ops: [{ op: "replace", stop: 3, title: "等待期里最容易踩的坑" }],
+      state: "pending",
+    });
+  });
+  it("reads a bare JSON tail and a startStop for an unsealed stop", () => {
+    const r = parseChatReply('好，下一站讲保额。{"proposal":{"type":"startStop","stop":2}}', fixture());
+    expect(r).toEqual({
+      reply: "好，下一站讲保额。",
+      proposal: { type: "startStop", stop: 2, stopId: "s2", state: "pending" },
+    });
+  });
+  it("plain answers carry no proposal", () => {
+    expect(parseChatReply("等待期是投保后一段不赔的时间。", fixture())).toEqual({
+      reply: "等待期是投保后一段不赔的时间。",
+    });
+  });
+  it("bad JSON or out-of-range stops show the text only, without an error", () => {
+    const b = fixture();
+    expect(parseChatReply('改一下。\n```json\n{"proposal":{"type":"editRoute","ops":[{"op":"remove"', b)).toEqual({ reply: "改一下。" });
+    expect(parseChatReply('删掉。{"proposal":{"type":"editRoute","ops":[{"op":"remove","stop":9}]}}', b)).toEqual({ reply: "删掉。" });
+    expect(parseChatReply('开始。{"proposal":{"type":"startStop","stop":1}}', b)).toEqual({ reply: "开始。" });
+    expect(parseChatReply('嗯。{"proposal":{"type":"dance"}}', b)).toEqual({ reply: "嗯。" });
+  });
+  it("drops invalid ops but keeps the valid ones, at most 4", () => {
+    const r = parseChatReply(
+      'x{"proposal":{"type":"editRoute","ops":[{"op":"move","stop":4,"to":1},{"op":"add","title":"","after":1},{"op":"remove","stop":0},{"op":"focus","stop":2,"text":"算收入缺口"},{"op":"add","title":"a","after":1},{"op":"add","title":"b","after":1},{"op":"add","title":"c","after":1}]}}',
+      fixture(),
+    );
+    expect(r.proposal?.type === "editRoute" && r.proposal.ops.map((o) => o.op)).toEqual(["move", "focus", "add", "add"]);
+  });
+  it("never shows the JSON tail while streaming", () => {
+    expect(displayChat('好，改一下。\n```js')).toBe("好，改一下。");
+    expect(displayChat('好。{"propo')).toBe('好。{"propo');
+    expect(displayChat('好。{"proposal":{"ty')).toBe("好。");
+  });
+});
+
+describe("applyRouteOps", () => {
+  it("replace renames the stop in place, title only, card count unchanged; undo is the prior snapshot", () => {
+    const b = fixture();
+    const { board, changed } = applyRouteOps(b, [{ op: "replace", stop: 3, title: "等待期里最容易踩的坑" }], "chat-1", "2026-10-23T00:00:00.000Z", ids);
+    expect(board.nodes).toHaveLength(b.nodes.length);
+    expect(titles(board)[2]).toBe("等待期里最容易踩的坑");
+    const s3 = board.nodes.find((n) => n.id === "s3")!;
+    expect(s3.body).toBe("");
+    expect(s3.status).toBe("unseen");
+    expect(changed).toEqual(["s3"]);
+    // The input board is untouched, so restoring it (the undo snapshot) brings the route back.
+    expect(titles(b)[2]).toBe("等待期与观察期");
+  });
+  it("removing a sealed stop archives it with its subtree, so it can be restored", () => {
+    const b = fixture();
+    expect(previewRoute(b, [{ op: "remove", stop: 1 }]).find((r) => r.kind === "remove")).toMatchObject({ archives: true, title: "保费豁免条款" });
+    const { board } = applyRouteOps(b, [{ op: "remove", stop: 1 }], "chat-2", "2026-10-23T00:00:00.000Z", ids);
+    expect(titles(board)).toEqual(["保额怎么定才够", "等待期与观察期", "重疾、中症、轻症的赔付比例"]);
+    expect(board.nodes.some((n) => n.id === "s1" || n.id === "s1a")).toBe(false);
+    expect(board.cardArchives?.map((a) => a.node.id).sort()).toEqual(["s1", "s1a"]);
+  });
+  it("replacing a sealed stop archives it and puts a new title-only stop in its place", () => {
+    const { board } = applyRouteOps(fixture(), [{ op: "replace", stop: 1, title: "豁免条款的坑" }], "chat-3", "2026-10-23T00:00:00.000Z", ids);
+    expect(board.route?.[0]).toBe("stop-new-0");
+    expect(titles(board)[0]).toBe("豁免条款的坑");
+    expect(board.cardArchives?.some((a) => a.node.id === "s1")).toBe(true);
+  });
+  it("move and add reorder the route and the first level left to right", () => {
+    const { board } = applyRouteOps(
+      fixture(),
+      [{ op: "move", stop: 3, to: 2 }, { op: "add", title: "健康告知", after: 0 }],
+      "chat-4",
+      "2026-10-23T00:00:00.000Z",
+      ids,
+    );
+    expect(titles(board)).toEqual(["健康告知", "保费豁免条款", "等待期与观察期", "保额怎么定才够", "重疾、中症、轻症的赔付比例"]);
+    const first = board.nodes.filter((n) => n.parentId === "q").sort((a, b) => a.order - b.order).map((n) => n.id);
+    expect(first).toEqual(board.route);
+    expect(board.nodes.find((n) => n.id === "stop-new-0")).toMatchObject({ body: "", status: "unseen" });
+  });
+  it("focus adds a remark; invalid ops are dropped and the route keeps at least one stop", () => {
+    const b = fixture();
+    expect(applyRouteOps(b, [{ op: "focus", stop: 2, text: "算收入缺口" }], "c", "2026-10-23T00:00:00.000Z", ids).board.nodes.find((n) => n.id === "s2")?.hand).toBe("重点：算收入缺口");
+    expect(validRouteOps(b, [1, 2, 3, 4].map((stop) => ({ op: "remove" as const, stop })))).toEqual([]);
+    expect(applyRouteOps(b, [{ op: "remove", stop: 7 }], "c", "2026-10-23T00:00:00.000Z", ids).board).toBe(b);
+  });
+});
+
+describe("chat turn", () => {
+  const note = (messages: StickyNote["messages"] = []): StickyNote => ({
+    id: "note-1", title: "", text: "", position: { x: 0, y: 0 }, attachedTo: { kind: "node", id: "q" }, messages,
+  });
+  it("free text is always an ordinary chat call with canvas:false, whatever was said", () => {
+    for (const text of ["开始吧", "把第 3 站删掉", "展开第二站并生成卡片", "等待期是什么？"]) {
+      const r = chatRequest(fixture(), note(), text, { requestId: "r", stickyId: "chat-note-1-r" });
+      expect(r.canvas).toBe(false);
+      expect(r.mode).toBe("chat");
+      expect(r.context).toEqual({ topic: "怎么挑一份合适的重疾险", references: [], summary: "" });
+    }
+  });
+  it("context is route titles, the current stop (200 chars) and the last 6 messages", () => {
+    const msgs = Array.from({ length: 10 }, (_, i) => ({ id: `m${i}`, role: (i % 2 ? "assistant" : "user") as "user" | "assistant", text: `消息${i}`, createdAt: "2026-10-23T00:00:00.000Z" }));
+    const p = chatPrompt(fixture(), note(msgs), "继续");
+    expect(p).toContain("1. 保费豁免条款 ✓");
+    expect(p).toContain("4. 重疾、中症、轻症的赔付比例");
+    expect(p).toContain("当前站：第 2 站「保额怎么定才够」");
+    expect(p).not.toContain("消息3");
+    expect(p).toContain("消息4");
+    expect(p).toContain("消息9");
+    expect(p).not.toContain("保额要覆盖治疗费和几年的收入缺口。".repeat(13));
+    expect(p).not.toContain("等待期内确诊不赔");
+  });
+  it("stays under the 2.5k cap by trimming history", () => {
+    const long = Array.from({ length: 6 }, (_, i) => ({ id: `m${i}`, role: "user" as const, text: "很长".repeat(400), createdAt: "2026-10-23T00:00:00.000Z" }));
+    const p = chatPrompt(fixture(), note(long), "继续");
+    expect(estimateTokens(CHAT_INSTRUCTIONS) + estimateTokens(p) + 400).toBeLessThanOrEqual(TURN_CAP);
+  });
+  it("a go-ahead equals the button only right after a pending proposal; new messages expire it", () => {
+    expect(["好", "好，开始吧", "开始吧", "好的", "应用"].every(isGoAhead)).toBe(true);
+    expect(["好难", "开始讲等待期", "好，那等待期是什么？"].some(isGoAhead)).toBe(false);
+    const asked = note([
+      { id: "a", role: "assistant", text: "下一站讲保额。", createdAt: "2026-10-23T00:00:00.000Z", meta: { chat: true, proposal: { type: "startStop", stop: 2, stopId: "s2", state: "pending" } } },
+    ]);
+    expect(pendingProposal(asked)?.id).toBe("a");
+    const expired = expireProposals(asked.messages);
+    expect(expired[0].meta?.proposal?.state).toBe("expired");
+    expect(pendingProposal({ ...asked, messages: expired })).toBeUndefined();
+  });
+});
