@@ -42,6 +42,11 @@ test("1 · a replace shows a diff and a dashed 待替换 card; 应用 renames st
   await expect(card(page, "c-how").locator(".card.pv-replace")).toHaveCount(1);
   await expect(card(page, "c-how").locator(".pv-tag")).toHaveText("待替换");
   expect(await page.locator(".react-flow__node").count()).toBe(cards);
+  // The canvas card and the saved board keep the old stop title until 应用.
+  await expect(card(page, "c-how")).toContainText("等待期与观察期");
+  await expect(card(page, "c-how")).not.toContainText("等待期里最容易踩的坑");
+  await page.waitForTimeout(600);
+  expect((await stationTitles(page))[2]).toBe("等待期与观察期");
   expect((await asks(page)).at(-1)).toMatchObject({ mode: "chat", canvas: false });
   await expect(drawer.getByLabel("向 AI 提问")).toHaveAttribute("placeholder", "继续说…");
   await diff.getByRole("button", { name: "应用" }).click();
@@ -49,6 +54,8 @@ test("1 · a replace shows a diff and a dashed 待替换 card; 应用 renames st
   await expect.poll(() => stationTitles(page)).toEqual(["保费豁免条款", "保额怎么定才够", "等待期里最容易踩的坑", "重疾、中症、轻症的赔付比例"]);
   expect(await page.locator(".react-flow__node").count()).toBe(cards);
   await expect(card(page, "c-how").locator(".card.pv-replace")).toHaveCount(0);
+  await expect(card(page, "c-how")).toContainText("等待期里最容易踩的坑");
+  await expect(card(page, "c-how")).not.toContainText("等待期与观察期");
   await diff.getByRole("button", { name: /撤销/ }).click();
   await expect(diff).toContainText("已撤销");
   await expect.poll(() => stationTitles(page)).toEqual(["保费豁免条款", "保额怎么定才够", "等待期与观察期", "重疾、中症、轻症的赔付比例"]);
