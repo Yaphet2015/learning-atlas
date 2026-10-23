@@ -26,7 +26,7 @@ const node = (
   status: "unseen",
 });
 const board = (): Board => ({
-  version: 2,
+  version: 3,
   id: "board-h",
   title: "彩虹",
   topic: "彩虹是怎么形成的？",

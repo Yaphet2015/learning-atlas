@@ -30,7 +30,7 @@ const node = (
 });
 function board(nodes: ConceptNode[]): Board {
   return {
-    version: 2,
+    version: 3,
     id: "board-f",
     title: "彩虹",
     topic: "彩虹是怎么形成的？",

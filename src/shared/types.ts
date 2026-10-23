@@ -144,6 +144,8 @@ export interface StickyNote {
   contextCards?: string[];
   /** When the conversation started; older notes have none. */
   createdAt?: string;
+  /** Set on a 批注卡 made from a legacy 我的笔记 text; the source note's id. */
+  meta?: { migratedFrom?: string };
 }
 export interface SceneState {
   width: number;
@@ -168,7 +170,7 @@ export interface CanvasArchive {
   createdAt: string;
 }
 export interface Board {
-  version: 2;
+  version: 3;
   id: string;
   title: string;
   topic: string;

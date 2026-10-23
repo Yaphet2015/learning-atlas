@@ -347,6 +347,8 @@ export const stickyNoteSchema = z
     excludedRefs: z.array(z.string().max(200)).max(100).optional(),
     contextCards: z.array(idSchema).max(LIMITS.contextReferences).optional(),
     createdAt: timestampSchema.optional(),
+    /** Set on a 批注卡 made from a legacy 我的笔记 text; the source note's id. */
+    meta: z.object({ migratedFrom: idSchema.optional() }).strict().optional(),
   })
   .strict();
 export const sceneSchema = z
@@ -411,7 +413,7 @@ export const boardPlanSchema = z
   .strict();
 export const boardSchema = z
   .object({
-    version: z.literal(2),
+    version: z.literal(3),
     id: idSchema,
     title: nonemptyText(160),
     topic: nonemptyText(2_000),
@@ -811,6 +813,14 @@ export function treeify(
  * each node becomes its parent (siblings ordered by old position.x) and every
  * other relation becomes a `cross` link.
  */
+/**
+ * v2 has v3's shape; it may still carry legacy 我的笔记 text. Validate it with the v3
+ * schema (refinements included) and let migrateNoteText move that text.
+ */
+const parseV2 = (input: unknown) =>
+  boardSchema.parse({ ...(input as object), version: 3 });
+
+/** v1 → v2 shape (validated as v3; parseBoard then runs migrateNoteText). */
 export function migrateV1toV2(input: unknown): z.infer<typeof boardSchema> {
   const v1 = legacyBoardV1Schema.parse(input);
   const nodes = [...v1.nodes];
@@ -853,7 +863,7 @@ export function migrateV1toV2(input: unknown): z.infer<typeof boardSchema> {
   });
   return boardSchema.parse({
     ...v1,
-    version: 2,
+    version: 3,
     nodes: nodes.map(({ emoji: _e, position: _p, color: _c, ...rest }) => ({
       ...rest,
       parentId: parent.get(rest.id) ?? null,
@@ -864,10 +874,68 @@ export function migrateV1toV2(input: unknown): z.infer<typeof boardSchema> {
   });
 }
 
-/** Validate a board from disk/IPC, upgrading v1 data on the way in. */
+/**
+ * v2 → v3: the right panel's 我的笔记 field is gone. Each note with non-empty text gets a
+ * 批注卡 beside it (same anchor and position, title 我的笔记, the text as its body) marked
+ * meta.migratedFrom, and the text is cleared. Idempotent: a note that already has a
+ * migrated 批注卡 never gets a second one, and running it on v3 data changes nothing.
+ */
+export function migrateNoteText(
+  board: z.infer<typeof boardSchema>,
+): z.infer<typeof boardSchema> {
+  const done = new Set(
+    board.notes.flatMap((n) => (n.meta?.migratedFrom ? [n.meta.migratedFrom] : [])),
+  );
+  const ids = new Set(board.notes.map((n) => n.id));
+  const notes: z.infer<typeof stickyNoteSchema>[] = [];
+  for (const note of board.notes) {
+    const text = note.text.trim();
+    if (!text) {
+      notes.push(note);
+      continue;
+    }
+    if (done.has(note.id)) {
+      notes.push({ ...note, text: "" });
+      continue;
+    }
+    // A full board keeps the old text rather than lose a note.
+    // ids holds every note the board will have, so it counts toward the limit.
+    if (ids.size >= LIMITS.notes) {
+      notes.push(note);
+      continue;
+    }
+    notes.push({ ...note, text: "" });
+    let id = `${note.id.slice(0, 85)}-migrated`;
+    for (let i = 2; ids.has(id); i += 1) id = `${note.id.slice(0, 80)}-migrated${i}`;
+    ids.add(id);
+    done.add(note.id);
+    const createdAt = note.createdAt ?? board.updatedAt;
+    notes.push({
+      id,
+      title: "我的笔记",
+      text: "",
+      position: { x: note.position.x + 24, y: note.position.y + 24 },
+      ...(note.attachedTo ? { attachedTo: { ...note.attachedTo } } : {}),
+      messages: [
+        { id: `${id.slice(0, 90)}-body`, role: "user", text, createdAt },
+      ],
+      createdAt,
+      meta: { migratedFrom: note.id },
+    });
+  }
+  return boardSchema.parse({
+    ...board,
+    version: 3,
+    notes,
+  });
+}
+
+/** Validate a board from disk/IPC, upgrading v1/v2 data on the way in. */
 export function parseBoard(input: unknown) {
   const version = (input as { version?: unknown } | null)?.version;
-  return version === 1 ? migrateV1toV2(input) : boardSchema.parse(input);
+  if (version === 1) return migrateNoteText(migrateV1toV2(input));
+  if (version === 2) return migrateNoteText(parseV2(input));
+  return boardSchema.parse(input);
 }
 export const safeParseBoard = (input: unknown) => {
   try {
