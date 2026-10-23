@@ -328,7 +328,30 @@ export const routeOpSchema = z.discriminatedUnion("op", [
 ]);
 const proposalStateSchema = z.enum(["pending", "applied", "undone", "cancelled", "expired"]);
 export const chatProposalSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("editRoute"), ops: z.array(routeOpSchema).min(1).max(4), state: proposalStateSchema }).strict(),
+  z
+    .object({
+      type: z.literal("editRoute"),
+      ops: z.array(routeOpSchema).min(1).max(4),
+      state: proposalStateSchema,
+      rows: z
+        .array(
+          z
+            .object({
+              kind: z.enum(["keep", "replace", "remove", "add", "move", "focus"]),
+              from: stopNo.optional(),
+              to: stopNo.optional(),
+              title: z.string().max(200),
+              was: z.string().max(200).optional(),
+              focus: z.string().max(200).optional(),
+              archives: z.boolean().optional(),
+              nodeId: idSchema.optional(),
+            })
+            .strict(),
+        )
+        .max(LIMITS.nodes)
+        .optional(),
+    })
+    .strict(),
   z.object({ type: z.literal("startStop"), stop: stopNo, stopId: idSchema, state: proposalStateSchema }).strict(),
 ]);
 export const chatMessageSchema = z

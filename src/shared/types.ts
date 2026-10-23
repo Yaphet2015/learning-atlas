@@ -147,9 +147,24 @@ export type RouteOp =
   | { op: "move"; stop: number; to: number }
   | { op: "replace"; stop: number; title: string }
   | { op: "focus"; stop: number; text: string };
+export interface RouteDiffRow {
+  kind: "keep" | "replace" | "remove" | "add" | "move" | "focus";
+  /** Station number before the change (undefined for a new stop). */
+  from?: number;
+  /** Station number after the change (undefined for a removed stop). */
+  to?: number;
+  title: string;
+  /** The old title, for a replaced stop. */
+  was?: string;
+  focus?: string;
+  /** Sealed (已讲通) stops that remove/replace archives. */
+  archives?: boolean;
+  nodeId?: string;
+}
 export type ProposalState = "pending" | "applied" | "undone" | "cancelled" | "expired";
 export type ChatProposal =
-  | { type: "editRoute"; ops: RouteOp[]; state: ProposalState }
+  /** rows: the diff as it was when applied, so the thread still reads right afterwards. */
+  | { type: "editRoute"; ops: RouteOp[]; state: ProposalState; rows?: RouteDiffRow[] }
   | { type: "startStop"; stop: number; stopId: string; state: ProposalState };
 export interface StickyNote {
   id: string;

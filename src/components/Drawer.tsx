@@ -36,6 +36,7 @@ import { StructuredVisual } from "./StructuredVisual";
 import { displayMessage } from "../model/kickoff";
 import { outlineOf, type OutlineItem } from "../model/answer";
 import { AnswerBlocks } from "./AnswerBlocks";
+import { ChatTurn, type ChatActions } from "./ChatTurn";
 import { refKey } from "../model/context";
 import { tip } from "./Tooltip";
 import { toggleContextCard } from "../model/selection";
@@ -538,6 +539,7 @@ export function Drawer({
   onHistory,
   study,
   lead,
+  chat,
 }: {
   note: StickyNote;
   /** Reading a selected card keeps focus on the canvas for shortcuts. */
@@ -572,6 +574,8 @@ export function Drawer({
   study?: StudyProps;
   /** The root's 摸底 or 合起来讲 panel, shown above the notes. */
   lead?: React.ReactNode;
+  /** The post-probe chat's proposal handlers (v2). */
+  chat?: ChatActions;
 }) {
   const [prompt, setPrompt] = useState("");
   const [menu, setMenu] = useState(false);
@@ -838,6 +842,12 @@ export function Drawer({
                 {displayMessage(m.role, m.text)}
               </div>
             );
+          if (m.meta?.chat && chat)
+            return (
+              <div key={m.id} className="msg assistant ans chat">
+                <ChatTurn message={m} chat={chat} busy={!!busy} onCopy={() => copy(m.text)} />
+              </div>
+            );
           const outline = outlineOf(m.text);
           // Laid from this answer, or the anchor already has its first level.
           const placed = !!m.meta?.laid || anchorHasChildren;
@@ -979,7 +989,15 @@ export function Drawer({
           ref={composer}
           aria-label="向 AI 提问"
           placeholder={
-            answers.some((m) => /检查/.test(m.text))
+            lastAnswer?.meta?.chat
+              ? lastAnswer.meta.proposal?.state === "pending"
+                ? lastAnswer.meta.proposal.type === "startStop"
+                  ? "或者先问点别的…"
+                  : "继续说…"
+                : lastAnswer.meta.proposal
+                  ? "继续说…"
+                  : "继续问…"
+              : answers.some((m) => /检查/.test(m.text))
               ? "继续追问，或回答上面的检查题…"
               : "继续追问…"
           }

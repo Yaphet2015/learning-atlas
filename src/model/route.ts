@@ -1,4 +1,4 @@
-import type { Board, ConceptNode, RouteOp } from "../shared/types";
+import type { Board, ConceptNode, RouteDiffRow, RouteOp } from "../shared/types";
 import { applyCanvasEdits, questionNode, type CanvasOperation } from "../shared/canvas";
 
 /** The learning path's stations in order: board.route if set, else the first level under the question. */
@@ -48,20 +48,7 @@ export function validRouteOps(board: Board, ops: RouteOp[]): RouteOp[] {
   return kept;
 }
 
-export interface RoutePreviewRow {
-  kind: "keep" | "replace" | "remove" | "add" | "move" | "focus";
-  /** Station number before the change (undefined for a new stop). */
-  from?: number;
-  /** Station number after the change (undefined for a removed stop). */
-  to?: number;
-  title: string;
-  /** The old title, for a replaced stop. */
-  was?: string;
-  focus?: string;
-  /** Sealed (已讲通) stops that remove/replace archives. */
-  archives?: boolean;
-  nodeId?: string;
-}
+export type RoutePreviewRow = RouteDiffRow;
 
 /** The new route as rows, for the inline diff (only changed rows are shown there). */
 export function previewRoute(board: Board, ops: RouteOp[]): RoutePreviewRow[] {

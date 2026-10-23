@@ -269,12 +269,21 @@ export function mergeHistory(
 ): ChatMessage[] {
   const byId = new Map(cached.map((m) => [m.id, m]));
   const byText = new Map(cached.map((m) => [`${m.role}\u0000${m.text}`, m]));
+  const merged = history.map((m) => {
+    const meta = (byId.get(m.id) ?? byText.get(`${m.role}\u0000${m.text}`))
+      ?.meta;
+    return meta && !m.meta ? { ...m, meta } : m;
+  });
+  // Chat turns (v2) run under their own per-turn ids, so the runtime transcript lacks them:
+  // keep the cached copies, in time order.
+  const known = new Set(merged.map((m) => m.id));
+  const chat = cached.filter((m) => m.meta?.chat && !known.has(m.id));
+  if (!chat.length) return cacheMessages(merged);
   return cacheMessages(
-    history.map((m) => {
-      const meta = (byId.get(m.id) ?? byText.get(`${m.role}\u0000${m.text}`))
-        ?.meta;
-      return meta && !m.meta ? { ...m, meta } : m;
-    }),
+    [...merged, ...chat]
+      .map((m, i) => ({ m, i }))
+      .sort((a, b) => a.m.createdAt.localeCompare(b.m.createdAt) || a.i - b.i)
+      .map(({ m }) => m),
   );
 }
 

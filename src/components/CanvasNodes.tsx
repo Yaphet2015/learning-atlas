@@ -79,6 +79,10 @@ export type CardData = {
   isNext?: boolean;
   /** 合起来讲 reached this station: it lights up. */
   lit?: boolean;
+  /** A pending chat route edit would replace or remove this stop (shown before 应用). */
+  preview?: "replace" | "remove";
+  /** Just changed by an applied route edit: a 1.2s highlight. */
+  flash?: boolean;
   onStartNext?: () => void;
 };
 export type GhostData = { [key: string]: unknown; w: number };
@@ -495,14 +499,15 @@ export function ConceptCard({ data, selected }: NodeProps<CardNode>) {
   return (
     <article
       {...attention}
-      className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""} ${data.lit ? "lit" : ""} ${hintsOpen ? "hints-open" : ""} ${controlsActive ? "hint-controls-active" : ""}`}
+      className={`card s-${n.status} ${selected || data.noteOpen ? "is-selected" : ""} ${animate ? "animate" : ""} ${data.dimmed ? "dimmed" : ""} ${data.lit ? "lit" : ""} ${data.preview ? `pv-${data.preview}` : ""} ${data.flash ? "route-flash" : ""} ${hintsOpen ? "hints-open" : ""} ${controlsActive ? "hint-controls-active" : ""}`}
       aria-busy={data.generating || undefined}
     >
       {data.generating && <BorderBeam />}
       {data.noteOpen && <NoteTab />}
       <Ports linkMode={data.linkMode} />
       {n.status === "explained" && <Seal light={n.seal === "probe"} />}
-      {data.station !== undefined && (
+      {data.preview === "replace" && <span className="pv-tag">待替换</span>}
+      {data.station !== undefined && data.preview !== "remove" && (
         <span className={`station ${data.isNext ? "next" : ""} ${n.status === "explained" ? "sealed" : ""}`} aria-label={`第 ${data.station} 站`}>
           {data.station}
         </span>
